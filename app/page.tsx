@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import { registerPushSubscription } from "@/lib/push";
 
 type Task = {
   id: number;
@@ -9,6 +10,7 @@ type Task = {
   deadline: string;
   reminder: string | null;
   reminder_sent: boolean;
+  reminder_last_sent: string | null;
   priority: "Low" | "Medium" | "High";
   category: string;
   completed: boolean;
@@ -25,43 +27,136 @@ export default function Home() {
   const [priority, setPriority] =
     useState<"Low" | "Medium" | "High">("Medium");
   const [category, setCategory] = useState("");
+  const [search, setSearch] = useState("");
+
+const [filter, setFilter] = useState<
+  "All" | "Today" | "Upcoming" | "Overdue"
+>("All");
 
   const [notificationPermission, setNotificationPermission] =
   useState<NotificationPermission>("default");
 
   const checkReminders = async () => {
-  if (!("Notification" in window)) return;
+  console.log("🔍 CHECK DAILY REMINDER JALAN");
 
-  if (Notification.permission !== "granted") return;
+  if (!("Notification" in window)) {
+    console.log("❌ Browser tidak mendukung Notification");
+    return;
+  }
 
-  const now = new Date().toISOString();
+  if (Notification.permission !== "granted") {
+    console.log("❌ Permission belum granted");
+    return;
+  }
+
+  const now = new Date();
+
+  console.log("🕐 Sekarang:", now.toString());
+
+  // Tanggal hari ini YYYY-MM-DD
+  const today = now.toLocaleDateString("en-CA");
 
   const { data, error } = await supabase
     .from("tasks")
     .select("*")
     .eq("completed", false)
-    .eq("reminder_sent", false)
-    .not("reminder", "is", null)
-    .lte("reminder", now);
+    .not("reminder", "is", null);
 
   if (error) {
-    console.error("Reminder check error:", error);
+    console.error("❌ Reminder check error:", error);
     return;
   }
 
-  if (!data || data.length === 0) return;
+  if (!data || data.length === 0) {
+    console.log("⏳ Tidak ada task dengan reminder");
+    return;
+  }
 
   for (const task of data) {
+    const [reminderHour, reminderMinute] =
+  task.reminder.split(":").map(Number);
+
+    // =========================
+    // CEK TANGGAL DEADLINE
+    // =========================
+
+    const deadlineDate = new Date(
+      task.deadline + "T00:00:00"
+    );
+
+    deadlineDate.setHours(23, 59, 59, 999);
+
+    // Kalau deadline sudah lewat
+    if (now > deadlineDate) {
+      console.log(
+        `⛔ Reminder berhenti: ${task.title} sudah melewati deadline`
+      );
+
+      continue;
+    }
+
+    // =========================
+    // CEK WAKTU REMINDER
+    // =========================
+
+
+    const currentHour = now.getHours();
+    const currentMinute = now.getMinutes();
+
+    // Apakah waktu reminder hari ini sudah tiba?
+    const reminderTimePassed =
+      currentHour > reminderHour ||
+      (currentHour === reminderHour &&
+        currentMinute >= reminderMinute);
+
+    if (!reminderTimePassed) {
+      console.log(
+        `⏳ Belum waktunya: ${task.title}`
+      );
+      continue;
+    }
+
+    // =========================
+    // CEK SUDAH DIKIRIM HARI INI
+    // =========================
+
+    if (task.reminder_last_sent === today) {
+      console.log(
+        `✅ Sudah dikirim hari ini: ${task.title}`
+      );
+      continue;
+    }
+
+    // =========================
+    // KIRIM NOTIFIKASI
+    // =========================
+
+    console.log(
+      `🚨 DAILY REMINDER: ${task.title}`
+    );
+
     new Notification(`🔔 ${task.title}`, {
-      body: "Waktunya meangerjzakan task ini!",
+      body: `Reminder harian • Deadline ${task.deadline}`,
+      icon: "/icon-192.png",
     });
 
-    await supabase
+    // =========================
+    // SIMPAN TANGGAL TERAKHIR
+    // =========================
+
+    const { error: updateError } = await supabase
       .from("tasks")
       .update({
-        reminder_sent: true,
+        reminder_last_sent: today,
       })
       .eq("id", task.id);
+
+    if (updateError) {
+      console.error(
+        "❌ Gagal menyimpan reminder_last_sent:",
+        updateError
+      );
+    }
   }
 
   loadTasks();
@@ -109,9 +204,30 @@ export default function Home() {
     loadTasks();
   }, []);
 
+  useEffect(() => {
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker
+      .register("/sw.js")
+      .then((registration) => {
+        console.log(
+          "✅ Service Worker registered:",
+          registration.scope
+        );
+      })
+      .catch((error) => {
+        console.error(
+          "❌ Service Worker registration failed:",
+          error
+        );
+      });
+  }
+}, []);
+
   // =========================
   // ADD TASK
   // =========================
+
+  
 
   const addTask = async () => {
     if (!title || !deadline) {
@@ -119,12 +235,13 @@ export default function Home() {
       return;
     }
 
-    const newTask: Task = {
+  const newTask: Task = {
   id: Date.now(),
   title,
   deadline,
   reminder: reminder || null,
   reminder_sent: false,
+  reminder_last_sent: null,
   priority,
   category,
   completed: false,
@@ -155,14 +272,35 @@ export default function Home() {
     return;
   }
 
-  const permission = await Notification.requestPermission();
+  try {
+    const permission =
+      await Notification.requestPermission();
 
-  setNotificationPermission(permission);
+    setNotificationPermission(permission);
 
-  if (permission === "granted") {
-    new Notification("🔔 Notifications aktif!", {
-      body: "Kamu sekarang akan menerima reminder task.",
-    });
+    if (permission !== "granted") {
+      alert("Permission notifikasi ditolak.");
+      return;
+    }
+
+    const subscription =
+      await registerPushSubscription();
+
+    console.log(
+      "📨 Subscription:",
+      JSON.stringify(subscription)
+    );
+
+    alert("✅ Push notification berhasil diaktifkan!");
+  } catch (error) {
+    console.error(
+      "❌ Gagal mengaktifkan push notification:",
+      error
+    );
+
+    alert(
+      "Gagal mengaktifkan push notification. Cek Console."
+    );
   }
 };
 
@@ -170,15 +308,14 @@ export default function Home() {
   setEditingId(task.id);
   setTitle(task.title);
   setDeadline(task.deadline);
-  setReminder(
-    task.reminder
-      ? task.reminder.slice(0, 16)
-      : ""
-  );
+
+  setReminder(task.reminder || "");
+
   setPriority(task.priority);
   setCategory(task.category);
   setShowForm(true);
 };
+  
 
   // =========================
   // UPDATE TASK
@@ -197,6 +334,7 @@ export default function Home() {
   deadline,
   reminder: reminder || null,
   reminder_sent: false,
+  reminder_last_sent: null,
   priority,
   category,
 })
@@ -209,19 +347,21 @@ export default function Home() {
     }
 
     setTasks(
-      tasks.map((task) =>
-        task.id === editingId
-          ? {
-    ...task,
-    title,
-    deadline,
-    reminder: reminder || null,
-    priority,
-    category,
-  }
-          : task
-      )
-    );
+  tasks.map((task) =>
+    task.id === editingId
+      ? {
+          ...task,
+          title,
+          deadline,
+          reminder: reminder || null,
+          reminder_sent: false,
+          reminder_last_sent: null,
+          priority,
+          category,
+        }
+      : task
+  )
+);
 
     resetForm();
   };
@@ -363,6 +503,43 @@ export default function Home() {
       }
     );
   };
+
+  const filteredTasks = tasks.filter((task) => {
+  const matchesSearch =
+    task.title
+      .toLowerCase()
+      .includes(search.toLowerCase()) ||
+    task.category
+      .toLowerCase()
+      .includes(search.toLowerCase());
+
+  if (!matchesSearch) return false;
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const taskDate = new Date(
+    task.deadline + "T00:00:00"
+  );
+  taskDate.setHours(0, 0, 0, 0);
+
+  if (filter === "Today") {
+    return taskDate.getTime() === today.getTime();
+  }
+
+  if (filter === "Upcoming") {
+    return taskDate.getTime() > today.getTime();
+  }
+
+  if (filter === "Overdue") {
+    return (
+      taskDate.getTime() < today.getTime() &&
+      !task.completed
+    );
+  }
+
+  return true;
+});
 
   // =========================
   // STATISTICS
@@ -515,11 +692,11 @@ export default function Home() {
 
               <div>
   <label className="mb-1.5 block text-sm font-medium text-gray-700">
-    Reminder
+    Daily Reminder
   </label>
 
   <input
-    type="datetime-local"
+    type="time"
     value={reminder}
     onChange={(e) =>
       setReminder(e.target.value)
@@ -528,7 +705,7 @@ export default function Home() {
   />
 
   <p className="mt-1 text-xs text-gray-400">
-    Pilih kapan kamu ingin diingatkan.
+    Kamu akan mendapat reminder setiap hari pada waktu ini sampai deadline.
   </p>
 </div>
 
@@ -614,6 +791,33 @@ export default function Home() {
         {/* TASK LIST */}
 
         <section className="mt-7">
+          <div className="mb-4">
+  <input
+    type="text"
+    value={search}
+    onChange={(e) => setSearch(e.target.value)}
+    placeholder="🔍 Search tasks..."
+    className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-gray-900"
+  />
+</div>
+
+<div className="mb-5 flex gap-2 overflow-x-auto pb-1">
+  {(["All", "Today", "Upcoming", "Overdue"] as const).map(
+    (item) => (
+      <button
+        key={item}
+        onClick={() => setFilter(item)}
+        className={`whitespace-nowrap rounded-xl px-4 py-2 text-sm font-medium transition ${
+          filter === item
+            ? "bg-gray-900 text-white"
+            : "bg-white text-gray-600 shadow-sm hover:bg-gray-100"
+        }`}
+      >
+        {item}
+      </button>
+    )
+  )}
+</div>
 
           <div className="mb-4 flex items-center justify-between">
             <h2 className="text-lg font-bold text-gray-900">
@@ -625,17 +829,17 @@ export default function Home() {
             </span>
           </div>
 
-          {tasks.length === 0 ? (
+          {filteredTasks.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-gray-300 bg-white px-5 py-12 text-center">
               <div className="text-4xl">📝</div>
 
               <h3 className="mt-3 font-semibold text-gray-800">
-                No tasks yet
-              </h3>
+  No tasks found
+</h3>
 
-              <p className="mt-1 text-sm text-gray-500">
-                Add your first task to get started.
-              </p>
+<p className="mt-1 text-sm text-gray-500">
+  Tidak ada task yang sesuai dengan filter kamu.
+</p>
 
               <button
                 onClick={() => setShowForm(true)}
@@ -646,7 +850,7 @@ export default function Home() {
             </div>
           ) : (
             <div className="space-y-3">
-              {tasks.map((task) => {
+              {filteredTasks.map((task) => {
                 const deadlineStatus =
                   getDeadlineStatus(task.deadline);
 
@@ -752,14 +956,7 @@ export default function Home() {
 
 {task.reminder && (
   <p className="mt-1 text-xs text-gray-500">
-    🔔{" "}
-    {new Date(task.reminder).toLocaleString(
-      "id-ID",
-      {
-        dateStyle: "medium",
-        timeStyle: "short",
-      }
-    )}
+    🔔 Daily reminder at {task.reminder.slice(0, 5)}
   </p>
 )}
 
