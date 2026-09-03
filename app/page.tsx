@@ -7,6 +7,8 @@ type Task = {
   id: number;
   title: string;
   deadline: string;
+  reminder: string | null;
+  reminder_sent: boolean;
   priority: "Low" | "Medium" | "High";
   category: string;
   completed: boolean;
@@ -19,9 +21,53 @@ export default function Home() {
 
   const [title, setTitle] = useState("");
   const [deadline, setDeadline] = useState("");
+  const [reminder, setReminder] = useState("");
   const [priority, setPriority] =
     useState<"Low" | "Medium" | "High">("Medium");
   const [category, setCategory] = useState("");
+
+  const [notificationPermission, setNotificationPermission] =
+  useState<NotificationPermission>("default");
+
+  const checkReminders = async () => {
+  if (!("Notification" in window)) return;
+
+  if (Notification.permission !== "granted") return;
+
+  const now = new Date().toISOString();
+
+  const { data, error } = await supabase
+    .from("tasks")
+    .select("*")
+    .eq("completed", false)
+    .eq("reminder_sent", false)
+    .not("reminder", "is", null)
+    .lte("reminder", now);
+
+  if (error) {
+    console.error("Reminder check error:", error);
+    return;
+  }
+
+  if (!data || data.length === 0) return;
+
+  for (const task of data) {
+    new Notification(`🔔 ${task.title}`, {
+      body: "Waktunya mengerjakan task ini!",
+    });
+
+    await supabase
+      .from("tasks")
+      .update({
+        reminder_sent: true,
+      })
+      .eq("id", task.id);
+  }
+
+  loadTasks();
+};
+
+
 
   // =========================
   // LOAD TASKS
@@ -42,6 +88,24 @@ export default function Home() {
   };
 
   useEffect(() => {
+  if (notificationPermission !== "granted") return;
+
+  checkReminders();
+
+  const interval = setInterval(() => {
+    checkReminders();
+  }, 30000);
+
+  return () => clearInterval(interval);
+}, [notificationPermission]);
+
+  useEffect(() => {
+  if ("Notification" in window) {
+    setNotificationPermission(Notification.permission);
+  }
+}, []);
+
+  useEffect(() => {
     loadTasks();
   }, []);
 
@@ -51,18 +115,20 @@ export default function Home() {
 
   const addTask = async () => {
     if (!title || !deadline) {
-      alert("Title dan deadline wajib diisi!");
+      alert("Title dan daeadline wajib diisi!");
       return;
     }
 
     const newTask: Task = {
-      id: Date.now(),
-      title,
-      deadline,
-      priority,
-      category,
-      completed: false,
-    };
+  id: Date.now(),
+  title,
+  deadline,
+  reminder: reminder || null,
+  reminder_sent: false,
+  priority,
+  category,
+  completed: false,
+};
 
     const { error } = await supabase
       .from("tasks")
@@ -83,14 +149,36 @@ export default function Home() {
   // EDIT TASK
   // =========================
 
+  const enableNotifications = async () => {
+  if (!("Notification" in window)) {
+    alert("Browser kamu tidak mendukung notifikasi.");
+    return;
+  }
+
+  const permission = await Notification.requestPermission();
+
+  setNotificationPermission(permission);
+
+  if (permission === "granted") {
+    new Notification("🔔 Notifications aktif!", {
+      body: "Kamu sekarang akan menerima reminder task.",
+    });
+  }
+};
+
   const editTask = (task: Task) => {
-    setEditingId(task.id);
-    setTitle(task.title);
-    setDeadline(task.deadline);
-    setPriority(task.priority);
-    setCategory(task.category);
-    setShowForm(true);
-  };
+  setEditingId(task.id);
+  setTitle(task.title);
+  setDeadline(task.deadline);
+  setReminder(
+    task.reminder
+      ? task.reminder.slice(0, 16)
+      : ""
+  );
+  setPriority(task.priority);
+  setCategory(task.category);
+  setShowForm(true);
+};
 
   // =========================
   // UPDATE TASK
@@ -103,14 +191,16 @@ export default function Home() {
     }
 
     const { error } = await supabase
-      .from("tasks")
-      .update({
-        title,
-        deadline,
-        priority,
-        category,
-      })
-      .eq("id", editingId);
+  .from("tasks")
+  .update({
+  title,
+  deadline,
+  reminder: reminder || null,
+  reminder_sent: false,
+  priority,
+  category,
+})
+  .eq("id", editingId);
 
     if (error) {
       console.error(error);
@@ -122,12 +212,13 @@ export default function Home() {
       tasks.map((task) =>
         task.id === editingId
           ? {
-              ...task,
-              title,
-              deadline,
-              priority,
-              category,
-            }
+    ...task,
+    title,
+    deadline,
+    reminder: reminder || null,
+    priority,
+    category,
+  }
           : task
       )
     );
@@ -201,13 +292,14 @@ export default function Home() {
   // =========================
 
   const resetForm = () => {
-    setTitle("");
-    setDeadline("");
-    setPriority("Medium");
-    setCategory("");
-    setEditingId(null);
-    setShowForm(false);
-  };
+  setTitle("");
+  setDeadline("");
+  setReminder("");
+  setPriority("Medium");
+  setCategory("");
+  setEditingId(null);
+  setShowForm(false);
+};
 
   // =========================
   // DEADLINE STATUS
@@ -300,18 +392,32 @@ export default function Home() {
             </p>
           </div>
 
-          <button
-            onClick={() => {
-              resetForm();
-              setShowForm(true);
-            }}
-            className="rounded-xl bg-gray-900 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-gray-700"
-          >
-            <span className="sm:hidden">＋</span>
-            <span className="hidden sm:inline">
-              ＋ Add Task
-            </span>
-          </button>
+          <div className="flex items-center gap-2">
+  {notificationPermission !== "granted" && (
+    <button
+      onClick={enableNotifications}
+      className="rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm font-semibold text-gray-700 shadow-sm transition hover:bg-gray-50"
+    >
+      🔔
+      <span className="hidden sm:inline ml-1">
+        Enable
+      </span>
+    </button>
+  )}
+
+  <button
+    onClick={() => {
+      resetForm();
+      setShowForm(true);
+    }}
+    className="rounded-xl bg-gray-900 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-gray-700"
+  >
+    <span className="sm:hidden">＋</span>
+    <span className="hidden sm:inline">
+      ＋ Add Task
+    </span>
+  </button>
+</div>
         </div>
       </header>
 
@@ -406,6 +512,25 @@ export default function Home() {
                   className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm outline-none transition focus:border-gray-900"
                 />
               </div>
+
+              <div>
+  <label className="mb-1.5 block text-sm font-medium text-gray-700">
+    Reminder
+  </label>
+
+  <input
+    type="datetime-local"
+    value={reminder}
+    onChange={(e) =>
+      setReminder(e.target.value)
+    }
+    className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm outline-none transition focus:border-gray-900"
+  />
+
+  <p className="mt-1 text-xs text-gray-400">
+    Pilih kapan kamu ingin diingatkan.
+  </p>
+</div>
 
               {/* PRIORITY + CATEGORY */}
 
@@ -622,8 +747,21 @@ export default function Home() {
                         {/* DATE */}
 
                         <p className="mt-3 text-xs text-gray-500">
-                          📅 {formatDate(task.deadline)}
-                        </p>
+  📅 {formatDate(task.deadline)}
+</p>
+
+{task.reminder && (
+  <p className="mt-1 text-xs text-gray-500">
+    🔔{" "}
+    {new Date(task.reminder).toLocaleString(
+      "id-ID",
+      {
+        dateStyle: "medium",
+        timeStyle: "short",
+      }
+    )}
+  </p>
+)}
 
                       </div>
                     </div>
