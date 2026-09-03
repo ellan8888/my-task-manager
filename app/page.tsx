@@ -36,131 +36,7 @@ const [filter, setFilter] = useState<
   const [notificationPermission, setNotificationPermission] =
   useState<NotificationPermission>("default");
 
-  const checkReminders = async () => {
-  console.log("🔍 CHECK DAILY REMINDER JALAN");
-
-  if (!("Notification" in window)) {
-    console.log("❌ Browser tidak mendukung Notification");
-    return;
-  }
-
-  if (Notification.permission !== "granted") {
-    console.log("❌ Permission belum granted");
-    return;
-  }
-
-  const now = new Date();
-
-  console.log("🕐 Sekarang:", now.toString());
-
-  // Tanggal hari ini YYYY-MM-DD
-  const today = now.toLocaleDateString("en-CA");
-
-  const { data, error } = await supabase
-    .from("tasks")
-    .select("*")
-    .eq("completed", false)
-    .not("reminder", "is", null);
-
-  if (error) {
-    console.error("❌ Reminder check error:", error);
-    return;
-  }
-
-  if (!data || data.length === 0) {
-    console.log("⏳ Tidak ada task dengan reminder");
-    return;
-  }
-
-  for (const task of data) {
-    const [reminderHour, reminderMinute] =
-  task.reminder.split(":").map(Number);
-
-    // =========================
-    // CEK TANGGAL DEADLINE
-    // =========================
-
-    const deadlineDate = new Date(
-      task.deadline + "T00:00:00"
-    );
-
-    deadlineDate.setHours(23, 59, 59, 999);
-
-    // Kalau deadline sudah lewat
-    if (now > deadlineDate) {
-      console.log(
-        `⛔ Reminder berhenti: ${task.title} sudah melewati deadline`
-      );
-
-      continue;
-    }
-
-    // =========================
-    // CEK WAKTU REMINDER
-    // =========================
-
-
-    const currentHour = now.getHours();
-    const currentMinute = now.getMinutes();
-
-    // Apakah waktu reminder hari ini sudah tiba?
-    const reminderTimePassed =
-      currentHour > reminderHour ||
-      (currentHour === reminderHour &&
-        currentMinute >= reminderMinute);
-
-    if (!reminderTimePassed) {
-      console.log(
-        `⏳ Belum waktunya: ${task.title}`
-      );
-      continue;
-    }
-
-    // =========================
-    // CEK SUDAH DIKIRIM HARI INI
-    // =========================
-
-    if (task.reminder_last_sent === today) {
-      console.log(
-        `✅ Sudah dikirim hari ini: ${task.title}`
-      );
-      continue;
-    }
-
-    // =========================
-    // KIRIM NOTIFIKASI
-    // =========================
-
-    console.log(
-      `🚨 DAILY REMINDER: ${task.title}`
-    );
-
-    new Notification(`🔔 ${task.title}`, {
-      body: `Reminder harian • Deadline ${task.deadline}`,
-      icon: "/icon-192.png",
-    });
-
-    // =========================
-    // SIMPAN TANGGAL TERAKHIR
-    // =========================
-
-    const { error: updateError } = await supabase
-      .from("tasks")
-      .update({
-        reminder_last_sent: today,
-      })
-      .eq("id", task.id);
-
-    if (updateError) {
-      console.error(
-        "❌ Gagal menyimpan reminder_last_sent:",
-        updateError
-      );
-    }
-  }
-
-  loadTasks();
-};
+  
 
 
 
@@ -182,17 +58,7 @@ const [filter, setFilter] = useState<
     setTasks(data || []);
   };
 
-  useEffect(() => {
-  if (notificationPermission !== "granted") return;
-
-  checkReminders();
-
-  const interval = setInterval(() => {
-    checkReminders();
-  }, 30000);
-
-  return () => clearInterval(interval);
-}, [notificationPermission]);
+  
 
   useEffect(() => {
   if ("Notification" in window) {
