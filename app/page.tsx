@@ -601,6 +601,12 @@ const [filter, setFilter] = useState<
           </div>
 
           <div className="flex items-center gap-2">
+            <button
+  onClick={testPushNotification}
+  className="rounded-xl border border-blue-200 bg-blue-50 px-3 py-2.5 text-sm font-semibold text-blue-700 shadow-sm transition hover:bg-blue-100"
+>
+  🧪 Test Push
+</button>
   {notificationPermission !== "granted" && (
     <button
       onClick={enableNotifications}
