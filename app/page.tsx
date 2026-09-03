@@ -605,7 +605,7 @@ const [filter, setFilter] = useState<
   onClick={testPushNotification}
   className="rounded-xl border border-blue-200 bg-blue-50 px-3 py-2.5 text-sm font-semibold text-blue-700 shadow-sm transition hover:bg-blue-100"
 >
-  🧪 Test Push
+  🧪 Test Paush
 </button>
   {notificationPermission !== "granted" && (
     <button
