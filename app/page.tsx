@@ -291,7 +291,7 @@ const [filter, setFilter] = useState<
       JSON.stringify(subscription)
     );
 
-    alert("✅ Push notification berhasil diaktifkan!");
+    alert("✅ Push notification bearhasil diaktifkan!");
   } catch (error) {
     console.error(
       "❌ Gagal mengaktifkan push notification:",
