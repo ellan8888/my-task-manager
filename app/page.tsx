@@ -53,7 +53,7 @@ export default function Home() {
 
   for (const task of data) {
     new Notification(`🔔 ${task.title}`, {
-      body: "Waktunya mengerjakan task ini!",
+      body: "Waktunya meangerjakan task ini!",
     });
 
     await supabase
