@@ -23,7 +23,8 @@ export default function Home() {
 
   const [title, setTitle] = useState("");
   const [deadline, setDeadline] = useState("");
-  const [reminder, setReminder] = useState("");
+  const [reminder, setReminder] =
+  useState("08:00");
   const [priority, setPriority] =
     useState<"Low" | "Medium" | "High">("Medium");
   const [category, setCategory] = useState("");
@@ -35,6 +36,22 @@ const [filter, setFilter] = useState<
 
   const [notificationPermission, setNotificationPermission] =
   useState<NotificationPermission>("default");
+
+  const [defaultReminder, setDefaultReminder] =
+  useState("20:00");
+
+const [showSettings, setShowSettings] =
+  useState(false);
+
+  const updateDefaultReminder = (
+  value: string
+) => {
+  setDefaultReminder(value);
+  localStorage.setItem(
+    "defaultReminder",
+    value
+  );
+};
 
   
 
@@ -86,6 +103,16 @@ const [filter, setFilter] = useState<
           error
         );
       });
+  }
+}, []);
+
+useEffect(() => {
+  const savedReminder =
+    localStorage.getItem("defaultReminder");
+
+  if (savedReminder) {
+    setDefaultReminder(savedReminder);
+    setReminder(savedReminder);
   }
 }, []);
 
@@ -467,6 +494,14 @@ const [filter, setFilter] = useState<
           </div>
 
           <div className="flex items-center gap-2">
+            <button
+  onClick={() =>
+    setShowSettings(!showSettings)
+  }
+  className="rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm font-semibold text-gray-700 shadow-sm transition hover:bg-gray-50"
+>
+  ⚙️ Settings
+</button>
             <button
   onClick={testPushNotification}
   className="rounded-xl border border-blue-200 bg-blue-50 px-3 py-2.5 text-sm font-semibold text-blue-700 shadow-sm transition hover:bg-blue-100"
@@ -861,6 +896,67 @@ const [filter, setFilter] = useState<
   <p className="mt-1 text-xs text-gray-500">
     🔔 Daily reminder at {task.reminder.slice(0, 5)}
   </p>
+)}
+
+{showSettings && (
+  <div className="mb-6 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+    <div className="mb-4">
+      <h2 className="text-base font-semibold text-gray-900">
+        🔔 Notification Settings
+      </h2>
+
+      <p className="mt-1 text-sm text-gray-500">
+        Atur pengaturan reminder My Task Manager.
+      </p>
+    </div>
+
+    <div className="space-y-4">
+      <div className="flex items-center justify-between gap-4">
+        <div>
+          <p className="text-sm font-medium text-gray-800">
+            Push Notification
+          </p>
+
+          <p className="text-xs text-gray-400">
+            Terima reminder meskipun aplikasi tidak sedang dibuka.
+          </p>
+        </div>
+
+        <span
+          className={`rounded-full px-3 py-1 text-xs font-semibold ${
+            notificationPermission === "granted"
+              ? "bg-green-100 text-green-700"
+              : "bg-gray-100 text-gray-500"
+          }`}
+        >
+          {notificationPermission === "granted"
+            ? "ON"
+            : "OFF"}
+        </span>
+      </div>
+
+      <div>
+        <label className="mb-1.5 block text-sm font-medium text-gray-700">
+          Default Daily Reminder
+        </label>
+
+        <input
+          type="time"
+          value={defaultReminder}
+          onChange={(e) =>
+            updateDefaultReminder(
+              e.target.value
+            )
+          }
+          className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm outline-none transition focus:border-gray-900"
+        />
+
+        <p className="mt-1 text-xs text-gray-400">
+          Waktu ini akan menjadi default saat membuat task baru.
+        </p>
+      </div>
+    </div>
+  </div>
 )}
 
                       </div>
