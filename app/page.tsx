@@ -266,6 +266,37 @@ const [filter, setFilter] = useState<
   // EDIT TASK
   // =========================
 
+  const testPushNotification = async () => {
+  try {
+    const response = await fetch("/api/push", {
+      method: "POST",
+    });
+
+    const result = await response.json();
+
+    console.log("📨 Push API result:", result);
+
+    if (result.success) {
+      alert(
+        `✅ Push berhasil dikirim!\n\nTerkirim: ${result.sent}\nGagal: ${result.failed}`
+      );
+    } else {
+      alert(
+        `❌ Push gagal:\n${result.message || result.error}`
+      );
+    }
+  } catch (error) {
+    console.error(
+      "❌ Test push error:",
+      error
+    );
+
+    alert(
+      "❌ Gagal menghubungi Push API."
+    );
+  }
+};
+
   const enableNotifications = async () => {
   if (!("Notification" in window)) {
     alert("Browser kamu tidak mendukung notifikasi.");
