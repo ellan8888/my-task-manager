@@ -26,59 +26,110 @@ export async function GET() {
       throw error;
     }
 
-    let message = "🔔 *My Task Manager — Daily Reminder*\n\n";
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
 
-    if (!tasks || tasks.length === 0) {
-      message += "🎉 Tidak ada task yang belum selesai!\n\n";
-      message += "Semua task sudah beres. Mantap! 💪";
-    } else {
-      message += `📋 *${tasks.length} task belum selesai:*\n\n`;
+    const overdue: any[] = [];
+    const todayTasks: any[] = [];
+    const tomorrow: any[] = [];
+    const upcoming: any[] = [];
 
-      for (const task of tasks) {
-        const deadline = new Date(
-          task.deadline + "T00:00:00"
-        );
+    for (const task of tasks || []) {
+      const deadline = new Date(
+        task.deadline + "T00:00:00"
+      );
 
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
+      deadline.setHours(0, 0, 0, 0);
 
-        const diff =
-          Math.ceil(
-            (deadline.getTime() - today.getTime()) /
-              (1000 * 60 * 60 * 24)
-          );
+      const diff = Math.round(
+        (deadline.getTime() - today.getTime()) /
+          (1000 * 60 * 60 * 24)
+      );
 
-        let status = "";
+      if (diff < 0) {
+        overdue.push(task);
+      } else if (diff === 0) {
+        todayTasks.push(task);
+      } else if (diff === 1) {
+        tomorrow.push(task);
+      } else {
+        upcoming.push(task);
+      }
+    }
 
-        if (diff < 0) {
-          status = "🔴 TERLAMBAT";
-        } else if (diff === 0) {
-          status = "🔥 HARI INI";
-        } else if (diff === 1) {
-          status = "🟠 BESOK";
-        } else {
-          status = `🟢 ${diff} hari lagi`;
-        }
+    let message =
+      "🔔 *MY TASK MANAGER*\n" +
+      "━━━━━━━━━━━━━━━━━━\n\n";
 
-        message += `*${task.title}*\n`;
-        message += `📅 Deadline: ${task.deadline}\n`;
-        message += `⏰ Status: ${status}\n`;
+    message += `📅 *${today.toLocaleDateString("id-ID", {
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+    })}*\n\n`;
+
+    if (overdue.length > 0) {
+      message += "🔴 *TERLAMBAT*\n\n";
+
+      for (const task of overdue) {
+        message += `• *${task.title}*\n`;
+        message += `  Deadline: ${task.deadline}\n`;
 
         if (task.priority) {
-          message += `⚡ Prioritas: ${task.priority}\n`;
-        }
-
-        if (task.category) {
-          message += `📁 Kategori: ${task.category}\n`;
+          message += `  Prioritas: ${task.priority}\n`;
         }
 
         message += "\n";
       }
-
-      message += `📊 *Total belum selesai: ${tasks.length}*`;
     }
 
-    const telegramResponse = await fetch(
+    if (todayTasks.length > 0) {
+      message += "🔥 *HARI INI*\n\n";
+
+      for (const task of todayTasks) {
+        message += `• *${task.title}*\n`;
+
+        if (task.priority) {
+          message += `  Prioritas: ${task.priority}\n`;
+        }
+
+        if (task.category) {
+          message += `  Kategori: ${task.category}\n`;
+        }
+
+        message += "\n";
+      }
+    }
+
+    if (tomorrow.length > 0) {
+      message += "🟠 *BESOK*\n\n";
+
+      for (const task of tomorrow) {
+        message += `• *${task.title}*\n`;
+        message += `  Deadline: ${task.deadline}\n\n`;
+      }
+    }
+
+    if (upcoming.length > 0) {
+      message += "📅 *MENDATANG*\n\n";
+
+      for (const task of upcoming) {
+        message += `• *${task.title}*\n`;
+        message += `  Deadline: ${task.deadline}\n\n`;
+      }
+    }
+
+    if (!tasks || tasks.length === 0) {
+      message +=
+        "🎉 *SEMUA TASK SUDAH SELESAI!*\n\n" +
+        "Tidak ada task yang perlu dikerjakan hari ini. Mantap! 💪";
+    } else {
+      message +=
+        "━━━━━━━━━━━━━━━━━━\n" +
+        `📊 *Total belum selesai: ${tasks.length} task*\n\n` +
+        "Semangat menyelesaikannya! 💪🔥";
+    }
+
+    const response = await fetch(
       `https://api.telegram.org/bot${botToken}/sendMessage`,
       {
         method: "POST",
@@ -93,19 +144,21 @@ export async function GET() {
       }
     );
 
-    const telegramResult = await telegramResponse.json();
+    const result = await response.json();
 
-    if (!telegramResponse.ok) {
+    if (!response.ok) {
       throw new Error(
-        telegramResult.description ||
-          "Gagal mengirim pesan Telegram."
+        result.description || "Telegram gagal mengirim pesan."
       );
     }
 
     return NextResponse.json({
       success: true,
-      message: "Telegram reminder berhasil dikirim.",
       totalTasks: tasks?.length || 0,
+      overdue: overdue.length,
+      today: todayTasks.length,
+      tomorrow: tomorrow.length,
+      upcoming: upcoming.length,
     });
   } catch (error: any) {
     console.error("❌ Telegram error:", error);
@@ -113,9 +166,7 @@ export async function GET() {
     return NextResponse.json(
       {
         success: false,
-        error:
-          error.message ||
-          "Gagal mengirim Telegram reminder.",
+        error: error.message || "Gagal mengirim Telegram.",
       },
       { status: 500 }
     );
