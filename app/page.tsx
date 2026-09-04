@@ -906,7 +906,7 @@ useEffect(() => {
       </h2>
 
       <p className="mt-1 text-sm text-gray-500">
-        Atur pengaaturan reminder My Task Manager.
+        Atur pengaatursn reminder My Task Manager.
       </p>
     </div>
 
