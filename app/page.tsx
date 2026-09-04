@@ -93,7 +93,7 @@
         })
         .catch((error) => {
           console.error(
-            "❌ Service Worker registration failed:",
+            "❌ Service Worker registraation failed:",
             error
           );
         });
