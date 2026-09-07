@@ -345,36 +345,32 @@
     // =========================
 
     const toggleTask = async (id: number) => {
-      const task = tasks.find((task) => task.id === id);
+  const task = tasks.find((task) => task.id === id);
 
-      if (!task) return;
+  if (!task) return;
 
-      const newCompletedStatus = !task.completed;
+  const confirmComplete = window.confirm(
+    "Tandai task ini sebagai selesai?"
+  );
 
-      const { error } = await supabase
-        .from("tasks")
-        .update({
-          completed: newCompletedStatus,
-        })
-        .eq("id", id);
+  if (!confirmComplete) return;
 
-      if (error) {
-        console.error(error);
-        alert("Gagal mengubah status task!");
-        return;
-      }
+  const { error } = await supabase
+    .from("tasks")
+    .delete()
+    .eq("id", id);
 
-      setTasks(
-        tasks.map((task) =>
-          task.id === id
-            ? {
-                ...task,
-                completed: newCompletedStatus,
-              }
-            : task
-        )
-      );
-    };
+  if (error) {
+    console.error(error);
+    alert("Gagal menyelesaikan task!");
+    return;
+  }
+
+  // Langsung hilangkan card dari tampilan
+  setTasks((current) =>
+    current.filter((item) => item.id !== id)
+  );
+};
 
     // =========================
     // RESET FORM

@@ -381,7 +381,9 @@ orderNotificationSent = true;
     .from("joki_orders")
     .update({
       reminder_sent: true,
-    })
+    completed: true,
+    reminder_last_sent: new Date().toISOString(),
+  })
     .eq("id", order.id);
 }
 }
