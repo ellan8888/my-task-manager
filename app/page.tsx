@@ -1012,7 +1012,7 @@
 
   {task.reminder && (
     <p className="mt-1 text-xs text-gray-500">
-      🔔 Daily reminder at {task.reminder.slice(0, 5)}
+      🔔 Daily reminader at {task.reminder.slice(0, 5)}
     </p>
   )}
 
