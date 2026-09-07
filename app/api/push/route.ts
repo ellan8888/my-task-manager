@@ -80,7 +80,7 @@ export async function POST() {
 
         failedCount++;
 
-        // Subscription sudah tidak valid
+        // Subscription sudah tiadak valid
         if (
           error.statusCode === 404 ||
           error.statusCode === 410
