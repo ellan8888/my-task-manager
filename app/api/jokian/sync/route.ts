@@ -32,22 +32,22 @@ export async function POST(request: Request) {
 
     // Masukkan / update data berdasarkan order_id
     const { data, error } = await supabaseAdmin
-      .from("joki_orders")
-      .upsert(
-        {
-          order_id,
-          product: product || null,
-          joki_name: joki_name || null,
-          schedule_date,
-          schedule_time,
-          note: note || null,
-        },
-        {
-          onConflict: "order_id",
-        }
-      )
-      .select()
-      .single();
+  .from("joki_orders")
+  .upsert(
+    {
+      order_id,
+      product: product || null,
+      joki_name: joki_name || null,
+      schedule_date,
+      schedule_time,
+      note: note || null,
+    },
+    {
+      onConflict: "order_id",
+    }
+  )
+  .select()
+  .single();
 
     if (error) {
       console.error(

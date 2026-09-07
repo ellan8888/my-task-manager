@@ -86,6 +86,7 @@
   const { data, error } = await supabase
     .from("joki_orders")
     .select("*")
+    .eq("completed", false)
     .order("schedule_date", { ascending: true })
     .order("schedule_time", { ascending: true });
 
@@ -1083,21 +1084,28 @@
 
               <button
                 onClick={async () => {
+  const confirmComplete = window.confirm(
+    "Tandai Jokian ini sebagai selesai?"
+  );
+
+  if (!confirmComplete) return;
+
   const { error } = await supabase
     .from("joki_orders")
-    .delete()
+    .update({
+      completed: true,
+    })
     .eq("id", order.id);
 
   if (error) {
     console.error(error);
-    alert("Gagal menghapus Jokian!");
+    alert("Gagal menyelesaikan Jokian!");
     return;
   }
 
-  setJokiOrders(
-    jokiOrders.filter(
-      (item) => item.id !== order.id
-    )
+  // Langsung hilangkan dari tampilan
+  setJokiOrders((current) =>
+    current.filter((item) => item.id !== order.id)
   );
 }}
                 className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 text-sm ${

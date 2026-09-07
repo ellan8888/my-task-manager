@@ -103,13 +103,16 @@ export async function GET() {
       );
     }
 
-    if (!tasks || tasks.length === 0) {
-      return NextResponse.json({
-        success: true,
-        message: "Tidak ada task dengan reminder.",
-        sent: 0,
-      });
-    }
+    if (
+  (!tasks || tasks.length === 0) &&
+  (!jokiOrders || jokiOrders.length === 0)
+) {
+  return NextResponse.json({
+    success: true,
+    message: "Tidak ada task atau jadwal Jokian.",
+    sent: 0,
+  });
+}
 
     // =========================
     // AMBIL SUBSCRIPTIONS
@@ -338,18 +341,19 @@ export async function GET() {
 for (const subscription of subscriptions) {
         try {
           await webpush.sendNotification(
-            {
-              endpoint: subscription.endpoint,
-              keys: {
-                p256dh: subscription.p256dh,
-                auth: subscription.auth,
-              },
-            },
-            payload
-          );
+  {
+    endpoint: subscription.endpoint,
+    keys: {
+      p256dh: subscription.p256dh,
+      auth: subscription.auth,
+    },
+  },
+  payload
+);
 
-          sent++;
-          jokiSent++;
+sent++;
+jokiSent++;
+orderNotificationSent = true;
         } catch (error: any) {
           console.error(
             "❌ Push Jokian gagal:",
