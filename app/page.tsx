@@ -17,8 +17,21 @@
     notes: string | null;
   };
 
+  type JokiOrder = {
+  id: number;
+  order_id: string;
+  product: string | null;
+  joki_name: string | null;
+  schedule_date: string;
+  schedule_time: string;
+  note: string | null;
+  completed: boolean;
+  created_at: string;
+};
+
   export default function Home() {
     const [tasks, setTasks] = useState<Task[]>([]);
+    const [jokiOrders, setJokiOrders] = useState<JokiOrder[]>([]);
     const [showForm, setShowForm] = useState(false);
     const [editingId, setEditingId] = useState<number | null>(null);
     
@@ -69,7 +82,20 @@
       setTasks(data || []);
     };
 
-    
+    const loadJokiOrders = async () => {
+  const { data, error } = await supabase
+    .from("joki_orders")
+    .select("*")
+    .order("schedule_date", { ascending: true })
+    .order("schedule_time", { ascending: true });
+
+  if (error) {
+    console.error("Gagal mengambil data Jokian:", error);
+    return;
+  }
+
+  setJokiOrders(data || []);
+};
 
     useEffect(() => {
     if ("Notification" in window) {
@@ -78,8 +104,9 @@
   }, []);
 
     useEffect(() => {
-      loadTasks();
-    }, []);
+  loadTasks();
+  loadJokiOrders();
+}, []);
 
     useEffect(() => {
     if ("serviceWorker" in navigator) {
@@ -1002,6 +1029,170 @@
               </div>
             )}
           </section>
+          {/* JOKIAN */}
+
+<section className="mt-8">
+  <div className="mb-4 flex items-center justify-between">
+    <div>
+      <h2 className="text-lg font-bold text-gray-900">
+        🎮 Jokian
+      </h2>
+
+      <p className="mt-1 text-xs text-gray-500">
+        Jadwal joki yang otomatis masuk dari Tokoku-bot.
+      </p>
+    </div>
+
+    <span className="text-sm text-gray-500">
+      {jokiOrders.filter((order) => !order.completed).length} pending
+    </span>
+  </div>
+
+  {jokiOrders.length === 0 ? (
+    <div className="rounded-2xl border border-dashed border-gray-300 bg-white px-5 py-10 text-center">
+      <div className="text-4xl">🎮</div>
+
+      <h3 className="mt-3 font-semibold text-gray-800">
+        Belum ada jadwal jokian
+      </h3>
+
+      <p className="mt-1 text-sm text-gray-500">
+        Jadwal dari Tokoku-bot akan muncul otomatis di sini.
+      </p>
+    </div>
+  ) : (
+    <div className="space-y-3">
+      {jokiOrders.map((order) => {
+        const scheduleDate = new Date(
+          `${order.schedule_date}T${order.schedule_time}`
+        );
+
+        const isToday =
+          scheduleDate.toDateString() ===
+          new Date().toDateString();
+
+        return (
+          <div
+            key={order.id}
+            className={`rounded-2xl bg-white p-4 shadow-sm transition sm:p-5 ${
+              order.completed ? "opacity-60" : ""
+            }`}
+          >
+            <div className="flex gap-3">
+              {/* CHECKBOX */}
+
+              <button
+                onClick={async () => {
+                  const newStatus = !order.completed;
+
+                  const { error } = await supabase
+                    .from("joki_orders")
+                    .update({
+                      completed: newStatus,
+                    })
+                    .eq("id", order.id);
+
+                  if (error) {
+                    console.error(error);
+                    alert("Gagal mengubah status Jokian!");
+                    return;
+                  }
+
+                  setJokiOrders(
+                    jokiOrders.map((item) =>
+                      item.id === order.id
+                        ? {
+                            ...item,
+                            completed: newStatus,
+                          }
+                        : item
+                    )
+                  );
+                }}
+                className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 text-sm ${
+                  order.completed
+                    ? "border-green-500 bg-green-500 text-white"
+                    : "border-gray-300 hover:border-gray-500"
+                }`}
+              >
+                {order.completed && "✓"}
+              </button>
+
+              {/* CONTENT */}
+
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
+                    <h3
+                      className={`font-semibold text-gray-900 ${
+                        order.completed
+                          ? "line-through"
+                          : ""
+                      }`}
+                    >
+                      {order.product || "Jokian"}
+                    </h3>
+
+                    <p className="mt-1 text-xs text-gray-500">
+                      Order #{order.order_id}
+                    </p>
+                  </div>
+
+                  <span
+                    className={`w-fit rounded-full px-2.5 py-1 text-xs font-medium ${
+                      order.completed
+                        ? "bg-green-100 text-green-700"
+                        : isToday
+                        ? "bg-orange-100 text-orange-700"
+                        : "bg-blue-100 text-blue-700"
+                    }`}
+                  >
+                    {order.completed
+                      ? "Selesai"
+                      : isToday
+                      ? "Hari Ini"
+                      : "Terjadwal"}
+                  </span>
+                </div>
+
+                {/* INFO */}
+
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {order.joki_name && (
+                    <span className="rounded-full bg-purple-100 px-2.5 py-1 text-xs font-medium text-purple-700">
+                      👤 {order.joki_name}
+                    </span>
+                  )}
+
+                  <span className="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-600">
+                    🕒 {order.schedule_time.slice(0, 5)}
+                  </span>
+
+                  <span className="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-600">
+                    📅{" "}
+                    {new Date(
+                      `${order.schedule_date}T00:00:00`
+                    ).toLocaleDateString("id-ID", {
+                      day: "numeric",
+                      month: "long",
+                      year: "numeric",
+                    })}
+                  </span>
+                </div>
+
+                {order.note && (
+                  <p className="mt-3 text-xs text-gray-500">
+                    📝 {order.note}
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  )}
+</section>
         </div>
       </main>
     );
