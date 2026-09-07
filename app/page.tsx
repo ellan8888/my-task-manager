@@ -1087,11 +1087,9 @@
   if (!confirmComplete) return;
 
   const { error } = await supabase
-    .from("joki_orders")
-    .update({
-      completed: true,
-    })
-    .eq("id", order.id);
+  .from("joki_orders")
+  .delete()
+  .eq("id", order.id);  
 
   if (error) {
     console.error(error);

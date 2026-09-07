@@ -417,16 +417,15 @@ for (const order of jokiOrders || []) {
   // =========================
 
   if (orderNotificationSent) {
-    const { error: updateError } =
-      await supabaseAdmin
-        .from("joki_orders")
-        .update({
-          reminder_sent: true,
-          completed: true,
-          reminder_last_sent:
-            new Date().toISOString(),
-        })
-        .eq("id", order.id);
+  const { error: updateError } =
+    await supabaseAdmin
+      .from("joki_orders")
+      .update({
+        reminder_sent: true,
+        reminder_last_sent:
+          new Date().toISOString(),
+      })
+      .eq("id", order.id);
 
     if (updateError) {
       console.error(
