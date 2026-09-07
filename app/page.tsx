@@ -1083,32 +1083,23 @@
 
               <button
                 onClick={async () => {
-                  const newStatus = !order.completed;
+  const { error } = await supabase
+    .from("joki_orders")
+    .delete()
+    .eq("id", order.id);
 
-                  const { error } = await supabase
-                    .from("joki_orders")
-                    .update({
-                      completed: newStatus,
-                    })
-                    .eq("id", order.id);
+  if (error) {
+    console.error(error);
+    alert("Gagal menghapus Jokian!");
+    return;
+  }
 
-                  if (error) {
-                    console.error(error);
-                    alert("Gagal mengubah status Jokian!");
-                    return;
-                  }
-
-                  setJokiOrders(
-                    jokiOrders.map((item) =>
-                      item.id === order.id
-                        ? {
-                            ...item,
-                            completed: newStatus,
-                          }
-                        : item
-                    )
-                  );
-                }}
+  setJokiOrders(
+    jokiOrders.filter(
+      (item) => item.id !== order.id
+    )
+  );
+}}
                 className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 text-sm ${
                   order.completed
                     ? "border-green-500 bg-green-500 text-white"

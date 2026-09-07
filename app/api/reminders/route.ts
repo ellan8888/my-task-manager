@@ -84,6 +84,25 @@ export async function GET() {
       );
     }
 
+        // =========================
+    // AMBIL JADWAL JOKIAN
+    // =========================
+
+    const { data: jokiOrders, error: jokiError } =
+      await supabaseAdmin
+        .from("joki_orders")
+        .select("*")
+        .eq("completed", false)
+.eq("schedule_date", today)
+.eq("reminder_sent", false);
+
+    if (jokiError) {
+      console.error(
+        "❌ Gagal mengambil jadwal Jokian:",
+        jokiError
+      );
+    }
+
     if (!tasks || tasks.length === 0) {
       return NextResponse.json({
         success: true,
@@ -131,6 +150,7 @@ export async function GET() {
     let sent = 0;
     let skipped = 0;
     let failed = 0;
+        let jokiSent = 0;
 
     // =========================
     // CEK SETIAP TASK
@@ -267,6 +287,101 @@ export async function GET() {
         })
         .eq("id", task.id);
     }
+
+        // =========================
+    // CEK JADWAL JOKIAN
+    // =========================
+
+    for (const order of jokiOrders || []) {
+      if (!order.schedule_time) {
+        continue;
+      }
+
+      const scheduleParts =
+        order.schedule_time
+          .split(":")
+          .map(Number);
+
+      const scheduleHour = scheduleParts[0];
+      const scheduleMinute = scheduleParts[1];
+
+      const scheduleMinutes =
+        scheduleHour * 60 +
+        scheduleMinute;
+
+      const currentMinutes =
+        currentHour * 60 +
+        currentMinute;
+
+      // Belum waktunya
+      if (currentMinutes < scheduleMinutes) {
+        console.log(
+          `⏳ Belum waktunya Jokian: ${order.order_id}`
+        );
+        continue;
+      }
+
+      const payload = JSON.stringify({
+        title: "🎮 Waktunya Jokian!",
+        body: `${order.product || "Jokian"} • Joki: ${
+          order.joki_name || "-"
+        } • Jam ${order.schedule_time.slice(0, 5)}`,
+        icon: "/icon-192.png",
+      });
+
+      console.log(
+        `🎮 Mengirim reminder Jokian: ${order.order_id}`
+      );
+
+      let orderNotificationSent = false;
+
+for (const subscription of subscriptions) {
+        try {
+          await webpush.sendNotification(
+            {
+              endpoint: subscription.endpoint,
+              keys: {
+                p256dh: subscription.p256dh,
+                auth: subscription.auth,
+              },
+            },
+            payload
+          );
+
+          sent++;
+          jokiSent++;
+        } catch (error: any) {
+          console.error(
+            "❌ Push Jokian gagal:",
+            error
+          );
+
+          failed++;
+
+          if (
+            error.statusCode === 404 ||
+            error.statusCode === 410
+          ) {
+            await supabaseAdmin
+              .from("push_subscriptions")
+              .delete()
+              .eq(
+                "endpoint",
+                subscription.endpoint
+              );
+          }
+        }
+      }
+      if (orderNotificationSent) {
+  await supabaseAdmin
+    .from("joki_orders")
+    .update({
+      reminder_sent: true,
+    })
+    .eq("id", order.id);
+}
+}
+    
 
     return NextResponse.json({
       success: true,
