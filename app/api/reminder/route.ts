@@ -125,7 +125,7 @@ export async function GET() {
 
     if (subError) {
       console.error(
-        "❌ Gagal mengambil subscriptions:",
+        "❌ Gagal mengambil subsgcriptions:",
         subError
       );
 
