@@ -291,101 +291,154 @@ export async function GET() {
         .eq("id", task.id);
     }
 
-        // =========================
-    // CEK JADWAL JOKIAN
-    // =========================
+          // =========================
+// CEK JADWAL JOKIAN
+// =========================
 
-    for (const order of jokiOrders || []) {
-      if (!order.schedule_time) {
-        continue;
-      }
+for (const order of jokiOrders || []) {
+  if (!order.schedule_time) {
+    continue;
+  }
 
-      const scheduleParts =
-        order.schedule_time
-          .split(":")
-          .map(Number);
+  // =========================
+  // JAM JOKIAN
+  // =========================
 
-      const scheduleHour = scheduleParts[0];
-      const scheduleMinute = scheduleParts[1];
+  const scheduleParts = order.schedule_time
+    .slice(0, 5)
+    .split(":")
+    .map(Number);
 
-      const scheduleMinutes =
-        scheduleHour * 60 +
-        scheduleMinute;
+  const scheduleHour = scheduleParts[0];
+  const scheduleMinute = scheduleParts[1];
 
-      const currentMinutes =
-        currentHour * 60 +
-        currentMinute;
+  const scheduleMinutes =
+    scheduleHour * 60 + scheduleMinute;
 
-      // Belum waktunya
-      if (currentMinutes < scheduleMinutes) {
-        console.log(
-          `⏳ Belum waktunya Jokian: ${order.order_id}`
-        );
-        continue;
-      }
+  // =========================
+  // JAM SEKARANG
+  // =========================
 
-      const payload = JSON.stringify({
-        title: "🎮 Waktunya Jokian!",
-        body: `${order.product || "Jokian"} • Joki: ${
-          order.joki_name || "-"
-        } • Jam ${order.schedule_time.slice(0, 5)}`,
-        icon: "/icon-192.png",
-      });
+  const currentMinutes =
+    currentHour * 60 + currentMinute;
 
-      console.log(
-        `🎮 Mengirim reminder Jokian: ${order.order_id}`
+  console.log(
+    `🎮 Cek Jokian ${order.order_id}: ` +
+    `jadwal ${String(scheduleHour).padStart(2, "0")}:${String(scheduleMinute).padStart(2, "0")} ` +
+    `| sekarang ${String(currentHour).padStart(2, "0")}:${String(currentMinute).padStart(2, "0")}`
+  );
+
+  // =========================
+  // BELUM WAKTUNYA
+  // =========================
+
+  if (currentMinutes < scheduleMinutes) {
+    console.log(
+      `⏳ Belum waktunya Jokian: ${order.order_id}`
+    );
+
+    skipped++;
+    continue;
+  }
+
+  // =========================
+  // PAYLOAD NOTIFIKASI
+  // =========================
+
+  const payload = JSON.stringify({
+    title: "🎮 Waktunya Jokian!",
+    body: `${order.product || "Jokian"} • Joki: ${
+      order.joki_name || "-"
+    } • Jam ${order.schedule_time.slice(0, 5)}`,
+    icon: "/icon-192.png",
+  });
+
+  console.log(
+    `🚨 Mengirim reminder Jokian: ${order.order_id}`
+  );
+
+  let orderNotificationSent = false;
+
+  // =========================
+  // KIRIM KE SEMUA SUBSCRIPTION
+  // =========================
+
+  for (const subscription of subscriptions) {
+    try {
+      await webpush.sendNotification(
+        {
+          endpoint: subscription.endpoint,
+          keys: {
+            p256dh: subscription.p256dh,
+            auth: subscription.auth,
+          },
+        },
+        payload
       );
 
-      let orderNotificationSent = false;
+      sent++;
+      jokiSent++;
 
-for (const subscription of subscriptions) {
-        try {
-          await webpush.sendNotification(
-  {
-    endpoint: subscription.endpoint,
-    keys: {
-      p256dh: subscription.p256dh,
-      auth: subscription.auth,
-    },
-  },
-  payload
-);
+      orderNotificationSent = true;
 
-sent++;
-jokiSent++;
-orderNotificationSent = true;
-        } catch (error: any) {
-          console.error(
-            "❌ Push Jokian gagal:",
-            error
+      console.log(
+        `✅ Notifikasi Jokian berhasil dikirim: ${order.order_id}`
+      );
+    } catch (error: any) {
+      console.error(
+        `❌ Push Jokian gagal untuk ${order.order_id}:`,
+        error
+      );
+
+      failed++;
+
+      // Subscription sudah tidak valid
+      if (
+        error.statusCode === 404 ||
+        error.statusCode === 410
+      ) {
+        await supabaseAdmin
+          .from("push_subscriptions")
+          .delete()
+          .eq(
+            "endpoint",
+            subscription.endpoint
           );
 
-          failed++;
-
-          if (
-            error.statusCode === 404 ||
-            error.statusCode === 410
-          ) {
-            await supabaseAdmin
-              .from("push_subscriptions")
-              .delete()
-              .eq(
-                "endpoint",
-                subscription.endpoint
-              );
-          }
-        }
+        console.log(
+          "🗑️ Subscription tidak valid dihapus."
+        );
       }
-      if (orderNotificationSent) {
-  await supabaseAdmin
-    .from("joki_orders")
-    .update({
-      reminder_sent: true,
-    completed: true,
-    reminder_last_sent: new Date().toISOString(),
-  })
-    .eq("id", order.id);
-}
+    }
+  }
+
+  // =========================
+  // SIMPAN STATUS
+  // =========================
+
+  if (orderNotificationSent) {
+    const { error: updateError } =
+      await supabaseAdmin
+        .from("joki_orders")
+        .update({
+          reminder_sent: true,
+          completed: true,
+          reminder_last_sent:
+            new Date().toISOString(),
+        })
+        .eq("id", order.id);
+
+    if (updateError) {
+      console.error(
+        `❌ Gagal update status Jokian ${order.order_id}:`,
+        updateError
+      );
+    } else {
+      console.log(
+        `✅ Status Jokian diperbarui: ${order.order_id}`
+      );
+    }
+  }
 }
     
 
