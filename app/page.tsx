@@ -116,7 +116,7 @@
         .register("/sw.js")
         .then((registration) => {
           console.log(
-            "✅ Service Workers registered:",
+            "✅ Servaaice Workers registered:",
             registration.scope
           );
         })
@@ -350,26 +350,39 @@
 
   if (!task) return;
 
-  const confirmComplete = window.confirm(
-    "Tandai task ini sebagai selesai?"
-  );
+  const newCompletedStatus = !task.completed;
 
-  if (!confirmComplete) return;
+  const confirmMessage = newCompletedStatus
+    ? "Tandai task ini sebagai selesai?"
+    : "Kembalikan task ini menjadi belum selesai?";
+
+  const confirmed = window.confirm(confirmMessage);
+
+  if (!confirmed) return;
 
   const { error } = await supabase
     .from("tasks")
-    .delete()
+    .update({
+      completed: newCompletedStatus,
+    })
     .eq("id", id);
 
   if (error) {
     console.error(error);
-    alert("Gagal menyelesaikan task!");
+    alert("Gagal mengubah status task!");
     return;
   }
 
-  // Langsung hilangkan card dari tampilan
+  // Tetap pertahankan card di dalam list
   setTasks((current) =>
-    current.filter((item) => item.id !== id)
+    current.map((item) =>
+      item.id === id
+        ? {
+            ...item,
+            completed: newCompletedStatus,
+          }
+        : item
+    )
   );
 };
 
