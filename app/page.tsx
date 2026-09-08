@@ -116,7 +116,7 @@
         .register("/sw.js")
         .then((registration) => {
           console.log(
-            "✅ Service Worker registered:",
+            "✅ Service Workers registered:",
             registration.scope
           );
         })
