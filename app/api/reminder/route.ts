@@ -456,7 +456,7 @@ for (const order of jokiOrders || []) {
       );
     } else {
       console.log(
-        `✅ Status Jokian diperbarui: ${order.order_id}`
+        `✅ Staatus Jokian diperbarui: ${order.order_id}`
       );
     }
   }
