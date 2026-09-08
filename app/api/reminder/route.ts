@@ -89,12 +89,11 @@ export async function GET() {
     // =========================
 
     const { data: jokiOrders, error: jokiError } =
-      await supabaseAdmin
-        .from("joki_orders")
-        .select("*")
-        .eq("completed", false)
-.eq("schedule_date", today)
-.eq("reminder_sent", false);
+  await supabaseAdmin
+    .from("joki_orders")
+    .select("*")
+    .eq("completed", false)
+    .eq("reminder_sent", false);
 
     if (jokiError) {
       console.error(
@@ -296,27 +295,33 @@ export async function GET() {
 // =========================
 
 for (const order of jokiOrders || []) {
-  if (!order.schedule_time) {
+  if (!order.schedule_date || !order.schedule_time) {
+    console.log(
+      `⚠️ Data jadwal Jokian tidak lengkap: ${order.order_id}`
+    );
+
+    skipped++;
     continue;
   }
 
   // =========================
-  // JAM JOKIAN
+  // TANGGAL JADWAL
   // =========================
 
-  const scheduleParts = order.schedule_time
-    .slice(0, 5)
-    .split(":")
-    .map(Number);
+  const scheduleDate = order.schedule_date;
 
-  const scheduleHour = scheduleParts[0];
-  const scheduleMinute = scheduleParts[1];
+  // Ambil HH:mm saja
+  const scheduleTime = order.schedule_time
+    .slice(0, 5);
+
+  const [scheduleHour, scheduleMinute] =
+    scheduleTime.split(":").map(Number);
 
   const scheduleMinutes =
     scheduleHour * 60 + scheduleMinute;
 
   // =========================
-  // JAM SEKARANG
+  // WAKTU SEKARANG WIB
   // =========================
 
   const currentMinutes =
@@ -324,15 +329,16 @@ for (const order of jokiOrders || []) {
 
   console.log(
     `🎮 Cek Jokian ${order.order_id}: ` +
-    `jadwal ${String(scheduleHour).padStart(2, "0")}:${String(scheduleMinute).padStart(2, "0")} ` +
-    `| sekarang ${String(currentHour).padStart(2, "0")}:${String(currentMinute).padStart(2, "0")}`
+    `tanggal ${scheduleDate} ` +
+    `jadwal ${scheduleTime} ` +
+    `| sekarang ${today} ${String(currentHour).padStart(2, "0")}:${String(currentMinute).padStart(2, "0")}`
   );
 
   // =========================
-  // BELUM WAKTUNYA
+  // CEK TANGGAL
   // =========================
 
-  if (currentMinutes < scheduleMinutes) {
+  if (scheduleDate > today) {
     console.log(
       `⏳ Belum waktunya Jokian: ${order.order_id}`
     );
@@ -342,20 +348,37 @@ for (const order of jokiOrders || []) {
   }
 
   // =========================
-  // PAYLOAD NOTIFIKASI
+  // CEK JAM
   // =========================
 
-  const payload = JSON.stringify({
-    title: "🎮 Waktunya Jokian!",
-    body: `${order.product || "Jokian"} • Joki: ${
-      order.joki_name || "-"
-    } • Jam ${order.schedule_time.slice(0, 5)}`,
-    icon: "/icon-192.png",
-  });
+  if (
+    scheduleDate === today &&
+    currentMinutes < scheduleMinutes
+  ) {
+    console.log(
+      `⏳ Belum waktunya Jokian: ${order.order_id}`
+    );
+
+    skipped++;
+    continue;
+  }
+
+  // =========================
+  // JADWAL SUDAH TIBA
+  // =========================
 
   console.log(
     `🚨 Mengirim reminder Jokian: ${order.order_id}`
   );
+
+  const payload = JSON.stringify({
+    title: "🎮 Waktunya Jokian!",
+    body:
+      `${order.product || "Jokian"} • ` +
+      `Joki: ${order.joki_name || "-"} • ` +
+      `Jam ${scheduleTime}`,
+    icon: "/icon-192.png",
+  });
 
   let orderNotificationSent = false;
 
@@ -384,6 +407,7 @@ for (const order of jokiOrders || []) {
       console.log(
         `✅ Notifikasi Jokian berhasil dikirim: ${order.order_id}`
       );
+
     } catch (error: any) {
       console.error(
         `❌ Push Jokian gagal untuk ${order.order_id}:`,
@@ -413,19 +437,17 @@ for (const order of jokiOrders || []) {
   }
 
   // =========================
-  // SIMPAN STATUS
+  // TANDAI REMINDER TERKIRIM
   // =========================
 
   if (orderNotificationSent) {
-  const { error: updateError } =
-    await supabaseAdmin
-      .from("joki_orders")
-      .update({
-        reminder_sent: true,
-        reminder_last_sent:
-          new Date().toISOString(),
-      })
-      .eq("id", order.id);
+    const { error: updateError } =
+      await supabaseAdmin
+        .from("joki_orders")
+        .update({
+          reminder_sent: true,
+        })
+        .eq("id", order.id);
 
     if (updateError) {
       console.error(

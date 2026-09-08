@@ -25,6 +25,7 @@
   schedule_date: string;
   schedule_time: string;
   note: string | null;
+  reminder_sent: boolean;
   completed: boolean;
   created_at: string;
 };
