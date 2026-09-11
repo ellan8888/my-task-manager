@@ -20,6 +20,7 @@
   type JokiOrder = {
   id: number;
   order_id: string;
+  buyer_name: string | null;
   product: string | null;
   joki_name: string | null;
   schedule_date: string;
@@ -1131,18 +1132,18 @@
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                   <div>
                     <h3
-                      className={`font-semibold text-gray-900 ${
-                        order.completed
-                          ? "line-through"
-                          : ""
-                      }`}
-                    >
-                      {order.product || "Jokian"}
-                    </h3>
+  className={`font-semibold text-gray-900 ${
+    order.completed
+      ? "line-through"
+      : ""
+  }`}
+>
+  {order.buyer_name || "Pembeli"}
+</h3>
 
-                    <p className="mt-1 text-xs text-gray-500">
-                      Order #{order.order_id}
-                    </p>
+<p className="mt-1 text-xs text-gray-500">
+  Order #{order.order_id}
+</p>
                   </div>
 
                   <span
