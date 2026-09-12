@@ -20,7 +20,7 @@
   type JokiOrder = {
   id: number;
   order_id: string;
-  buyer_name: string | null;
+  roblox_username: string | null;
   product: string | null;
   joki_name: string | null;
   schedule_date: string;
@@ -1138,7 +1138,7 @@
       : ""
   }`}
 >
-  {order.buyer_name || "Pembeli"}
+  {order.roblox_username || "Pembeli"}
 </h3>
 
 <p className="mt-1 text-xs text-gray-500">
