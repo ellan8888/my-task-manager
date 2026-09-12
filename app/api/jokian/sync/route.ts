@@ -7,7 +7,7 @@ export async function POST(request: Request) {
 
     const {
       order_id,
-      username_roblox,
+      roblox_username,
       product,    
       joki_name,
       schedule_date,
@@ -37,7 +37,7 @@ export async function POST(request: Request) {
   .upsert(
     {
       order_id,
-      username_roblox: username_roblox || null,
+      roblox_username: roblox_username || null,
       product: product || null,
       joki_name: joki_name || null,
       schedule_date,
