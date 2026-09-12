@@ -32,3 +32,24 @@ body {
 .animate-in {
   animation: modal-in 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
+
+/* Bikin icon date & time picker terlihat di dark mode */
+input[type="date"]::-webkit-calendar-picker-indicator,
+input[type="time"]::-webkit-calendar-picker-indicator {
+  filter: invert(1);
+  opacity: 0.6;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator:hover,
+input[type="time"]::-webkit-calendar-picker-indicator:hover {
+  opacity: 1;
+}
+
+/* (Opsional) Bikin text "dd/mm/yyyy" lebih terang */
+input[type="date"],
+input[type="time"] {
+  color-scheme: dark;
+}
+
