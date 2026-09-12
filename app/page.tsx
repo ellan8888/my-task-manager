@@ -1,23 +1,23 @@
-  "use client";
+"use client";
 
-  import { useEffect, useState } from "react";
-  import { supabase } from "@/lib/supabase";
-  import { registerPushSubscription } from "@/lib/push";
+import { useEffect, useState } from "react";
+import { supabase } from "@/lib/supabase";
+import { registerPushSubscription } from "@/lib/push";
 
-  type Task = {
-    id: number;
-    title: string;
-    deadline: string;
-    reminder: string | null;
-    reminder_sent: boolean;
-    reminder_last_sent: string | null;
-    priority: "Low" | "Medium" | "High";
-    category: string;
-    completed: boolean;
-    notes: string | null;
-  };
+type Task = {
+  id: number;
+  title: string;
+  deadline: string;
+  reminder: string | null;
+  reminder_sent: boolean;
+  reminder_last_sent: string | null;
+  priority: "Low" | "Medium" | "High";
+  category: string;
+  completed: boolean;
+  notes: string | null;
+};
 
-  type JokiOrder = {
+type JokiOrder = {
   id: number;
   order_id: string;
   roblox_username: string | null;
@@ -31,200 +31,202 @@
   created_at: string;
 };
 
-  export default function Home() {
-    const [tasks, setTasks] = useState<Task[]>([]);
-    const [jokiOrders, setJokiOrders] = useState<JokiOrder[]>([]);
-    const [showForm, setShowForm] = useState(false);
-    const [editingId, setEditingId] = useState<number | null>(null);
-    
+export default function Home() {
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [jokiOrders, setJokiOrders] = useState<JokiOrder[]>([]);
+  const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState<number | null>(null);
 
-    const [title, setTitle] = useState("");
-    const [deadline, setDeadline] = useState("");
-    const [reminder, setReminder] = useState("08:00");
-    const [notes, setNotes] = useState("");
-    const [priority, setPriority] =
-      useState<"Low" | "Medium" | "High">("Medium");
-    const [category, setCategory] = useState("");
-    const [search, setSearch] = useState("");
+  const [title, setTitle] = useState("");
+  const [deadline, setDeadline] = useState("");
+  const [reminder, setReminder] = useState("08:00");
+  const [notes, setNotes] = useState("");
+  const [priority, setPriority] = useState<"Low" | "Medium" | "High">("Medium");
+  const [category, setCategory] = useState("");
+  const [search, setSearch] = useState("");
 
-  const [filter, setFilter] = useState<
-    "All" | "Today" | "Upcoming" | "Overdue"
-  >("All");
+  const [filter, setFilter] = useState<"All" | "Today" | "Upcoming" | "Overdue">("All");
 
-    const [notificationPermission, setNotificationPermission] =
-    useState<NotificationPermission>("default");
+  const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>("default");
+  const [defaultReminder, setDefaultReminder] = useState("20:00");
+  const [showSettings, setShowSettings] = useState(false);
 
-    const [defaultReminder, setDefaultReminder] =
-    useState("20:00");
+  const [currentView, setCurrentView] = useState<"list" | "kanban">("list");
+  // State untuk modal konfirmasi custom
+const [confirmDialog, setConfirmDialog] = useState<{
+  open: boolean;
+  title: string;
+  message: string;
+  variant: "danger" | "warning" | "info" | "success";
+  confirmText: string;
+  onConfirm: () => void;
+}>({
+  open: false,
+  title: "",
+  message: "",
+  variant: "info",
+  confirmText: "OK",
+  onConfirm: () => {},
+});
 
-  const [showSettings, setShowSettings] =
-    useState(false);
+// Helper untuk membuka modal
+const showConfirm = (
+  title: string,
+  message: string,
+  variant: "danger" | "warning" | "info" | "success",
+  confirmText: string,
+  onConfirm: () => void
+) => {
+  setConfirmDialog({ open: true, title, message, variant, confirmText, onConfirm });
+};
 
-    const updateDefaultReminder = (value: string) => {
+const closeConfirm = () => {
+  setConfirmDialog((prev) => ({ ...prev, open: false }));
+};
+
+  const updateDefaultReminder = (value: string) => {
     setDefaultReminder(value);
     localStorage.setItem("defaultReminder", value);
     setReminder(value);
   };
 
-    // =========================
-    // LOAD TASKS
-    // =========================
+  // =========================
+  // LOAD TASKS
+  // =========================
 
-    const loadTasks = async () => {
-      const { data, error } = await supabase
-        .from("tasks")
-        .select("*")
-        .order("created_at", { ascending: false });
+  const loadTasks = async () => {
+    const { data, error } = await supabase
+      .from("tasks")
+      .select("*")
+      .order("created_at", { ascending: false });
 
-      if (error) {
-        console.error(error);
-        return;
-      }
+    if (error) {
+      console.error(error);
+      return;
+    }
 
-      setTasks(data || []);
-    };
+    setTasks(data || []);
+  };
 
-    const loadJokiOrders = async () => {
-  const { data, error } = await supabase
-    .from("joki_orders")
-    .select("*")
-    .eq("completed", false)
-    .order("schedule_date", { ascending: true })
-    .order("schedule_time", { ascending: true });
+  const loadJokiOrders = async () => {
+    const { data, error } = await supabase
+      .from("joki_orders")
+      .select("*")
+      .eq("completed", false)
+      .order("schedule_date", { ascending: true })
+      .order("schedule_time", { ascending: true });
 
-  if (error) {
-    console.error("Gagal mengambil data Jokian:", error);
-    return;
-  }
+    if (error) {
+      console.error("Gagal mengambil data Jokian:", error);
+      return;
+    }
 
-  setJokiOrders(data || []);
-};
+    setJokiOrders(data || []);
+  };
 
-    useEffect(() => {
+  useEffect(() => {
+    const link = document.createElement("link");
+    link.rel = "stylesheet";
+    link.href = "https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css";
+    document.head.appendChild(link);
+  }, []);
+
+  useEffect(() => {
     if ("Notification" in window) {
       setNotificationPermission(Notification.permission);
     }
   }, []);
 
-    useEffect(() => {
-  loadTasks();
-  loadJokiOrders();
-}, []);
+  useEffect(() => {
+    loadTasks();
+    loadJokiOrders();
+  }, []);
 
-    useEffect(() => {
+  useEffect(() => {
     if ("serviceWorker" in navigator) {
       navigator.serviceWorker
         .register("/sw.js")
         .then((registration) => {
-          console.log(
-            "✅ Servaaice Workers registered:",
-            registration.scope
-          );
+          console.log("Service Workers registered:", registration.scope);
         })
         .catch((error) => {
-          console.error(
-            "❌ Service Worker registraation failed:",
-            error
-          );
+          console.error("Service Worker registration failed:", error);
         });
     }
   }, []);
 
   useEffect(() => {
-    const savedReminder =
-      localStorage.getItem("defaultReminder");
-
+    const savedReminder = localStorage.getItem("defaultReminder");
     if (savedReminder) {
       setDefaultReminder(savedReminder);
       setReminder(savedReminder);
     }
   }, []);
 
-    // =========================
-    // ADD TASK
-    // =========================
+  // =========================
+  // ADD TASK
+  // =========================
 
-    
-
-    const addTask = async () => {
-      if (!title || !deadline) {
-        alert("Title dan daeadline wajib diisi!");
-        return;
-      }
+  const addTask = async () => {
+    if (!title || !deadline) {
+      alert("Title dan deadline wajib diisi!");
+      return;
+    }
 
     const newTask: Task = {
-    id: Date.now(),
-    title,
-    deadline,
-    reminder: reminder || null,
-    reminder_sent: false,
-    reminder_last_sent: null,
-    priority,
-    category,
-    completed: false,
-    notes,
-  };
-
-      const { error } = await supabase
-        .from("tasks")
-        .insert([newTask]);
-
-      if (error) {
-        console.error(error);
-        alert("Gagal menyimpan task!");
-        return;
-      }
-
-      setTasks([newTask, ...tasks]);
-
-      resetForm();
+      id: Date.now(),
+      title,
+      deadline,
+      reminder: reminder || null,
+      reminder_sent: false,
+      reminder_last_sent: null,
+      priority,
+      category,
+      completed: false,
+      notes,
     };
 
-    // =========================
-    // EDIT TASK
-    // =========================
+    const { error } = await supabase.from("tasks").insert([newTask]);
 
-    const testPushNotification = async () => {
+    if (error) {
+      console.error(error);
+      alert("Gagal menyimpan task!");
+      return;
+    }
+
+    setTasks([newTask, ...tasks]);
+    resetForm();
+  };
+
+  // =========================
+  // TEST PUSH
+  // =========================
+
+  const testPushNotification = async () => {
     try {
-      const response = await fetch("/api/push", {
-        method: "POST",
-      });
-
+      const response = await fetch("/api/push", { method: "POST" });
       const result = await response.json();
-
-      console.log("📨 Push API result:", result);
+      console.log("Push API result:", result);
 
       if (result.success) {
-        alert(
-          `✅ Push berhasil dikirim!\n\nTerkirim: ${result.sent}\nGagal: ${result.failed}`
-        );
+        alert(`Push berhasil dikirim!\n\nTerkirim: ${result.sent}\nGagal: ${result.failed}`);
       } else {
-        alert(
-          `❌ Push gagal:\n${result.message || result.error}`
-        );
+        alert(`Push gagal:\n${result.message || result.error}`);
       }
     } catch (error) {
-      console.error(
-        "❌ Test push error:",
-        error
-      );
-
-      alert(
-        "❌ Gagal menghubungi Push API."
-      );
+      console.error("Test push error:", error);
+      alert("Gagal menghubungi Push API.");
     }
   };
 
-    const enableNotifications = async () => {
+  const enableNotifications = async () => {
     if (!("Notification" in window)) {
       alert("Browser kamu tidak mendukung notifikasi.");
       return;
     }
 
     try {
-      const permission =
-        await Notification.requestPermission();
-
+      const permission = await Notification.requestPermission();
       setNotificationPermission(permission);
 
       if (permission !== "granted") {
@@ -232,166 +234,143 @@
         return;
       }
 
-      const subscription =
-        await registerPushSubscription();
-
-      console.log(
-        "📨 Subscription:",
-        JSON.stringify(subscription)
-      );
-
-      alert("✅ Push notifiction bearhasil diaktifkan!");
+      const subscription = await registerPushSubscription();
+      console.log("Subscription:", JSON.stringify(subscription));
+      alert("Push notification berhasil diaktifkan!");
     } catch (error) {
-      console.error(
-        "❌ Gagal mengaktifkan push notification:",
-        error
-      );
-
-      alert(
-        "Gagal mengaktifkan push notification. Cek Console."
-      );
+      console.error("Gagal mengaktifkan push notification:", error);
+      alert("Gagal mengaktifkan push notification. Cek Console.");
     }
   };
 
-    const editTask = (task: Task) => {
+  const editTask = (task: Task) => {
     setEditingId(task.id);
     setTitle(task.title);
     setDeadline(task.deadline);
-
     setReminder(task.reminder || "");
-
     setPriority(task.priority);
     setCategory(task.category);
     setShowForm(true);
     setNotes(task.notes || "");
   };
-    
 
-    // =========================
-    // UPDATE TASK
-    // =========================
+  // =========================
+  // UPDATE TASK
+  // =========================
 
-    const updateTask = async () => {
-      if (!title || !deadline || editingId === null) {
-        alert("Title dan deadline wajib diisi!");
-        return;
-      }
+  const updateTask = async () => {
+    if (!title || !deadline || editingId === null) {
+      alert("Title dan deadline wajib diisi!");
+      return;
+    }
 
-      const { error } = await supabase
-    .from("tasks")
-    .update({
-    title,
-    deadline,
-    reminder: reminder || null,
-    reminder_sent: false,
-    reminder_last_sent: null,
-    priority,
-    category,
-    notes,
-  })
-    .eq("id", editingId);
+    const { error } = await supabase
+      .from("tasks")
+      .update({
+        title,
+        deadline,
+        reminder: reminder || null,
+        reminder_sent: false,
+        reminder_last_sent: null,
+        priority,
+        category,
+        notes,
+      })
+      .eq("id", editingId);
 
-      if (error) {
-        console.error(error);
-        alert("Gagal mengupdate task!");
-        return;
-      }
+    if (error) {
+      console.error(error);
+      alert("Gagal mengupdate task!");
+      return;
+    }
 
-      setTasks(
-    tasks.map((task) =>
-      task.id === editingId
-        ? {
-            ...task,
-            title,
-            deadline,
-            reminder: reminder || null,
-            reminder_sent: false,
-            reminder_last_sent: null,
-            priority,
-            category,
-          }
-        : task
-    )
-  );
+    setTasks(
+      tasks.map((task) =>
+        task.id === editingId
+          ? {
+              ...task,
+              title,
+              deadline,
+              reminder: reminder || null,
+              reminder_sent: false,
+              reminder_last_sent: null,
+              priority,
+              category,
+            }
+          : task
+      )
+    );
 
-      resetForm();
-    };
+    resetForm();
+  };
 
-    // =========================
-    // DELETE TASK
-    // =========================
+  // =========================
+  // DELETE TASK
+  // =========================
 
-    const deleteTask = async (id: number) => {
-      const confirmDelete = window.confirm(
-        "Yakin ingin menghapus task ini?"
-      );
-
-      if (!confirmDelete) return;
-
-      const { error } = await supabase
-        .from("tasks")
-        .delete()
-        .eq("id", id);
-
+  const deleteTask = async (id: number) => {
+  showConfirm(
+    "Hapus Task?",
+    "Yakin ingin menghapus task ini? Tindakan ini tidak bisa dibatalkan.",
+    "danger",
+    "Ya, Hapus",
+    async () => {
+      const { error } = await supabase.from("tasks").delete().eq("id", id);
       if (error) {
         console.error(error);
         alert("Gagal menghapus task!");
         return;
       }
-
       setTasks(tasks.filter((task) => task.id !== id));
-    };
+      closeConfirm();
+    }
+  );
+};
 
-    // =========================
-    // TOGGLE COMPLETE
-    // =========================
+  // =========================
+  // TOGGLE COMPLETE
+  // =========================
 
-    const toggleTask = async (id: number) => {
+  const toggleTask = async (id: number) => {
   const task = tasks.find((task) => task.id === id);
-
   if (!task) return;
 
   const newCompletedStatus = !task.completed;
 
-  const confirmMessage = newCompletedStatus
-    ? "Tandai task ini sebagai selesai?"
-    : "Kembalikan task ini menjadi belum selesai?";
+  showConfirm(
+    newCompletedStatus ? "Tandai Selesai?" : "Batalkan Selesai?",
+    newCompletedStatus
+      ? `Tandai "${task.title}" sebagai selesai?`
+      : `Kembalikan "${task.title}" menjadi belum selesai?`,
+    newCompletedStatus ? "success" : "info",
+    newCompletedStatus ? "Ya, Selesai" : "Ya, Kembalikan",
+    async () => {
+      const { error } = await supabase
+        .from("tasks")
+        .update({ completed: newCompletedStatus })
+        .eq("id", id);
 
-  const confirmed = window.confirm(confirmMessage);
+      if (error) {
+        console.error(error);
+        alert("Gagal mengubah status task!");
+        return;
+      }
 
-  if (!confirmed) return;
-
-  const { error } = await supabase
-    .from("tasks")
-    .update({
-      completed: newCompletedStatus,
-    })
-    .eq("id", id);
-
-  if (error) {
-    console.error(error);
-    alert("Gagal mengubah status task!");
-    return;
-  }
-
-  // Tetap pertahankan card di dalam list
-  setTasks((current) =>
-    current.map((item) =>
-      item.id === id
-        ? {
-            ...item,
-            completed: newCompletedStatus,
-          }
-        : item
-    )
+      setTasks((current) =>
+        current.map((item) =>
+          item.id === id ? { ...item, completed: newCompletedStatus } : item
+        )
+      );
+      closeConfirm();
+    }
   );
 };
 
-    // =========================
-    // RESET FORM
-    // =========================
+  // =========================
+  // RESET FORM
+  // =========================
 
-    const resetForm = () => {
+  const resetForm = () => {
     setTitle("");
     setDeadline("");
     setReminder(defaultReminder);
@@ -402,806 +381,884 @@
     setNotes("");
   };
 
-    // =========================
-    // DEADLINE STATUS
-    // =========================
+  // =========================
+  // DEADLINE STATUS
+  // =========================
 
-    const getDeadlineStatus = (deadline: string) => {
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-
-      const target = new Date(deadline + "T00:00:00");
-      target.setHours(0, 0, 0, 0);
-
-      const difference =
-        Math.ceil(
-          (target.getTime() - today.getTime()) /
-            (1000 * 60 * 60 * 24)
-        );
-
-      if (difference < 0) {
-        return {
-          label: "Overdue",
-          className:
-            "bg-red-100 text-red-700",
-        };
-      }
-
-      if (difference === 0) {
-        return {
-          label: "Today",
-          className:
-            "bg-orange-100 text-orange-700",
-        };
-      }
-
-      if (difference === 1) {
-        return {
-          label: "Tomorrow",
-          className:
-            "bg-yellow-100 text-yellow-700",
-        };
-      }
-
-      return {
-        label: `${difference} days left`,
-        className:
-          "bg-green-100 text-green-700",
-      };
-    };
-
-    // =========================
-    // FORMAT DATE
-    // =========================
-
-    const formatDate = (date: string) => {
-      return new Date(date + "T00:00:00").toLocaleDateString(
-        "en-US",
-        {
-          day: "numeric",
-          month: "long",
-          year: "numeric",
-        }
-      );
-    };
-
-    const filteredTasks = tasks
-  .filter((task) => {
-    const matchesSearch =
-      task.title
-        .toLowerCase()
-        .includes(search.toLowerCase()) ||
-      task.category
-        .toLowerCase()
-        .includes(search.toLowerCase());
-
-    if (!matchesSearch) return false;
-
+  const getDeadlineStatus = (deadline: string) => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    const taskDate = new Date(
-      task.deadline + "T00:00:00"
-    );
-    taskDate.setHours(0, 0, 0, 0);
+    const target = new Date(deadline + "T00:00:00");
+    target.setHours(0, 0, 0, 0);
 
-    if (filter === "Today") {
-      return taskDate.getTime() === today.getTime();
+    const difference = Math.ceil((target.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+
+    if (difference < 0) {
+      return {
+        label: "Overdue",
+        displayText: "Overdue",
+        icon: "fa-triangle-exclamation",
+        className: "bg-rose-500/20 text-rose-300 border border-rose-500/30",
+      };
     }
-
-    if (filter === "Upcoming") {
-      return taskDate.getTime() > today.getTime();
+    if (difference === 0) {
+      return {
+        label: "Today",
+        displayText: "Hari Ini",
+        icon: "fa-fire",
+        className: "bg-amber-500/20 text-amber-300 border border-amber-500/30",
+      };
     }
-
-    if (filter === "Overdue") {
-      return (
-        taskDate.getTime() < today.getTime() &&
-        !task.completed
-      );
+    if (difference === 1) {
+      return {
+        label: "Tomorrow",
+        displayText: "Besok",
+        icon: "fa-calendar-day",
+        className: "bg-yellow-500/20 text-yellow-300 border border-yellow-500/30",
+      };
     }
+    return {
+      label: `${difference} days left`,
+      displayText: `${difference} hari lagi`,
+      icon: "fa-calendar-check",
+      className: "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30",
+    };
+  };
 
-    return true;
-  })
-  .sort((a, b) => {
-    return (
-      new Date(a.deadline + "T00:00:00").getTime() -
-      new Date(b.deadline + "T00:00:00").getTime()
-    );
-  });
+  // =========================
+  // FORMAT DATE
+  // =========================
 
-    // =========================
-    // STATISTICS
-    // =========================
+  const formatDate = (date: string) => {
+    return new Date(date + "T00:00:00").toLocaleDateString("en-US", {
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+    });
+  };
 
-    const completedTasks = tasks.filter(
-      (task) => task.completed
-    ).length;
+  const filteredTasks = tasks
+    .filter((task) => {
+      const matchesSearch =
+        task.title.toLowerCase().includes(search.toLowerCase()) ||
+        task.category.toLowerCase().includes(search.toLowerCase());
 
-    const pendingTasks = tasks.filter(
-      (task) => !task.completed
-    ).length;
+      if (!matchesSearch) return false;
 
-    return (
-      <main className="min-h-screen bg-gray-50">
-        {/* HEADER */}
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
 
-        <header className="sticky top-0 z-20 border-b bg-white">
-          <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-4">
-            <div>
-              <h1 className="text-xl font-bold text-gray-900 sm:text-2xl">
-                My Task Manager
-              </h1>
+      const taskDate = new Date(task.deadline + "T00:00:00");
+      taskDate.setHours(0, 0, 0, 0);
 
-              <p className="text-xs text-gray-500 sm:text-sm">
-                Organize your day, one task at a time.
-              </p>
+      if (filter === "Today") return taskDate.getTime() === today.getTime();
+      if (filter === "Upcoming") return taskDate.getTime() > today.getTime();
+      if (filter === "Overdue") return taskDate.getTime() < today.getTime() && !task.completed;
+
+      return true;
+    })
+    .sort((a, b) => {
+      return new Date(a.deadline + "T00:00:00").getTime() - new Date(b.deadline + "T00:00:00").getTime();
+    });
+
+  // =========================
+  // STATISTICS
+  // =========================
+
+  const completedTasks = tasks.filter((task) => task.completed).length;
+  const pendingTasks = tasks.filter((task) => !task.completed).length;
+
+  const jokiToday = jokiOrders.filter(o => new Date(`${o.schedule_date}T${o.schedule_time}`).toDateString() === new Date().toDateString()).length;
+  const jokiScheduled = jokiOrders.length - jokiToday;
+
+  return (
+    <div className="min-h-screen bg-slate-950 text-slate-100 font-sans antialiased selection:bg-violet-500 selection:text-white flex flex-col md:flex-row">
+      
+      {/* SIDEBAR */}
+      <aside className="w-full md:w-72 bg-slate-900/80 border-r border-slate-800/80 shrink-0 flex flex-col justify-between p-5 z-30 transition-all duration-300">
+        <div>
+          <div className="flex items-center justify-between pb-6 border-b border-slate-800/80">
+            <div className="flex items-center space-x-3.5">
+              <div className="w-11 h-11 rounded-2xl bg-linear-to-tr from-violet-600 via-indigo-600 to-purple-500 flex items-center justify-center text-white shadow-lg shadow-violet-600/30 ring-2 ring-violet-500/20">
+                <i className="fa-solid fa-gamepad text-xl"></i>
+              </div>
+              <div>
+                <div className="flex items-center space-x-1.5">
+                  <h1 className="font-extrabold text-lg leading-tight tracking-tight text-white">My Task Manager</h1>
+                 
+                </div>
+                <p className="text-xs text-slate-400 font-medium flex items-center gap-1.5 mt-0.5">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> Tokoku-Bot Sync
+                </p>
+              </div>
             </div>
+          </div>
 
-            <div className="flex items-center gap-2">
-              <button
-    onClick={() =>
-      setShowSettings(!showSettings)
-    }
-    className="rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm font-semibold text-gray-700 shadow-sm transition hover:bg-gray-50"
-  >
-    ⚙️ Settings
-  </button>
-              <button
-    onClick={testPushNotification}
-    className="rounded-xl border border-blue-200 bg-blue-50 px-3 py-2.5 text-sm font-semibold text-blue-700 shadow-sm transition hover:bg-blue-100"
-  >
-    🧪 Test Paush
-  </button>
-    {notificationPermission !== "granted" && (
-      <button
-        onClick={enableNotifications}
-        className="rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm font-semibold text-gray-700 shadow-sm transition hover:bg-gray-50"
-      >
-        🔔
-        <span className="hidden sm:inline ml-1">
-          Enable
-        </span>
-      </button>
-    )}
+          <nav className="mt-6 space-y-2">
+            <a href="#" className="flex items-center space-x-3.5 px-4 py-3 rounded-2xl bg-linear-to-r from-violet-600/20 to-indigo-600/10 text-violet-300 font-semibold text-sm border border-violet-500/30 transition-all shadow-sm">
+              <i className="fa-solid fa-list-check w-5 text-center text-violet-400"></i>
+              <span>Daftar Order Jokian</span>
+              <span className="ml-auto bg-violet-600 text-white text-xs px-2.5 py-0.5 rounded-full font-bold shadow-sm">{jokiOrders.length}</span>
+            </a>
+            
+            <button className="w-full flex items-center space-x-3.5 px-4 py-3 rounded-2xl text-slate-400 hover:bg-slate-800/60 hover:text-slate-200 text-sm font-medium transition-all group">
+              <i className="fa-solid fa-share-nodes w-5 text-center group-hover:text-violet-400 transition"></i>
+              <span>Rekap Teks WA / Discord</span>
+              <span className="ml-auto text-[10px] bg-indigo-500/20 text-indigo-300 px-2 py-0.5 rounded font-mono">Export</span>
+            </button>
 
-    <button
-      onClick={() => {
-        resetForm();
-        setShowForm(true);
-      }}
-      className="rounded-xl bg-gray-900 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-gray-700"
-    >
-      <span className="sm:hidden">＋</span>
-      <span className="hidden sm:inline">
-        ＋ Add Task
-      </span>
-    </button>
-  </div>
+            <button onClick={() => setShowSettings(!showSettings)} className="w-full flex items-center space-x-3.5 px-4 py-3 rounded-2xl text-slate-400 hover:bg-slate-800/60 hover:text-slate-200 text-sm font-medium transition-all group">
+              <i className="fa-solid fa-robot w-5 text-center group-hover:text-violet-400 transition"></i>
+              <span>Webhook Tokoku-bot</span>
+              <span className="ml-auto w-2 h-2 rounded-full bg-emerald-500"></span>
+            </button>
+          </nav>
+
+          <div className="mt-8 p-4 rounded-2xl bg-slate-900/60 border border-slate-800/60 space-y-2.5">
+            <div className="flex justify-between items-center text-xs font-semibold">
+              <span className="text-slate-400">Progres Hari Ini</span>
+              <span className="text-violet-400">
+                {tasks.length > 0 ? Math.round((completedTasks / tasks.length) * 100) : 0}%
+              </span>
+            </div>
+            <div className="w-full bg-slate-800 rounded-full h-2 overflow-hidden">
+              <div 
+                className="bg-linear-to-r from-violet-500 to-indigo-500 h-2 rounded-full transition-all duration-500" 
+                style={{ width: `${tasks.length > 0 ? (completedTasks / tasks.length) * 100 : 0}%` }}
+              ></div>
+            </div>
+            <p className="text-[11px] text-slate-500">{completedTasks} dari {tasks.length} tugas selesai</p>
+          </div>
+        </div>
+
+        <div className="space-y-4 pt-4 border-t border-slate-800/80">
+          <div className="flex items-center justify-between p-3 rounded-2xl bg-slate-900/60 border border-slate-800/80">
+            <div className="flex items-center space-x-3">
+              <div className="relative">
+                <div className="w-9 h-9 rounded-xl bg-violet-600/20 text-violet-400 border border-violet-500/30 flex items-center justify-center font-bold">E</div>
+                <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-emerald-500 border-2 border-slate-900 rounded-full"></span>
+              </div>
+              <div>
+                <p className="text-sm font-bold text-slate-200">Ellan Worker</p>
+                <p className="text-[11px] text-slate-400">Administrator</p>
+              </div>
+            </div>
+            <button className="w-9 h-9 rounded-xl bg-slate-800 text-slate-300 flex items-center justify-center hover:bg-slate-700 transition">
+              <i className="fa-solid fa-moon text-sm"></i>
+            </button>
+          </div>
+        </div>
+      </aside>
+
+      {/* MAIN CONTENT AREA */}
+      <main className="flex-1 flex flex-col h-screen overflow-hidden bg-slate-950">
+        
+        <header className="h-16 border-b border-slate-800/80 bg-slate-950/60 backdrop-blur-md px-4 md:px-8 flex items-center justify-between z-20 shrink-0">
+          <div className="flex items-center space-x-4">
+            <div>
+              <h2 className="text-base md:text-xl font-extrabold text-white tracking-tight flex items-center gap-2">
+                <span>Pusat Kendali Task</span>
+                
+              </h2>
+              <p className="text-xs text-slate-400 hidden sm:block">Kelola dan pantau antrean real-time</p>
+            </div>
+          </div>
+
+          <div className="flex items-center space-x-2.5">
+            <button onClick={testPushNotification} className="flex items-center space-x-2 bg-slate-900 hover:bg-slate-800 text-slate-200 px-3.5 py-2 rounded-xl text-xs md:text-sm font-semibold border border-slate-800 transition shadow-sm active:scale-95">
+              <i className="fa-solid fa-bolt text-amber-400"></i>
+              <span className="hidden sm:inline">Simulasi Webhook</span>
+            </button>
+
+            <button 
+              onClick={() => { resetForm(); setShowForm(true); }} 
+              className="flex items-center space-x-2 bg-linear-to-r from-violet-600 via-indigo-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 text-white px-4 py-2 rounded-xl text-xs md:text-sm font-bold shadow-lg shadow-violet-600/30 transition transform hover:-translate-y-0.5 active:translate-y-0"
+            >
+              <i className="fa-solid fa-plus text-xs"></i>
+              <span> Task Baru</span>
+            </button>
           </div>
         </header>
 
-        <div className="mx-auto max-w-5xl px-4 py-5 sm:py-8">
+        <div className="flex-1 overflow-y-auto custom-scrollbar p-4 md:p-8 space-y-6">
 
-          {/* STATISTICS */}
-
+          {/* Settings Panel */}
           {showSettings && (
-    <div className="mb-6 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-      <div className="mb-4">
-        <h2 className="text-base font-semibold text-gray-900">
-          🔔 Notification Settings
-        </h2>
-
-        <p className="mt-1 text-sm text-gray-500">
-          Atur pengaatursn reminder My Task Manager.
-        </p>
-      </div>
-
-      <div className="space-y-4">
-        <div className="flex items-center justify-between gap-4">
-          <div>
-            <p className="text-sm font-medium text-gray-800">
-              Push Notification
-            </p>
-
-            <p className="text-xs text-gray-400">
-              Terima reminder meskipun aplikasi tidak sedang dibuka.
-            </p>
-          </div>
-
-          <span
-            className={`rounded-full px-3 py-1 text-xs font-semibold ${
-              notificationPermission === "granted"
-                ? "bg-green-100 text-green-700"
-                : "bg-gray-100 text-gray-500"
-            }`}
-          >
-            {notificationPermission === "granted"
-              ? "ON"
-              : "OFF"}
-          </span>
-        </div>
-
-        <div>
-          <label className="mb-1.5 block text-sm font-medium text-gray-700">
-            Default Daily Reminder
-          </label>
-
-          <input
-            type="time"
-            value={defaultReminder}
-            onChange={(e) =>
-              updateDefaultReminder(
-                e.target.value
-              )
-            }
-            className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm outline-none transition focus:border-gray-900"
-          />
-
-          <p className="mt-1 text-xs text-gray-400">
-            Waktu ini akan menjadi default saat membuat task baru.
-          </p>
-        </div>
-      </div>
-    </div>
-  )}
-
-          <section className="grid grid-cols-3 gap-3 sm:gap-5">
-            <div className="rounded-2xl bg-white p-4 shadow-sm">
-              <p className="text-xs text-gray-500">
-                Total
-              </p>
-
-              <p className="mt-1 text-2xl font-bold text-gray-900">
-                {tasks.length}
-              </p>
-            </div>
-
-            <div className="rounded-2xl bg-white p-4 shadow-sm">
-              <p className="text-xs text-gray-500">
-                Completed
-              </p>
-
-              <p className="mt-1 text-2xl font-bold text-green-600">
-                {completedTasks}
-              </p>
-            </div>
-
-            <div className="rounded-2xl bg-white p-4 shadow-sm">
-              <p className="text-xs text-gray-500">
-                Pending
-              </p>
-
-              <p className="mt-1 text-2xl font-bold text-orange-500">
-                {pendingTasks}
-              </p>
-            </div>
-          </section>
-
-          {/* FORM */}
-
-          {showForm && (
-            <section className="mt-5 rounded-2xl bg-white p-5 shadow-sm sm:p-6">
-              <div className="mb-5 flex items-center justify-between">
-                <h2 className="text-lg font-bold text-gray-900">
-                  {editingId !== null
-                    ? "Edit Task"
-                    : "Add New Task"}
+            <div className="bg-slate-900/50 backdrop-blur-xl border border-slate-800 rounded-2xl p-5 shadow-sm">
+              <div className="mb-4">
+                <h2 className="text-base font-semibold text-white flex items-center gap-2">
+                  <i className="fa-solid fa-bell text-violet-400"></i>
+                  <span>Notification Settings</span>
                 </h2>
-
-                <button
-                  onClick={resetForm}
-                  className="text-xl text-gray-400 hover:text-gray-700"
-                >
-                  ×
-                </button>
+                <p className="mt-1 text-sm text-slate-400">Atur pengaturan reminder My Task Manager.</p>
               </div>
-
               <div className="space-y-4">
-
-                {/* TITLE */}
-
-                <div>
-                  <label className="mb-1.5 block text-sm font-medium text-gray-700">
-                    Task
-                  </label>
-
-                  <input
-                    type="text"
-                    value={title}
-                    onChange={(e) =>
-                      setTitle(e.target.value)
-                    }
-                    placeholder="Contoh: Kerjakan laporan"
-                    className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm outline-none transition focus:border-gray-900"
-                  />
-                </div>
-
-                
-
-                {/* DEADLINE */}
-
-                <div>
-                  <label className="mb-1.5 block text-sm font-medium text-gray-700">
-                    Deadline
-                  </label>
-
-                  <input
-                    type="date"
-                    value={deadline}
-                    onChange={(e) =>
-                      setDeadline(e.target.value)
-                    }
-                    className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm outline-none transition focus:border-gray-900"
-                  />
-                </div>
-
-                <div>
-    <label className="mb-1.5 block text-sm font-medium text-gray-700">
-      Daily Reminder
-    </label>
-
-    <input
-      type="time"
-      value={reminder}
-      onChange={(e) =>
-        setReminder(e.target.value)
-      }
-      className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm outline-none transition focus:border-gray-900"
-    />
-
-    <p className="mt-1 text-xs text-gray-400">
-      Kamu akan mendapat reminder setiap hari pada waktu ini sampai deadline.
-    </p>
-  </div>
-
-                {/* PRIORITY + CATEGORY */}
-
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-
+                <div className="flex items-center justify-between gap-4">
                   <div>
-                    <label className="mb-1.5 block text-sm font-medium text-gray-700">
-                      Priority
-                    </label>
-
-                    <select
-                      value={priority}
-                      onChange={(e) =>
-                        setPriority(
-                          e.target.value as
-                            | "Low"
-                            | "Medium"
-                            | "High"
-                        )
-                      }
-                      className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm outline-none focus:border-gray-900"
-                    >
-                      <option value="Low">
-                        Low
-                      </option>
-
-                      <option value="Medium">
-                        Medium
-                      </option>
-
-                      <option value="High">
-                        High
-                      </option>
-                    </select>
+                    <p className="text-sm font-medium text-slate-200">Push Notification</p>
+                    <p className="text-xs text-slate-500">Terima reminder meskipun aplikasi tidak sedang dibuka.</p>
                   </div>
-
-                  <div>
-                    <label className="mb-1.5 block text-sm font-medium text-gray-700">
-                      Category
-                    </label>
-
-                    <input
-                      type="text"
-                      value={category}
-                      onChange={(e) =>
-                        setCategory(e.target.value)
-                      }
-                      placeholder="Kuliah, Kerja, Personal..."
-                      className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm outline-none focus:border-gray-900"
-                    />
-                  </div>
+                  <span className={`rounded-full px-3 py-1 text-xs font-semibold ${notificationPermission === "granted" ? "bg-emerald-500/20 text-emerald-400" : "bg-slate-800 text-slate-400"}`}>
+                    {notificationPermission === "granted" ? "ON" : "OFF"}
+                  </span>
                 </div>
-
                 <div>
-  <label className="mb-1.5 block text-sm font-medium text-gray-700">
-    Notes
-  </label>
-
-  <textarea
-    value={notes}
-    onChange={(e) => setNotes(e.target.value)}
-    placeholder="Tambahkan catatan untuk task ini..."
-    rows={4}
-    className="w-full resize-none rounded-xl border border-gray-200 px-4 py-3 text-sm outline-none transition focus:border-gray-900"
-  />
-
-  <p className="mt-1 text-xs text-gray-400">
-    Tambahkan detail, checklist, atau informasi penting untuk task.
-  </p>
-</div>
-
-                {/* BUTTON */}
-
-                <div className="flex gap-3 pt-2">
-                  <button
-                    onClick={
-                      editingId !== null
-                        ? updateTask
-                        : addTask
-                    }
-                    className="flex-1 rounded-xl bg-gray-900 px-4 py-3 text-sm font-semibold text-white hover:bg-gray-700"
-                  >
-                    {editingId !== null
-                      ? "Update Task"
-                      : "Save Task"}
+                  <label className="mb-1.5 block text-sm font-medium text-slate-300">Default Daily Reminder</label>
+                  <input type="time" value={defaultReminder} onChange={(e) => updateDefaultReminder(e.target.value)} className="w-full rounded-xl border border-slate-800 bg-slate-950 px-4 py-3 text-sm text-slate-200 outline-none transition focus:border-violet-500" />
+                  <p className="mt-1 text-xs text-slate-500">Waktu ini akan menjadi default saat membuat task baru.</p>
+                </div>
+                {notificationPermission !== "granted" && (
+                  <button onClick={enableNotifications} className="w-full rounded-xl bg-slate-800 px-4 py-3 text-sm font-semibold text-slate-200 hover:bg-slate-700 transition flex items-center justify-center gap-2">
+                    <i className="fa-solid fa-bell"></i>
+                    <span>Enable Push Notification</span>
                   </button>
-
-                  
-
-                  <button
-                    onClick={resetForm}
-                    className="rounded-xl border border-gray-200 px-5 py-3 text-sm font-medium text-gray-700 hover:bg-gray-50"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </div>
-            </section>
-          )}
-
-          {/* TASK LIST */}
-
-          <section className="mt-7">
-            <div className="mb-4">
-    <input
-      type="text"
-      value={search}
-      onChange={(e) => setSearch(e.target.value)}
-      placeholder="🔍 Search tasks..."
-      className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-gray-900"
-    />
-  </div>
-
-  <div className="mb-5 flex gap-2 overflow-x-auto pb-1">
-    {(["All", "Today", "Upcoming", "Overdue"] as const).map(
-      (item) => (
-        <button
-          key={item}
-          onClick={() => setFilter(item)}
-          className={`whitespace-nowrap rounded-xl px-4 py-2 text-sm font-medium transition ${
-            filter === item
-              ? "bg-gray-900 text-white"
-              : "bg-white text-gray-600 shadow-sm hover:bg-gray-100"
-          }`}
-        >
-          {item}
-        </button>
-      )
-    )}
-  </div>
-
-            <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-lg font-bold text-gray-900">
-                My Tasks
-              </h2>
-
-              <span className="text-sm text-gray-500">
-                {pendingTasks} pending
-              </span>
-            </div>
-
-            {filteredTasks.length === 0 ? (
-              <div className="rounded-2xl border border-dashed border-gray-300 bg-white px-5 py-12 text-center">
-                <div className="text-4xl">📝</div>
-
-                <h3 className="mt-3 font-semibold text-gray-800">
-    No tasks found
-  </h3>
-
-  <p className="mt-1 text-sm text-gray-500">
-    Tidak ada task yang sesuai dengan filter kamu.
-  </p>
-
-                <button
-                  onClick={() => setShowForm(true)}
-                  className="mt-5 rounded-xl bg-gray-900 px-5 py-2.5 text-sm font-semibold text-white"
-                >
-                  ＋ Add Task
-                </button>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {filteredTasks.map((task) => {
-                  const deadlineStatus =
-                    getDeadlineStatus(task.deadline);
-
-                  return (
-                    <div
-                      key={task.id}
-                      className={`rounded-2xl bg-white p-4 shadow-sm transition sm:p-5 ${
-                        task.completed
-                          ? "opacity-60"
-                          : ""
-                      }`}
-                    >
-                      <div className="flex gap-3">
-
-                        {/* CHECKBOX */}
-
-                        <button
-                          onClick={() =>
-                            toggleTask(task.id)
-                          }
-                          className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 text-sm ${
-                            task.completed
-                              ? "border-green-500 bg-green-500 text-white"
-                              : "border-gray-300 hover:border-gray-500"
-                          }`}
-                        >
-                          {task.completed && "✓"}
-                        </button>
-
-                        {/* CONTENT */}
-
-                        <div className="min-w-0 flex-1">
-
-                          <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                            <h3
-                              className={`font-semibold text-gray-900 ${
-                                task.completed
-                                  ? "line-through"
-                                  : ""
-                              }`}
-                            >
-                              {task.title}
-                            </h3>
-
-                            {task.notes && (
-  <p className="mt-2 text-sm leading-relaxed text-gray-500">
-    {task.notes}
-  </p>
-)}
-
-                            <div className="flex shrink-0 gap-2">
-                              <button
-                                onClick={() =>
-                                  editTask(task)
-                                }
-                                className="rounded-lg px-2 py-1 text-sm text-gray-500 hover:bg-gray-100 hover:text-gray-900"
-                              >
-                                ✏️
-                              </button>
-
-                              <button
-                                onClick={() =>
-                                  deleteTask(task.id)
-                                }
-                                className="rounded-lg px-2 py-1 text-sm text-gray-500 hover:bg-red-50 hover:text-red-600"
-                              >
-                                🗑️
-                              </button>
-                            </div>
-                          </div>
-
-                          {/* INFO */}
-
-                          <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
-
-                            <span
-                              className={`rounded-full px-2.5 py-1 font-medium ${
-                                task.priority === "High"
-                                  ? "bg-red-100 text-red-700"
-                                  : task.priority ===
-                                    "Medium"
-                                  ? "bg-yellow-100 text-yellow-700"
-                                  : "bg-gray-100 text-gray-600"
-                              }`}
-                            >
-                              {task.priority}
-                            </span>
-
-                            {task.category && (
-                              <span className="rounded-full bg-blue-100 px-2.5 py-1 font-medium text-blue-700">
-                                {task.category}
-                              </span>
-                            )}
-
-                            {!task.completed && (
-                              <span
-                                className={`rounded-full px-2.5 py-1 font-medium ${deadlineStatus.className}`}
-                              >
-                                {deadlineStatus.label}
-                              </span>
-                            )}
-                          </div>
-
-                          {/* DATE */}
-
-                          <p className="mt-3 text-xs text-gray-500">
-    📅 {formatDate(task.deadline)}
-  </p>
-
-  {task.reminder && (
-    <p className="mt-1 text-xs text-gray-500">
-      🔔 Daily reminader at {task.reminder.slice(0, 5)}
-    </p>
-  )}
-
-
-
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </section>
-          {/* JOKIAN */}
-
-<section className="mt-8">
-  <div className="mb-4 flex items-center justify-between">
-    <div>
-      <h2 className="text-lg font-bold text-gray-900">
-        🎮 Jokian
-      </h2>
-
-      <p className="mt-1 text-xs text-gray-500">
-        Jadwal joki yang otomatis masuk dari Tokoku-bot.
-      </p>
-    </div>
-
-    <span className="text-sm text-gray-500">
-      {jokiOrders.filter((order) => !order.completed).length} pending
-    </span>
-  </div>
-
-  {jokiOrders.length === 0 ? (
-    <div className="rounded-2xl border border-dashed border-gray-300 bg-white px-5 py-10 text-center">
-      <div className="text-4xl">🎮</div>
-
-      <h3 className="mt-3 font-semibold text-gray-800">
-        Belum ada jadwal jokian
-      </h3>
-
-      <p className="mt-1 text-sm text-gray-500">
-        Jadwal dari Tokoku-bot akan muncul otomatis di sini.
-      </p>
-    </div>
-  ) : (
-    <div className="space-y-3">
-      {jokiOrders.map((order) => {
-        const scheduleDate = new Date(
-          `${order.schedule_date}T${order.schedule_time}`
-        );
-
-        const isToday =
-          scheduleDate.toDateString() ===
-          new Date().toDateString();
-
-        return (
-          <div
-            key={order.id}
-            className={`rounded-2xl bg-white p-4 shadow-sm transition sm:p-5 ${
-              order.completed ? "opacity-60" : ""
-            }`}
-          >
-            <div className="flex gap-3">
-              {/* CHECKBOX */}
-
-              <button
-                onClick={async () => {
-  const confirmComplete = window.confirm(
-    "Tandai Jokian ini sebagai selesai?"
-  );
-
-  if (!confirmComplete) return;
-
-  const { error } = await supabase
-  .from("joki_orders")
-  .delete()
-  .eq("id", order.id);  
-
-  if (error) {
-    console.error(error);
-    alert("Gagal menyelesaikan Jokian!");
-    return;
-  }
-
-  // Langsung hilangkan dari tampilan
-  setJokiOrders((current) =>
-    current.filter((item) => item.id !== order.id)
-  );
-}}
-                className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 text-sm ${
-                  order.completed
-                    ? "border-green-500 bg-green-500 text-white"
-                    : "border-gray-300 hover:border-gray-500"
-                }`}
-              >
-                {order.completed && "✓"}
-              </button>
-
-              {/* CONTENT */}
-
-              <div className="min-w-0 flex-1">
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                  <div>
-                    <h3
-  className={`font-semibold text-gray-900 ${
-    order.completed
-      ? "line-through"
-      : ""
-  }`}
->
-  {order.roblox_username || "Pembeli"}
-</h3>
-
-<p className="mt-1 text-xs text-gray-500">
-  Order #{order.order_id}
-</p>
-                  </div>
-
-                  <span
-                    className={`w-fit rounded-full px-2.5 py-1 text-xs font-medium ${
-                      order.completed
-                        ? "bg-green-100 text-green-700"
-                        : isToday
-                        ? "bg-orange-100 text-orange-700"
-                        : "bg-blue-100 text-blue-700"
-                    }`}
-                  >
-                    {order.completed
-                      ? "Selesai"
-                      : isToday
-                      ? "Hari Ini"
-                      : "Terjadwal"}
-                  </span>
-                </div>
-
-                {/* INFO */}
-
-                <div className="mt-3 flex flex-wrap gap-2">
-                  {order.joki_name && (
-                    <span className="rounded-full bg-purple-100 px-2.5 py-1 text-xs font-medium text-purple-700">
-                      👤 {order.joki_name}
-                    </span>
-                  )}
-
-                  <span className="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-600">
-                    🕒 {order.schedule_time.slice(0, 5)}
-                  </span>
-
-                  <span className="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-600">
-                    📅{" "}
-                    {new Date(
-                      `${order.schedule_date}T00:00:00`
-                    ).toLocaleDateString("id-ID", {
-                      day: "numeric",
-                      month: "long",
-                      year: "numeric",
-                    })}
-                  </span>
-                </div>
-
-                {order.note && (
-                  <p className="mt-3 text-xs text-gray-500">
-                    📝 {order.note}
-                  </p>
                 )}
               </div>
             </div>
+          )}
+
+          {/* Metrics Summary Cards */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            
+            <div className="bg-slate-900/50 backdrop-blur-xl border border-slate-800 rounded-2xl p-4 md:p-5 relative overflow-hidden group hover:border-violet-500/50 transition-all duration-300">
+              <div className="absolute -right-4 -bottom-4 w-20 h-20 bg-violet-600/10 rounded-full blur-xl group-hover:bg-violet-600/20 transition"></div>
+              <div className="flex justify-between items-start">
+                <div>
+                  <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Total Order</p>
+                  <h3 className="text-2xl md:text-3xl font-black text-white mt-1">{tasks.length + jokiOrders.length}</h3>
+                </div>
+                <div className="w-10 h-10 rounded-xl bg-violet-500/10 text-violet-400 flex items-center justify-center border border-violet-500/20">
+                  <i className="fa-solid fa-boxes-stacked text-base"></i>
+                </div>
+              </div>
+              <div className="mt-3 flex items-center text-[11px] font-semibold text-violet-400">
+                <i className="fa-solid fa-robot mr-1.5"></i>
+                <span>Sync Tokoku-bot</span>
+              </div>
+            </div>
+
+            <div className="bg-slate-900/50 backdrop-blur-xl border border-slate-800 rounded-2xl p-4 md:p-5 relative overflow-hidden group hover:border-amber-500/50 transition-all duration-300">
+              <div className="absolute -right-4 -bottom-4 w-20 h-20 bg-amber-600/10 rounded-full blur-xl group-hover:bg-amber-600/20 transition"></div>
+              <div className="flex justify-between items-start">
+                <div>
+                  <p className="text-xs font-bold text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
+                    <i className="fa-solid fa-fire text-xs"></i>
+                    <span>Hari Ini</span>
+                  </p>
+                  <h3 className="text-2xl md:text-3xl font-black text-amber-300 mt-1">{jokiToday}</h3>
+                </div>
+                <div className="w-10 h-10 rounded-xl bg-amber-500/10 text-amber-400 flex items-center justify-center border border-amber-500/20">
+                  <i className="fa-solid fa-fire text-base"></i>
+                </div>
+              </div>
+              <div className="mt-3 flex items-center text-[11px] font-semibold text-amber-400">
+                <i className="fa-solid fa-clock mr-1.5"></i>
+                <span>Prioritas Pengerjaan</span>
+              </div>
+            </div>
+
+            <div className="bg-slate-900/50 backdrop-blur-xl border border-slate-800 rounded-2xl p-4 md:p-5 relative overflow-hidden group hover:border-indigo-500/50 transition-all duration-300">
+              <div className="absolute -right-4 -bottom-4 w-20 h-20 bg-indigo-600/10 rounded-full blur-xl group-hover:bg-indigo-600/20 transition"></div>
+              <div className="flex justify-between items-start">
+                <div>
+                  <p className="text-xs font-bold text-indigo-400 uppercase tracking-wider flex items-center gap-1.5">
+                    <i className="fa-solid fa-calendar-days text-xs"></i>
+                    <span>Terjadwal</span>
+                  </p>
+                  <h3 className="text-2xl md:text-3xl font-black text-indigo-300 mt-1">{jokiScheduled}</h3>
+                </div>
+                <div className="w-10 h-10 rounded-xl bg-indigo-500/10 text-indigo-400 flex items-center justify-center border border-indigo-500/20">
+                  <i className="fa-solid fa-calendar-day text-base"></i>
+                </div>
+              </div>
+              <div className="mt-3 flex items-center text-[11px] font-semibold text-indigo-400">
+                <i className="fa-solid fa-list-ol mr-1.5"></i>
+                <span>Antrean Berikutnya</span>
+              </div>
+            </div>
+
+            <div className="bg-slate-900/50 backdrop-blur-xl border border-slate-800 rounded-2xl p-4 md:p-5 relative overflow-hidden group hover:border-emerald-500/50 transition-all duration-300">
+              <div className="absolute -right-4 -bottom-4 w-20 h-20 bg-emerald-600/10 rounded-full blur-xl group-hover:bg-emerald-600/20 transition"></div>
+              <div className="flex justify-between items-start">
+                <div>
+                  <p className="text-xs font-bold text-emerald-400 uppercase tracking-wider flex items-center gap-1.5">
+                    <i className="fa-solid fa-circle-check text-xs"></i>
+                    <span>Selesai</span>
+                  </p>
+                  <h3 className="text-2xl md:text-3xl font-black text-emerald-400 mt-1">{completedTasks}</h3>
+                </div>
+                <div className="w-10 h-10 rounded-xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center border border-emerald-500/20">
+                  <i className="fa-solid fa-circle-check text-base"></i>
+                </div>
+              </div>
+              <div className="mt-3 flex items-center text-[11px] font-semibold text-emerald-400">
+                <i className="fa-solid fa-square-check mr-1.5"></i>
+                <span>Sudah Tuntas</span>
+              </div>
+            </div>
           </div>
-        );
-      })}
-    </div>
-  )}
-</section>
+
+          {/* Controls Toolbar */}
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-slate-900/60 p-4 rounded-2xl border border-slate-800/80 shadow-sm">
+            <div className="flex items-center space-x-1.5 overflow-x-auto pb-2 lg:pb-0 custom-scrollbar">
+              <button 
+                onClick={() => setFilter("All")} 
+                className={`px-4 py-2 rounded-xl text-xs font-bold transition ${filter === "All" ? "bg-violet-600 text-white shadow-md shadow-violet-600/30" : "bg-slate-800/80 text-slate-300 hover:bg-slate-700"}`}
+              >
+                Semua ({tasks.length})
+              </button>
+              <button 
+                onClick={() => setFilter("Today")} 
+                className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 ${filter === "Today" ? "bg-violet-600 text-white shadow-md shadow-violet-600/30" : "bg-slate-800/80 text-slate-300 hover:bg-slate-700"}`}
+              >
+                <span className="w-2 h-2 rounded-full bg-amber-400"></span> Hari Ini
+              </button>
+              <button 
+                onClick={() => setFilter("Upcoming")} 
+                className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 ${filter === "Upcoming" ? "bg-violet-600 text-white shadow-md shadow-violet-600/30" : "bg-slate-800/80 text-slate-300 hover:bg-slate-700"}`}
+              >
+                <span className="w-2 h-2 rounded-full bg-indigo-400"></span> Terjadwal
+              </button>
+              <button 
+                onClick={() => setFilter("Overdue")} 
+                className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 ${filter === "Overdue" ? "bg-violet-600 text-white shadow-md shadow-violet-600/30" : "bg-slate-800/80 text-slate-300 hover:bg-slate-700"}`}
+              >
+                <span className="w-2 h-2 rounded-full bg-rose-400"></span> Overdue
+              </button>
+            </div>
+
+            <div className="flex items-center space-x-3">
+              <div className="relative flex-1 md:w-64">
+                <i className="fa-solid fa-magnifying-glass absolute left-3.5 top-1/2 transform -translate-y-1/2 text-slate-400 text-xs"></i>
+                <input 
+                  type="text" 
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Cari Task / Category..." 
+                  className="w-full bg-slate-950 text-slate-200 text-xs rounded-xl pl-9 pr-4 py-2.5 border border-slate-800 focus:outline-none focus:border-violet-500 transition"
+                />
+              </div>
+
+              <button className="px-3 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-violet-400 text-xs font-semibold border border-slate-700/60 transition flex items-center gap-1.5">
+                <i className="fa-regular fa-copy"></i>
+                <span className="hidden md:inline">Salin Rekap</span>
+              </button>
+
+              <div className="flex items-center bg-slate-950 p-1 rounded-xl border border-slate-800">
+                <button 
+                  onClick={() => setCurrentView("list")} 
+                  className={`p-2 rounded-lg text-xs transition ${currentView === "list" ? "bg-violet-600 text-white shadow-sm" : "text-slate-400 hover:text-white"}`}
+                >
+                  <i className="fa-solid fa-list-ul"></i>
+                </button>
+                <button 
+                  onClick={() => setCurrentView("kanban")} 
+                  className={`p-2 rounded-lg text-xs transition ${currentView === "kanban" ? "bg-violet-600 text-white shadow-sm" : "text-slate-400 hover:text-white"}`}
+                >
+                  <i className="fa-solid fa-table-columns"></i>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Form Modal */}
+          {showForm && (
+            <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
+              <div className="bg-slate-900 rounded-3xl border border-slate-800 max-w-lg w-full p-6 md:p-8 shadow-2xl relative max-h-[90vh] overflow-y-auto custom-scrollbar">
+                <div className="flex justify-between items-center mb-6">
+                  <div className="flex items-center space-x-3">
+                    <div className="w-10 h-10 rounded-2xl bg-violet-600/20 text-violet-400 border border-violet-500/30 flex items-center justify-center">
+                      <i className="fa-solid fa-pen-to-square text-base"></i>
+                    </div>
+                    <div>
+                      <h3 className="font-extrabold text-lg text-white">{editingId !== null ? "Edit Task" : "Tambah Task Baru"}</h3>
+                      <p className="text-xs text-slate-400">Masukkan rincian task</p>
+                    </div>
+                  </div>
+                  <button onClick={resetForm} className="text-slate-400 hover:text-white p-2 rounded-lg">
+                    <i className="fa-solid fa-xmark text-lg"></i>
+                  </button>
+                </div>
+
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-400 uppercase mb-1.5">Task</label>
+                    <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Contoh: Kerjakan laporan" className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-slate-200 focus:outline-none focus:border-violet-500 transition" />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-400 uppercase mb-1.5">Deadline</label>
+                      <input type="date" value={deadline} onChange={(e) => setDeadline(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-slate-200 focus:outline-none focus:border-violet-500 transition" />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-slate-400 uppercase mb-1.5">Daily Reminder</label>
+                      <input type="time" value={reminder} onChange={(e) => setReminder(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-slate-200 focus:outline-none focus:border-violet-500 transition" />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-400 uppercase mb-1.5">Priority</label>
+                      <select value={priority} onChange={(e) => setPriority(e.target.value as any)} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-slate-200 focus:outline-none focus:border-violet-500 transition">
+                        <option value="Low">Low</option>
+                        <option value="Medium">Medium</option>
+                        <option value="High">High</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-slate-400 uppercase mb-1.5">Category</label>
+                      <input type="text" value={category} onChange={(e) => setCategory(e.target.value)} placeholder="Kuliah, Kerja..." className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-slate-200 focus:outline-none focus:border-violet-500 transition" />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-400 uppercase mb-1.5">Notes</label>
+                    <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} placeholder="Tambahkan catatan..." className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-slate-200 focus:outline-none focus:border-violet-500 transition resize-none"></textarea>
+                  </div>
+
+                  <div className="pt-4 flex justify-end space-x-3 border-t border-slate-800/80">
+                    <button onClick={resetForm} className="px-5 py-2.5 rounded-xl text-xs font-bold text-slate-400 hover:text-white hover:bg-slate-800 transition">Batal</button>
+                    <button onClick={editingId !== null ? updateTask : addTask} className="px-6 py-2.5 rounded-xl text-xs font-extrabold bg-linear-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white shadow-lg shadow-violet-600/30 transition">
+                      {editingId !== null ? "Update Task" : "Simpan Task"}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Header Section Banner */}
+          <div className="flex items-center justify-between pt-1">
+            <div className="flex items-center space-x-2.5">
+              <div className="w-7 h-7 rounded-lg bg-violet-600/20 text-violet-400 border border-violet-500/30 flex items-center justify-center text-xs">
+                <i className="fa-solid fa-gamepad"></i>
+              </div>
+              <h3 className="font-extrabold text-slate-100 text-base md:text-lg">Jadwal Task & Jokian Aktif</h3>
+              
+            </div>
+            <p className="text-xs text-slate-400">Menampilkan {filteredTasks.length} task • {jokiOrders.length} jokian</p>
+          </div>
+
+          {/* LIST VIEW CONTAINER */}
+          {currentView === "list" && (
+            <div className="space-y-3.5">
+              {/* MY TASKS SECTION */}
+              <div className="mb-4">
+                <h3 className="text-sm font-bold text-slate-300 mb-3 flex items-center gap-2">
+                  <i className="fa-solid fa-clipboard-list text-violet-400"></i>
+                  <span>My Tasks</span>
+                </h3>
+                {filteredTasks.length === 0 ? (
+                  <div className="bg-slate-900/50 backdrop-blur-xl border border-slate-800 rounded-3xl p-8 text-center text-slate-400">
+                    <div className="w-14 h-14 rounded-2xl bg-violet-600/10 text-violet-400 flex items-center justify-center mx-auto mb-3 border border-violet-500/20">
+                      <i className="fa-regular fa-clipboard text-2xl"></i>
+                    </div>
+                    <h4 className="font-bold text-slate-200 text-sm">Tidak ada task ditemukan</h4>
+                    <p className="text-xs text-slate-500 mt-1">Coba ubah filter atau tambah task baru.</p>
+                  </div>
+                ) : (
+                  filteredTasks.map((task) => {
+                    const deadlineStatus = getDeadlineStatus(task.deadline);
+
+                    return (
+                      <div
+  key={task.id}
+  className={`relative bg-slate-900/90 border border-slate-800 rounded-2xl p-4 md:p-5 mb-3 hover:border-slate-700 transition-all duration-300 ${
+    task.completed ? "opacity-60" : ""
+  }`}
+>
+  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+
+                          {/* LEFT SIDE */}
+                          <div className="flex items-start gap-4 min-w-0 flex-1">
+
+                            {/* CHECKBOX */}
+                            <button
+  onClick={() => toggleTask(task.id)}
+  className={`mt-1 w-6 h-6 rounded-lg border-2 flex items-center justify-center shrink-0 transition-all ${
+    task.completed
+      ? "bg-emerald-500 border-emerald-500 text-white"
+      : "border-slate-600 bg-transparent hover:border-violet-500 text-transparent"
+  }`}
+>
+  <i className="fa-solid fa-check text-xs"></i>
+</button>
+
+                            {/* CONTENT */}
+                            <div className="min-w-0 flex-1">
+
+                              {/* TITLE + BOT BADGE */}
+                              <div className="flex items-center gap-2.5">
+                                <h4
+  className={`font-extrabold text-base md:text-lg text-white truncate ${
+    task.completed ? "line-through text-slate-400" : ""
+  }`}
+>
+  {task.title}
+</h4>
+
+                              </div>
+
+                              {/* INFO CHIPS */}
+                              <div className="flex flex-wrap items-center gap-2 mt-3">
+
+                                {/* USER */}
+                                <span className="inline-flex items-center gap-1.5 bg-violet-500/10 text-violet-300 px-3 py-1.5 rounded-xl text-xs font-semibold border border-violet-500/20">
+                                  <i className="fa-regular fa-user text-[11px]"></i>
+                                  <span>Ellan</span>
+                                </span>
+
+                                {/* REMINDER / TIME */}
+                                {task.reminder && (
+                                  <span className="inline-flex items-center gap-1.5 bg-slate-800 text-slate-300 px-3 py-1.5 rounded-xl text-xs font-semibold border border-slate-700/70">
+                                    <i className="fa-regular fa-clock text-[11px] text-amber-400"></i>
+                                    <span>{task.reminder.slice(0, 5)}</span>
+                                  </span>
+                                )}
+
+                                {/* DEADLINE */}
+                                <span className="inline-flex items-center gap-1.5 bg-slate-800 text-slate-300 px-3 py-1.5 rounded-xl text-xs font-semibold border border-slate-700/70">
+                                  <i className="fa-regular fa-calendar text-[11px] text-indigo-400"></i>
+                                  <span>{formatDate(task.deadline)}</span>
+                                </span>
+
+                                {/* NOTES */}
+                                {(task.notes || task.category) && (
+                                  <span className="inline-flex items-center gap-1.5 bg-violet-500/10 text-violet-300 px-3 py-1.5 rounded-xl text-xs font-semibold border border-violet-500/20">
+                                    <i className="fa-regular fa-note-sticky text-[11px] text-violet-400"></i>
+                                    <span className="truncate max-w-45">
+                                      {task.notes || task.category}
+                                    </span>
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* RIGHT SIDE */}
+                          <div className="flex items-center gap-3 shrink-0">
+
+                            {/* STATUS */}
+                            {!task.completed ? (
+                              <span
+                                className={`hidden md:inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold border ${deadlineStatus.className}`}
+                              >
+                                <i className={`fa-solid ${deadlineStatus.icon} text-[11px]`}></i>
+                                {deadlineStatus.displayText}
+                              </span>
+                            ) : (
+                              <span className="hidden md:inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                                <i className="fa-solid fa-check text-[11px]"></i>
+                                Selesai
+                              </span>
+                            )}
+
+                            {/* EDIT */}
+                            <button
+                              onClick={() => editTask(task)}
+                              className="w-9 h-9 flex items-center justify-center rounded-xl text-slate-400 hover:text-violet-400 hover:bg-slate-800 transition"
+                              title="Edit Task"
+                            >
+                              <i className="fa-solid fa-pen-to-square text-base"></i>
+                            </button>
+
+                            {/* DELETE */}
+                            <button
+                              onClick={() => deleteTask(task.id)}
+                              className="w-9 h-9 flex items-center justify-center rounded-xl text-slate-400 hover:text-rose-400 hover:bg-slate-800 transition"
+                              title="Hapus Task"
+                            >
+                              <i className="fa-regular fa-trash-can text-base"></i>
+                            </button>
+
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+
+              {/* JOKIAN SECTION */}
+              <div className="mt-6">
+                <h3 className="text-sm font-bold text-slate-300 mb-3 flex items-center gap-2">
+                  <i className="fa-solid fa-gamepad text-violet-400"></i>
+                  <span>Jadwal Jokian</span>
+                </h3>
+                {jokiOrders.length === 0 ? (
+                  <div className="bg-slate-900/50 backdrop-blur-xl border border-slate-800 rounded-3xl p-12 text-center text-slate-400">
+                    <div className="w-16 h-16 rounded-2xl bg-violet-600/10 text-violet-400 flex items-center justify-center mx-auto mb-4 border border-violet-500/20">
+                      <i className="fa-solid fa-folder-open text-2xl"></i>
+                    </div>
+                    <h4 className="font-bold text-slate-200 text-base">Tidak ada jadwal jokian</h4>
+                    <p className="text-xs text-slate-500 mt-1">Jadwal dari Tokoku-bot akan muncul otomatis di sini.</p>
+                  </div>
+                ) : (
+                  jokiOrders.map((order) => {
+                    const scheduleDate = new Date(`${order.schedule_date}T${order.schedule_time}`);
+                    const isToday = scheduleDate.toDateString() === new Date().toDateString();
+                    return (
+                      <div key={order.id} className={`bg-slate-900/50 backdrop-blur-xl border border-slate-800 rounded-2xl p-4 md:p-5 hover:border-violet-500/40 transition-all duration-300 mb-3 ${isToday ? 'shadow-[0_0_15px_rgba(245,158,11,0.15)] border-amber-500/30' : ''}`}>
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                          <div className="flex items-start space-x-3.5 flex-1 min-w-0">
+                            <button 
+                              onClick={() =>
+  showConfirm(
+    "Selesaikan Jokian?",
+    `Tandai jokian "${order.roblox_username || "Pembeli"}" sebagai selesai?`,
+    "success",
+    "Ya, Selesai",
+    async () => {
+      const { error } = await supabase.from("joki_orders").delete().eq("id", order.id);
+      if (error) {
+        console.error(error);
+        alert("Gagal menyelesaikan Jokian!");
+        return;
+      }
+      setJokiOrders((current) => current.filter((item) => item.id !== order.id));
+      closeConfirm();
+    }
+  )
+}
+                              className="mt-1 w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all shrink-0 border-slate-600 hover:border-violet-500 text-transparent"
+                            >
+                              <i className="fa-solid fa-check text-xs"></i>
+                            </button>
+                            <div className="space-y-2 flex-1 min-w-0">
+                              <div className="flex items-center space-x-2">
+                                <h4 className="font-extrabold text-base md:text-lg text-white truncate">{order.roblox_username || "Pembeli"}</h4>
+                                
+                              </div>
+                              <div className="flex items-center space-x-2 text-xs text-slate-400 font-mono">
+  <span>
+    Order <strong className="text-violet-400 font-semibold">#{order.order_id}</strong>
+  </span>
+  <button
+    onClick={() => navigator.clipboard.writeText(order.order_id)}
+    className="text-slate-500 hover:text-violet-400 transition p-0.5"
+    title="Copy Order ID"
+  >
+    <i className="fa-regular fa-copy text-xs"></i>
+  </button>
+</div>
+                              
+                              <div className="flex flex-wrap items-center gap-2 pt-1 text-xs">
+                                <span className="inline-flex items-center space-x-1.5 bg-violet-500/10 text-violet-300 px-2.5 py-1 rounded-lg font-semibold border border-violet-500/20">
+                                  <i className="fa-regular fa-user text-[11px]"></i>
+                                  <span>{order.joki_name || "Ellan"}</span>
+                                </span>
+                                <span className="inline-flex items-center space-x-1.5 bg-slate-800/80 text-slate-300 px-2.5 py-1 rounded-lg font-semibold border border-slate-700/50">
+                                  <i className="fa-regular fa-clock text-[11px] text-amber-400"></i>
+                                  <span>{order.schedule_time.slice(0, 5)}</span>
+                                </span>
+                                <span className="inline-flex items-center space-x-1.5 bg-slate-800/80 text-slate-300 px-2.5 py-1 rounded-lg font-semibold border border-slate-700/50">
+                                  <i className="fa-regular fa-calendar-days text-[11px] text-indigo-400"></i>
+                                  <span>{new Date(`${order.schedule_date}T00:00:00`).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })}</span>
+                                </span>
+                                {order.note && (
+                                  <span className="inline-flex items-center space-x-1.5 bg-violet-500/10 text-violet-300 px-2.5 py-1 rounded-lg font-mono text-[11px] border border-violet-500/20">
+                                    <i className="fa-regular fa-note-sticky text-[11px] text-violet-400"></i>
+                                    <span>{order.note}</span>
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* RIGHT: hanya badge status, tanpa edit/hapus */}
+                          <div className="flex items-center justify-between sm:justify-end space-x-3 pt-3 sm:pt-0 border-t sm:border-t-0 border-slate-800/60">
+                            {isToday ? (
+                              <span className="bg-amber-500/20 text-amber-300 border border-amber-500/30 text-[11px] font-bold px-3 py-1.5 rounded-xl flex items-center gap-1.5">
+                                <i className="fa-solid fa-fire text-xs text-amber-400"></i> Hari Ini
+                              </span>
+                            ) : (
+                              <span className="bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 text-[11px] font-bold px-3 py-1.5 rounded-xl flex items-center gap-1.5">
+                                <i className="fa-solid fa-calendar text-xs"></i> Terjadwal
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* KANBAN VIEW CONTAINER */}
+          {currentView === "kanban" && (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              
+              <div className="bg-slate-900/40 rounded-2xl p-4 border border-slate-800/80 space-y-3 flex flex-col">
+                <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+                  <div className="flex items-center space-x-2">
+                    <span className="w-3 h-3 rounded-full bg-amber-500 animate-pulse"></span>
+                    <h4 className="font-extrabold text-sm text-amber-400 flex items-center gap-1.5">
+                      <i className="fa-solid fa-fire text-xs"></i> Hari Ini
+                    </h4>
+                  </div>
+                  <span className="text-xs bg-amber-500/20 text-amber-300 px-2.5 py-0.5 rounded-full font-bold">{jokiToday}</span>
+                </div>
+                <div className="space-y-3 flex-1 min-h-50">
+                  {jokiOrders.filter(o => new Date(`${o.schedule_date}T${o.schedule_time}`).toDateString() === new Date().toDateString()).map(order => (
+                    <div key={order.id} className="bg-slate-900/90 p-4 rounded-2xl border border-slate-800 space-y-3 hover:border-violet-500/50 transition shadow-md">
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <h5 className="font-extrabold text-sm text-white">{order.roblox_username || "Pembeli"}</h5>
+                          <p className="text-[11px] text-violet-400 font-mono mt-0.5">#{order.order_id}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center justify-between text-xs text-slate-400 pt-2 border-t border-slate-800/80">
+                        <span className="font-semibold text-violet-300"><i className="fa-regular fa-user mr-1 text-[11px]"></i>{order.joki_name || "Ellan"}</span>
+                        <span className="font-mono text-amber-400"><i className="fa-regular fa-clock mr-1"></i>{order.schedule_time.slice(0, 5)}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="bg-slate-900/40 rounded-2xl p-4 border border-slate-800/80 space-y-3 flex flex-col">
+                <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+                  <div className="flex items-center space-x-2">
+                    <span className="w-3 h-3 rounded-full bg-indigo-500"></span>
+                    <h4 className="font-extrabold text-sm text-indigo-400 flex items-center gap-1.5">
+                      <i className="fa-solid fa-calendar-days text-xs"></i> Terjadwal
+                    </h4>
+                  </div>
+                  <span className="text-xs bg-indigo-500/20 text-indigo-300 px-2.5 py-0.5 rounded-full font-bold">{jokiScheduled}</span>
+                </div>
+                <div className="space-y-3 flex-1 min-h-50">
+                  {jokiOrders.filter(o => new Date(`${o.schedule_date}T${o.schedule_time}`).toDateString() !== new Date().toDateString()).map(order => (
+                    <div key={order.id} className="bg-slate-900/90 p-4 rounded-2xl border border-slate-800 space-y-3 hover:border-violet-500/50 transition shadow-md">
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <h5 className="font-extrabold text-sm text-white">{order.roblox_username || "Pembeli"}</h5>
+                          <p className="text-[11px] text-violet-400 font-mono mt-0.5">#{order.order_id}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center justify-between text-xs text-slate-400 pt-2 border-t border-slate-800/80">
+                        <span className="font-semibold text-violet-300"><i className="fa-regular fa-user mr-1 text-[11px]"></i>{order.joki_name || "Ellan"}</span>
+                        <span className="font-mono text-amber-400"><i className="fa-regular fa-clock mr-1"></i>{order.schedule_time.slice(0, 5)}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="bg-slate-900/40 rounded-2xl p-4 border border-slate-800/80 space-y-3 flex flex-col">
+                <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+                  <div className="flex items-center space-x-2">
+                    <span className="w-3 h-3 rounded-full bg-emerald-500"></span>
+                    <h4 className="font-extrabold text-sm text-emerald-400 flex items-center gap-1.5">
+                      <i className="fa-solid fa-circle-check text-xs"></i> Selesai
+                    </h4>
+                  </div>
+                  <span className="text-xs bg-emerald-500/20 text-emerald-300 px-2.5 py-0.5 rounded-full font-bold">{completedTasks}</span>
+                </div>
+                <div className="space-y-3 flex-1 min-h-50">
+                  {tasks.filter(t => t.completed).map(task => (
+                    <div key={task.id} className="bg-slate-900/90 p-4 rounded-2xl border border-slate-800 space-y-3 hover:border-violet-500/50 transition shadow-md opacity-70">
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <h5 className="font-extrabold text-sm text-white line-through">{task.title}</h5>
+                          <p className="text-[11px] text-violet-400 font-mono mt-0.5">{task.category}</p>
+                        </div>
+                        <div className="flex items-center space-x-1">
+                          <button 
+                            onClick={() => editTask(task)} 
+                            className="text-slate-400 hover:text-violet-400 p-1.5 rounded-lg hover:bg-slate-800/80 transition" 
+                            title="Edit Task"
+                          >
+                            <i className="fa-solid fa-pen-to-square text-xs"></i>
+                          </button>
+                          <button 
+                            onClick={() => deleteTask(task.id)} 
+                            className="text-slate-400 hover:text-rose-400 p-1.5 rounded-lg hover:bg-slate-800/80 transition" 
+                            title="Hapus Task"
+                          >
+                            <i className="fa-regular fa-trash-can text-xs"></i>
+                          </button>
+                        </div>
+                      </div>
+                      <div className="flex items-center justify-between text-xs text-slate-400 pt-2 border-t border-slate-800/80">
+                        <span className="font-semibold text-violet-300"><i className="fa-regular fa-user mr-1 text-[11px]"></i>Task</span>
+                        <span className="font-mono text-amber-400"><i className="fa-regular fa-clock mr-1"></i>{formatDate(task.deadline)}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+            </div>
+          )}
+
         </div>
       </main>
-    );
-  }
+      {/* CUSTOM CONFIRM DIALOG */}
+{confirmDialog.open && (
+  <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-60 flex items-center justify-center p-4">
+    <div className="bg-slate-900 rounded-3xl border border-slate-800 max-w-md w-full p-6 md:p-7 shadow-2xl relative animate-in">
+      
+      <div className="flex items-start gap-4">
+        {/* ICON */}
+        <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 border ${
+          confirmDialog.variant === "danger"
+            ? "bg-rose-500/10 text-rose-400 border-rose-500/30"
+            : confirmDialog.variant === "warning"
+            ? "bg-amber-500/10 text-amber-400 border-amber-500/30"
+            : confirmDialog.variant === "success"
+            ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30"
+            : "bg-violet-500/10 text-violet-400 border-violet-500/30"
+        }`}>
+          <i className={`fa-solid text-xl ${
+            confirmDialog.variant === "danger"
+              ? "fa-triangle-exclamation"
+              : confirmDialog.variant === "warning"
+              ? "fa-circle-exclamation"
+              : confirmDialog.variant === "success"
+              ? "fa-circle-check"
+              : "fa-circle-info"
+          }`}></i>
+        </div>
+
+        <div className="flex-1 min-w-0">
+          <h3 className="font-extrabold text-lg text-white">
+            {confirmDialog.title}
+          </h3>
+          <p className="text-sm text-slate-400 mt-1.5 leading-relaxed">
+            {confirmDialog.message}
+          </p>
+        </div>
+      </div>
+
+      {/* ACTIONS */}
+      <div className="flex justify-end gap-3 mt-6 pt-5 border-t border-slate-800/80">
+        <button
+          onClick={closeConfirm}
+          className="px-5 py-2.5 rounded-xl text-xs font-bold text-slate-300 hover:text-white hover:bg-slate-800 border border-slate-800 transition"
+        >
+          Batal
+        </button>
+        <button
+          onClick={confirmDialog.onConfirm}
+          className={`px-6 py-2.5 rounded-xl text-xs font-extrabold text-white shadow-lg transition ${
+            confirmDialog.variant === "danger"
+              ? "bg-linear-to-r from-rose-600 to-red-600 hover:from-rose-500 hover:to-red-500 shadow-rose-600/30"
+              : confirmDialog.variant === "success"
+              ? "bg-linear-to-r from-emerald-600 to-green-600 hover:from-emerald-500 hover:to-green-500 shadow-emerald-600/30"
+              : "bg-linear-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 shadow-violet-600/30"
+          }`}
+        >
+          {confirmDialog.confirmText}
+        </button>
+      </div>
+
+    </div>
+  </div>
+)}
+    </div>
+  );
+}

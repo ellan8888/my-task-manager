@@ -6,7 +6,7 @@ export const metadata: Metadata = {
   description: "Personal task manager and reminder",
   applicationName: "My Task Manager",
 };
-
+  
 export default function RootLayout({
   children,
 }: Readonly<{
