@@ -1237,28 +1237,54 @@ export default function Home() {
                             <div className="flex items-start space-x-3.5 flex-1 min-w-0">
                               <button
                                 onClick={() =>
-                                  showConfirm(
-                                    "Selesaikan Jokian?",
-                                    `Tandai jokian "${order.roblox_username || "Pembeli"}" sebagai selesai?`,
-                                    "success",
-                                    "Ya, Selesai",
-                                    async () => {
-                                      const { error } = await supabase
-                                        .from("joki_orders")
-                                        .delete()
-                                        .eq("id", order.id);
-                                      if (error) {
-                                        console.error(error);
-                                        alert("Gagal menyelesaikan Jokian!");
-                                        return;
-                                      }
-                                      setJokiOrders((current) =>
-                                        current.filter((item) => item.id !== order.id)
-                                      );
-                                      closeConfirm();
-                                    }
-                                  )
-                                }
+  showConfirm(
+    "Selesaikan Jokian?",
+    `Tandai jokian "${order.roblox_username || "Pembeli"}" sebagai selesai?`,
+    "success",
+    "Ya, Selesai",
+    async () => {
+      // 1. Hapus dari Supabase
+      const { error } = await supabase
+        .from("joki_orders")
+        .delete()
+        .eq("id", order.id);
+
+      if (error) {
+        console.error(error);
+        alert("Gagal menyelesaikan Jokian!");
+        return;
+      }
+
+      // 2. Hapus akun dari RAM (jika ada roblox_username)
+      if (order.roblox_username) {
+        try {
+          const res = await fetch("/api/remove-account", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ username: order.roblox_username }),
+          });
+          
+          const data = await res.json();
+          console.log("RAM response:", data);
+          
+          // Optional: kasih notifikasi kalau gagal
+          if (!data.success) {
+            console.warn("Gagal hapus dari RAM:", data.message);
+          }
+        } catch (err) {
+          console.error("Gagal hapus dari RAM:", err);
+          // Tidak alert, karena ini opsional
+        }
+      }
+
+      // 3. Update UI
+      setJokiOrders((current) =>
+        current.filter((item) => item.id !== order.id)
+      );
+      closeConfirm();
+    }
+  )
+}
                                 className="mt-1 w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all shrink-0 border-slate-300 dark:border-slate-600 hover:border-violet-500 text-transparent"
                               >
                                 <i className="fa-solid fa-check text-xs"></i>
