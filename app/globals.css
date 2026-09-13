@@ -53,3 +53,5 @@ input[type="time"] {
   color-scheme: dark;
 }
 
+@import "tailwindcss";
+@custom-variant dark (&:where(.dark, .dark *));
