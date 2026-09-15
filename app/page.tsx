@@ -35,6 +35,7 @@ type JokiOrder = {
 
 export default function Home() {
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [processingOrders, setProcessingOrders] = useState<Set<number>>(new Set());
   const [jokiOrders, setJokiOrders] = useState<JokiOrder[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -393,6 +394,83 @@ export default function Home() {
       }
     );
   };
+
+  // =========================
+// COMPLETE JOKI ORDER (dengan animasi)
+// =========================
+
+const handleCompleteOrder = async (order: JokiOrder) => {
+  // 1. Mark as processing DULU (trigger animasi CSS)
+  setProcessingOrders((prev) => new Set(prev).add(order.id));
+
+  // 2. Show confirm dialog
+  showConfirm(
+    order.completed_by_bot ? "Konfirmasi Jokian Selesai?" : "Selesaikan Jokian?",
+    order.completed_by_bot
+      ? `Order "${order.roblox_username || "Pembeli"}" sudah selesai. Hapus dari daftar?`
+      : `Tandai jokian "${order.roblox_username || "Pembeli"}" sebagai selesai?`,
+    "success",
+    order.completed_by_bot ? "Ya, Konfirmasi" : "Ya, Selesai",
+    async () => {
+      // 3. Tutup dialog langsung
+      closeConfirm();
+
+      // 4. PENTING: Tunggu 50ms supaya React commit perubahan "processing" ke DOM
+      await new Promise((resolve) => setTimeout(resolve, 50));
+
+      try {
+        // 5. Hapus dari Supabase + RAM (background)
+        const { error } = await supabase
+          .from("joki_orders")
+          .delete()
+          .eq("id", order.id);
+
+        if (error) {
+          console.error(error);
+          alert("Gagal menyelesaikan Jokian!");
+          setProcessingOrders((prev) => {
+            const next = new Set(prev);
+            next.delete(order.id);
+            return next;
+          });
+          return;
+        }
+
+        // 6. Hapus dari RAM (tanpa await supaya tidak blocking)
+        if (order.roblox_username) {
+          fetch("/api/remove-account", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ username: order.roblox_username }),
+          })
+            .then((res) => res.json())
+            .then((data) => console.log("RAM response:", data))
+            .catch((err) => console.error("Gagal hapus dari RAM:", err));
+        }
+
+        // 7. TUNGGU ANIMASI CSS SELESAI (600ms > 500ms duration)
+        await new Promise((resolve) => setTimeout(resolve, 600));
+
+        // 8. BARU hapus dari array (React remove dari DOM)
+        setJokiOrders((current) => current.filter((item) => item.id !== order.id));
+
+        // 9. Cleanup state
+        setProcessingOrders((prev) => {
+          const next = new Set(prev);
+          next.delete(order.id);
+          return next;
+        });
+      } catch (err) {
+        console.error(err);
+        setProcessingOrders((prev) => {
+          const next = new Set(prev);
+          next.delete(order.id);
+          return next;
+        });
+      }
+    }
+  );
+};
 
   // =========================
   // TOGGLE COMPLETE
@@ -1257,12 +1335,15 @@ export default function Home() {
   const scheduleDate = new Date(`${order.schedule_date}T${order.schedule_time}`);
   const isToday = scheduleDate.toDateString() === new Date().toDateString();
   const isCompletedByBot = order.completed_by_bot === true;
+  const isProcessing = processingOrders.has(order.id);  // ← TAMBAH INI
 
   return (
     <div
       key={order.id}
-      className={`bg-white dark:bg-slate-900/50 backdrop-blur-xl border rounded-2xl p-4 md:p-5 transition-all duration-300 mb-3 ${
-        isCompletedByBot
+      className={`bg-white dark:bg-slate-900/50 backdrop-blur-xl border rounded-2xl p-4 md:p-5 mb-3 transition-all duration-500 ease-out ${
+        isProcessing
+          ? "opacity-0 scale-95 blur-sm pointer-events-none"  // ← ANIMASI SAAT PROCESSING
+          : isCompletedByBot
           ? "border-emerald-300 dark:border-emerald-500/40 opacity-60"
           : isToday
           ? "border-amber-300 dark:border-amber-500/30 shadow-[0_0_15px_rgba(245,158,11,0.15)]"
@@ -1271,110 +1352,32 @@ export default function Home() {
     >
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="flex items-start space-x-3.5 flex-1 min-w-0">
-          
+
           {/* Tombol Checklist / Konfirmasi */}
-          {isCompletedByBot ? (
-            // === TOMBOL KONFIRMASI (setelah bot selesai) ===
-            <button
-              onClick={() =>
-                showConfirm(
-                  "Konfirmasi Jokian Selesai?",
-                  `Order "${order.roblox_username || "Pembeli"}" sudah selesai. Hapus dari daftar?`,
-                  "success",
-                  "Ya, Konfirmasi",
-                  async () => {
-                    // 1. Hapus dari Supabase
-                    const { error } = await supabase
-                      .from("joki_orders")
-                      .delete()
-                      .eq("id", order.id);
-
-                    if (error) {
-                      console.error(error);
-                      alert("Gagal konfirmasi Jokian!");
-                      return;
-                    }
-
-                    // 2. Hapus akun dari RAM
-                    if (order.roblox_username) {
-                      try {
-                        const res = await fetch("/api/remove-account", {
-                          method: "POST",
-                          headers: { "Content-Type": "application/json" },
-                          body: JSON.stringify({ username: order.roblox_username }),
-                        });
-                        const data = await res.json();
-                        console.log("RAM response:", data);
-                      } catch (err) {
-                        console.error("Gagal hapus dari RAM:", err);
-                      }
-                    }
-
-                    // 3. Update UI
-                    setJokiOrders((current) =>
-                      current.filter((item) => item.id !== order.id)
-                    );
-                    closeConfirm();
-                  }
-                )
-              }
-              className="mt-1 w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all shrink-0 bg-emerald-500 border-emerald-500 text-white hover:bg-emerald-600"
-              title="Konfirmasi Selesai"
-            >
+          <button
+            onClick={() => handleCompleteOrder(order)}  // ← GANTI HANDLER
+            disabled={isProcessing}
+            className={`mt-1 w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all shrink-0 ${
+              isProcessing
+                ? "border-emerald-500 bg-emerald-500 text-white cursor-wait"  // ← SPINNER STATE
+                : isCompletedByBot
+                ? "bg-emerald-500 border-emerald-500 text-white hover:bg-emerald-600"
+                : "border-slate-300 dark:border-slate-600 hover:border-violet-500 text-transparent"
+            }`}
+            title={isCompletedByBot ? "Konfirmasi Selesai" : "Selesaikan"}
+          >
+            {isProcessing ? (
+              <i className="fa-solid fa-spinner fa-spin text-xs"></i>  // ← SPINNER
+            ) : (
               <i className="fa-solid fa-check text-xs"></i>
-            </button>
-          ) : (
-            // === CHECKLIST LAMA (sebelum bot selesai) ===
-            <button
-              onClick={() =>
-                showConfirm(
-                  "Selesaikan Jokian?",
-                  `Tandai jokian "${order.roblox_username || "Pembeli"}" sebagai selesai?`,
-                  "success",
-                  "Ya, Selesai",
-                  async () => {
-                    const { error } = await supabase
-                      .from("joki_orders")
-                      .delete()
-                      .eq("id", order.id);
-
-                    if (error) {
-                      console.error(error);
-                      alert("Gagal menyelesaikan Jokian!");
-                      return;
-                    }
-
-                    if (order.roblox_username) {
-                      try {
-                        await fetch("/api/remove-account", {
-                          method: "POST",
-                          headers: { "Content-Type": "application/json" },
-                          body: JSON.stringify({ username: order.roblox_username }),
-                        });
-                      } catch (err) {
-                        console.error("Gagal hapus dari RAM:", err);
-                      }
-                    }
-
-                    setJokiOrders((current) =>
-                      current.filter((item) => item.id !== order.id)
-                    );
-                    closeConfirm();
-                  }
-                )
-              }
-              className="mt-1 w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all shrink-0 border-slate-300 dark:border-slate-600 hover:border-violet-500 text-transparent"
-              title="Selesaikan"
-            >
-              <i className="fa-solid fa-check text-xs"></i>
-            </button>
-          )}
+            )}
+          </button>
 
           <div className="space-y-2 flex-1 min-w-0">
             <div className="flex items-center space-x-2">
               <h4 className={`font-extrabold text-base md:text-lg truncate ${
-                isCompletedByBot 
-                  ? "text-slate-400 dark:text-slate-500 line-through" 
+                isCompletedByBot
+                  ? "text-slate-400 dark:text-slate-500 line-through"
                   : "text-slate-900 dark:text-white"
               }`}>
                 {order.roblox_username || "Pembeli"}
@@ -1383,6 +1386,12 @@ export default function Home() {
                 <span className="inline-flex items-center gap-1 bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 px-2 py-0.5 rounded-md text-[10px] font-bold border border-emerald-200 dark:border-emerald-500/30">
                   <i className="fa-solid fa-robot text-[9px]"></i>
                   Bot Selesai
+                </span>
+              )}
+              {isProcessing && (
+                <span className="inline-flex items-center gap-1 bg-blue-100 dark:bg-blue-500/20 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded-md text-[10px] font-bold border border-blue-200 dark:border-blue-500/30 animate-pulse">
+                  <i className="fa-solid fa-spinner fa-spin text-[9px]"></i>
+                  Memproses...
                 </span>
               )}
             </div>
