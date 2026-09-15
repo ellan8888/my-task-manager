@@ -400,10 +400,7 @@ export default function Home() {
 // =========================
 
 const handleCompleteOrder = async (order: JokiOrder) => {
-  // 1. Mark as processing DULU (trigger animasi CSS)
-  setProcessingOrders((prev) => new Set(prev).add(order.id));
-
-  // 2. Show confirm dialog
+  // 1. Show confirm dialog DULU (JANGAN set processing di sini!)
   showConfirm(
     order.completed_by_bot ? "Konfirmasi Jokian Selesai?" : "Selesaikan Jokian?",
     order.completed_by_bot
@@ -412,14 +409,17 @@ const handleCompleteOrder = async (order: JokiOrder) => {
     "success",
     order.completed_by_bot ? "Ya, Konfirmasi" : "Ya, Selesai",
     async () => {
-      // 3. Tutup dialog langsung
+      // 2. Tutup dialog langsung
       closeConfirm();
 
-      // 4. PENTING: Tunggu 50ms supaya React commit perubahan "processing" ke DOM
+      // 3. BARU set processing (trigger animasi) — SETELAH klik "Ya"
+      setProcessingOrders((prev) => new Set(prev).add(order.id));
+
+      // 4. Tunggu 50ms supaya React render perubahan className ke DOM
       await new Promise((resolve) => setTimeout(resolve, 50));
 
       try {
-        // 5. Hapus dari Supabase + RAM (background)
+        // 5. Hapus dari Supabase
         const { error } = await supabase
           .from("joki_orders")
           .delete()
@@ -436,7 +436,7 @@ const handleCompleteOrder = async (order: JokiOrder) => {
           return;
         }
 
-        // 6. Hapus dari RAM (tanpa await supaya tidak blocking)
+        // 6. Hapus dari RAM (background, tanpa await)
         if (order.roblox_username) {
           fetch("/api/remove-account", {
             method: "POST",
@@ -448,13 +448,13 @@ const handleCompleteOrder = async (order: JokiOrder) => {
             .catch((err) => console.error("Gagal hapus dari RAM:", err));
         }
 
-        // 7. TUNGGU ANIMASI CSS SELESAI (600ms > 500ms duration)
-        await new Promise((resolve) => setTimeout(resolve, 600));
+        // 7. TUNGGU ANIMASI CSS SELESAI (durasi transition)
+        await new Promise((resolve) => setTimeout(resolve, 700));
 
-        // 8. BARU hapus dari array (React remove dari DOM)
+        // 8. Hapus card dari UI
         setJokiOrders((current) => current.filter((item) => item.id !== order.id));
 
-        // 9. Cleanup state
+        // 9. Cleanup
         setProcessingOrders((prev) => {
           const next = new Set(prev);
           next.delete(order.id);
