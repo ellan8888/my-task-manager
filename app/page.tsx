@@ -28,6 +28,8 @@ type JokiOrder = {
   note: string | null;
   reminder_sent: boolean;
   completed: boolean;
+  completed_by_bot: boolean;       // ← TAMBAH
+  completed_at: string | null;     // ← TAMBAH
   created_at: string;
 };
 
@@ -140,6 +142,36 @@ export default function Home() {
     loadTasks();
     loadJokiOrders();
   }, []);
+
+  useEffect(() => {
+  loadTasks();
+  loadJokiOrders();
+
+  // === REALTIME SUBSCRIPTION untuk joki_orders ===
+  const channel = supabase
+    .channel("joki_orders_realtime")
+    .on(
+      "postgres_changes",
+      { event: "UPDATE", schema: "public", table: "joki_orders" },
+      (payload) => {
+        console.log("Joki order updated:", payload);
+        const updated = payload.new as JokiOrder;
+
+        setJokiOrders((current) =>
+          current.map((item) =>
+            item.id === updated.id
+              ? { ...item, ...updated }
+              : item
+          )
+        );
+      }
+    )
+    .subscribe();
+
+  return () => {
+    supabase.removeChannel(channel);
+  };
+}, []);
 
   useEffect(() => {
   const savedTheme = localStorage.getItem("theme");
@@ -1222,143 +1254,202 @@ export default function Home() {
                     </div>
                   ) : (
                     jokiOrders.map((order) => {
-                      const scheduleDate = new Date(`${order.schedule_date}T${order.schedule_time}`);
-                      const isToday = scheduleDate.toDateString() === new Date().toDateString();
-                      return (
-                        <div
-                          key={order.id}
-                          className={`bg-white dark:bg-slate-900/50 backdrop-blur-xl border rounded-2xl p-4 md:p-5 transition-all duration-300 mb-3 ${
-                            isToday
-                              ? "border-amber-300 dark:border-amber-500/30 shadow-[0_0_15px_rgba(245,158,11,0.15)]"
-                              : "border-slate-200 dark:border-slate-800 hover:border-violet-300 dark:hover:border-violet-500/40"
-                          }`}
-                        >
-                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                            <div className="flex items-start space-x-3.5 flex-1 min-w-0">
-                              <button
-                                onClick={() =>
-  showConfirm(
-    "Selesaikan Jokian?",
-    `Tandai jokian "${order.roblox_username || "Pembeli"}" sebagai selesai?`,
-    "success",
-    "Ya, Selesai",
-    async () => {
-      // 1. Hapus dari Supabase
-      const { error } = await supabase
-        .from("joki_orders")
-        .delete()
-        .eq("id", order.id);
+  const scheduleDate = new Date(`${order.schedule_date}T${order.schedule_time}`);
+  const isToday = scheduleDate.toDateString() === new Date().toDateString();
+  const isCompletedByBot = order.completed_by_bot === true;
 
-      if (error) {
-        console.error(error);
-        alert("Gagal menyelesaikan Jokian!");
-        return;
-      }
-
-      // 2. Hapus akun dari RAM (jika ada roblox_username)
-      if (order.roblox_username) {
-        try {
-          const res = await fetch("/api/remove-account", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ username: order.roblox_username }),
-          });
+  return (
+    <div
+      key={order.id}
+      className={`bg-white dark:bg-slate-900/50 backdrop-blur-xl border rounded-2xl p-4 md:p-5 transition-all duration-300 mb-3 ${
+        isCompletedByBot
+          ? "border-emerald-300 dark:border-emerald-500/40 opacity-60"
+          : isToday
+          ? "border-amber-300 dark:border-amber-500/30 shadow-[0_0_15px_rgba(245,158,11,0.15)]"
+          : "border-slate-200 dark:border-slate-800 hover:border-violet-300 dark:hover:border-violet-500/40"
+      }`}
+    >
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="flex items-start space-x-3.5 flex-1 min-w-0">
           
-          const data = await res.json();
-          console.log("RAM response:", data);
-          
-          // Optional: kasih notifikasi kalau gagal
-          if (!data.success) {
-            console.warn("Gagal hapus dari RAM:", data.message);
-          }
-        } catch (err) {
-          console.error("Gagal hapus dari RAM:", err);
-          // Tidak alert, karena ini opsional
-        }
-      }
+          {/* Tombol Checklist / Konfirmasi */}
+          {isCompletedByBot ? (
+            // === TOMBOL KONFIRMASI (setelah bot selesai) ===
+            <button
+              onClick={() =>
+                showConfirm(
+                  "Konfirmasi Jokian Selesai?",
+                  `Order "${order.roblox_username || "Pembeli"}" sudah selesai. Hapus dari daftar?`,
+                  "success",
+                  "Ya, Konfirmasi",
+                  async () => {
+                    // 1. Hapus dari Supabase
+                    const { error } = await supabase
+                      .from("joki_orders")
+                      .delete()
+                      .eq("id", order.id);
 
-      // 3. Update UI
-      setJokiOrders((current) =>
-        current.filter((item) => item.id !== order.id)
-      );
-      closeConfirm();
-    }
-  )
-}
-                                className="mt-1 w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all shrink-0 border-slate-300 dark:border-slate-600 hover:border-violet-500 text-transparent"
-                              >
-                                <i className="fa-solid fa-check text-xs"></i>
-                              </button>
-                              <div className="space-y-2 flex-1 min-w-0">
-                                <div className="flex items-center space-x-2">
-                                  <h4 className="font-extrabold text-base md:text-lg text-slate-900 dark:text-white truncate">
-                                    {order.roblox_username || "Pembeli"}
-                                  </h4>
-                                </div>
-                                <div className="flex items-center space-x-2 text-xs text-slate-500 dark:text-slate-400 font-mono">
-                                  <span>
-                                    Order{" "}
-                                    <strong className="text-violet-600 dark:text-violet-400 font-semibold">
-                                      #{order.order_id}
-                                    </strong>
-                                  </span>
-                                  <button
-                                    onClick={() =>
-                                      navigator.clipboard.writeText(order.order_id)
-                                    }
-                                    className="text-slate-400 hover:text-violet-600 dark:hover:text-violet-400 transition p-0.5"
-                                    title="Copy Order ID"
-                                  >
-                                    <i className="fa-regular fa-copy text-xs"></i>
-                                  </button>
-                                </div>
+                    if (error) {
+                      console.error(error);
+                      alert("Gagal konfirmasi Jokian!");
+                      return;
+                    }
 
-                                <div className="flex flex-wrap items-center gap-2 pt-1 text-xs">
-                                  <span className="inline-flex items-center space-x-1.5 bg-violet-100 dark:bg-violet-500/10 text-violet-700 dark:text-violet-300 px-2.5 py-1 rounded-lg font-semibold border border-violet-200 dark:border-violet-500/20">
-                                    <i className="fa-regular fa-user text-[11px]"></i>
-                                    <span>{order.joki_name || "Ellan"}</span>
-                                  </span>
-                                  <span className="inline-flex items-center space-x-1.5 bg-slate-100 dark:bg-slate-800/80 text-slate-700 dark:text-slate-300 px-2.5 py-1 rounded-lg font-semibold border border-slate-200 dark:border-slate-700/50">
-                                    <i className="fa-regular fa-clock text-[11px] text-amber-500 dark:text-amber-400"></i>
-                                    <span>{order.schedule_time.slice(0, 5)}</span>
-                                  </span>
-                                  <span className="inline-flex items-center space-x-1.5 bg-slate-100 dark:bg-slate-800/80 text-slate-700 dark:text-slate-300 px-2.5 py-1 rounded-lg font-semibold border border-slate-200 dark:border-slate-700/50">
-                                    <i className="fa-regular fa-calendar-days text-[11px] text-indigo-500 dark:text-indigo-400"></i>
-                                    <span>
-                                      {new Date(
-                                        `${order.schedule_date}T00:00:00`
-                                      ).toLocaleDateString("id-ID", {
-                                        day: "numeric",
-                                        month: "long",
-                                        year: "numeric",
-                                      })}
-                                    </span>
-                                  </span>
-                                  {order.note && (
-                                    <span className="inline-flex items-center space-x-1.5 bg-violet-100 dark:bg-violet-500/10 text-violet-700 dark:text-violet-300 px-2.5 py-1 rounded-lg font-mono text-[11px] border border-violet-200 dark:border-violet-500/20">
-                                      <i className="fa-regular fa-note-sticky text-[11px] text-violet-500 dark:text-violet-400"></i>
-                                      <span>{order.note}</span>
-                                    </span>
-                                  )}
-                                </div>
-                              </div>
-                            </div>
+                    // 2. Hapus akun dari RAM
+                    if (order.roblox_username) {
+                      try {
+                        const res = await fetch("/api/remove-account", {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ username: order.roblox_username }),
+                        });
+                        const data = await res.json();
+                        console.log("RAM response:", data);
+                      } catch (err) {
+                        console.error("Gagal hapus dari RAM:", err);
+                      }
+                    }
 
-                            <div className="flex items-center justify-between sm:justify-end space-x-3 pt-3 sm:pt-0 border-t sm:border-t-0 border-slate-200 dark:border-slate-800/60">
-                              {isToday ? (
-                                <span className="bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-500/30 text-[11px] font-bold px-3 py-1.5 rounded-xl flex items-center gap-1.5">
-                                  <i className="fa-solid fa-fire text-xs text-amber-500 dark:text-amber-400"></i> Hari Ini
-                                </span>
-                              ) : (
-                                <span className="bg-indigo-100 dark:bg-indigo-500/20 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-500/30 text-[11px] font-bold px-3 py-1.5 rounded-xl flex items-center gap-1.5">
-                                  <i className="fa-solid fa-calendar text-xs"></i> Terjadwal
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })
+                    // 3. Update UI
+                    setJokiOrders((current) =>
+                      current.filter((item) => item.id !== order.id)
+                    );
+                    closeConfirm();
+                  }
+                )
+              }
+              className="mt-1 w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all shrink-0 bg-emerald-500 border-emerald-500 text-white hover:bg-emerald-600"
+              title="Konfirmasi Selesai"
+            >
+              <i className="fa-solid fa-check text-xs"></i>
+            </button>
+          ) : (
+            // === CHECKLIST LAMA (sebelum bot selesai) ===
+            <button
+              onClick={() =>
+                showConfirm(
+                  "Selesaikan Jokian?",
+                  `Tandai jokian "${order.roblox_username || "Pembeli"}" sebagai selesai?`,
+                  "success",
+                  "Ya, Selesai",
+                  async () => {
+                    const { error } = await supabase
+                      .from("joki_orders")
+                      .delete()
+                      .eq("id", order.id);
+
+                    if (error) {
+                      console.error(error);
+                      alert("Gagal menyelesaikan Jokian!");
+                      return;
+                    }
+
+                    if (order.roblox_username) {
+                      try {
+                        await fetch("/api/remove-account", {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ username: order.roblox_username }),
+                        });
+                      } catch (err) {
+                        console.error("Gagal hapus dari RAM:", err);
+                      }
+                    }
+
+                    setJokiOrders((current) =>
+                      current.filter((item) => item.id !== order.id)
+                    );
+                    closeConfirm();
+                  }
+                )
+              }
+              className="mt-1 w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all shrink-0 border-slate-300 dark:border-slate-600 hover:border-violet-500 text-transparent"
+              title="Selesaikan"
+            >
+              <i className="fa-solid fa-check text-xs"></i>
+            </button>
+          )}
+
+          <div className="space-y-2 flex-1 min-w-0">
+            <div className="flex items-center space-x-2">
+              <h4 className={`font-extrabold text-base md:text-lg truncate ${
+                isCompletedByBot 
+                  ? "text-slate-400 dark:text-slate-500 line-through" 
+                  : "text-slate-900 dark:text-white"
+              }`}>
+                {order.roblox_username || "Pembeli"}
+              </h4>
+              {isCompletedByBot && (
+                <span className="inline-flex items-center gap-1 bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 px-2 py-0.5 rounded-md text-[10px] font-bold border border-emerald-200 dark:border-emerald-500/30">
+                  <i className="fa-solid fa-robot text-[9px]"></i>
+                  Bot Selesai
+                </span>
+              )}
+            </div>
+            <div className="flex items-center space-x-2 text-xs text-slate-500 dark:text-slate-400 font-mono">
+              <span>
+                Order{" "}
+                <strong className="text-violet-600 dark:text-violet-400 font-semibold">
+                  #{order.order_id}
+                </strong>
+              </span>
+              <button
+                onClick={() => navigator.clipboard.writeText(order.order_id)}
+                className="text-slate-400 hover:text-violet-600 dark:hover:text-violet-400 transition p-0.5"
+                title="Copy Order ID"
+              >
+                <i className="fa-regular fa-copy text-xs"></i>
+              </button>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2 pt-1 text-xs">
+              <span className="inline-flex items-center space-x-1.5 bg-violet-100 dark:bg-violet-500/10 text-violet-700 dark:text-violet-300 px-2.5 py-1 rounded-lg font-semibold border border-violet-200 dark:border-violet-500/20">
+                <i className="fa-regular fa-user text-[11px]"></i>
+                <span>{order.joki_name || "Ellan"}</span>
+              </span>
+              <span className="inline-flex items-center space-x-1.5 bg-slate-100 dark:bg-slate-800/80 text-slate-700 dark:text-slate-300 px-2.5 py-1 rounded-lg font-semibold border border-slate-200 dark:border-slate-700/50">
+                <i className="fa-regular fa-clock text-[11px] text-amber-500 dark:text-amber-400"></i>
+                <span>{order.schedule_time.slice(0, 5)}</span>
+              </span>
+              <span className="inline-flex items-center space-x-1.5 bg-slate-100 dark:bg-slate-800/80 text-slate-700 dark:text-slate-300 px-2.5 py-1 rounded-lg font-semibold border border-slate-200 dark:border-slate-700/50">
+                <i className="fa-regular fa-calendar-days text-[11px] text-indigo-500 dark:text-indigo-400"></i>
+                <span>
+                  {new Date(`${order.schedule_date}T00:00:00`).toLocaleDateString("id-ID", {
+                    day: "numeric",
+                    month: "long",
+                    year: "numeric",
+                  })}
+                </span>
+              </span>
+              {order.note && (
+                <span className="inline-flex items-center space-x-1.5 bg-violet-100 dark:bg-violet-500/10 text-violet-700 dark:text-violet-300 px-2.5 py-1 rounded-lg font-mono text-[11px] border border-violet-200 dark:border-violet-500/20">
+                  <i className="fa-regular fa-note-sticky text-[11px] text-violet-500 dark:text-violet-400"></i>
+                  <span>{order.note}</span>
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between sm:justify-end space-x-3 pt-3 sm:pt-0 border-t sm:border-t-0 border-slate-200 dark:border-slate-800/60">
+          {isCompletedByBot ? (
+            <span className="bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-500/30 text-[11px] font-bold px-3 py-1.5 rounded-xl flex items-center gap-1.5">
+              <i className="fa-solid fa-check text-xs"></i> Selesai oleh Bot
+            </span>
+          ) : isToday ? (
+            <span className="bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-500/30 text-[11px] font-bold px-3 py-1.5 rounded-xl flex items-center gap-1.5">
+              <i className="fa-solid fa-fire text-xs text-amber-500 dark:text-amber-400"></i> Hari Ini
+            </span>
+          ) : (
+            <span className="bg-indigo-100 dark:bg-indigo-500/20 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-500/30 text-[11px] font-bold px-3 py-1.5 rounded-xl flex items-center gap-1.5">
+              <i className="fa-solid fa-calendar text-xs"></i> Terjadwal
+            </span>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+})
                   )}
                 </div>
               </div>
