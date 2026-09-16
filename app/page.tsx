@@ -36,11 +36,22 @@ type JokiOrder = {
 export default function Home() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [processingOrders, setProcessingOrders] = useState<Set<number>>(new Set());
-  const [editingUsername, setEditingUsername] = useState<{
+  const [jokiOrders, setJokiOrders] = useState<JokiOrder[]>([]);
+  // ↓ TAMBAH 3 STATE INI DI SINI ↓
+const [editingUsername, setEditingUsername] = useState<{
   orderId: number;
   value: string;
 } | null>(null);
-  const [jokiOrders, setJokiOrders] = useState<JokiOrder[]>([]);
+
+const [ramAccounts, setRamAccounts] = useState<{
+  Username: string;
+  UserID: number;
+  Alias: string;
+  Group: string;
+}[]>([]);
+
+const [loadingAccounts, setLoadingAccounts] = useState(false);
+  
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [title, setTitle] = useState("");
@@ -269,6 +280,35 @@ export default function Home() {
     setTasks([newTask, ...tasks]);
     resetForm();
   };
+
+  const isUsernameUsedInOtherCards = (username: string, currentOrderId: number) => {
+  return jokiOrders.some(
+    (o) => o.id !== currentOrderId && 
+           o.roblox_username?.toLowerCase() === username.toLowerCase()
+  );
+};
+
+// =========================
+// FETCH RAM ACCOUNTS
+// =========================
+const fetchRamAccounts = async () => {
+  setLoadingAccounts(true);
+  try {
+    const res = await fetch("/api/get-accounts");
+    const data = await res.json();
+
+    if (data.success && Array.isArray(data.accounts)) {
+      setRamAccounts(data.accounts);
+      console.log("RAM accounts loaded:", data.accounts);
+    } else {
+      console.error("Gagal load RAM accounts:", data.message);
+    }
+  } catch (err) {
+    console.error("Error fetch RAM accounts:", err);
+  } finally {
+    setLoadingAccounts(false);
+  }
+};
 
   // =========================
   // TEST PUSH
@@ -1376,6 +1416,29 @@ const updateOrderUsername = async (orderId: number, newUsername: string) => {
   const isToday = scheduleDate.toDateString() === new Date().toDateString();
   const isCompletedByBot = order.completed_by_bot === true;
   const isProcessing = processingOrders.has(order.id);  // ← TAMBAH INI
+  
+
+// =========================
+// FETCH RAM ACCOUNTS
+// =========================
+const fetchRamAccounts = async () => {
+  setLoadingAccounts(true);
+  try {
+    const res = await fetch("/api/get-accounts");
+    const data = await res.json();
+    
+    if (data.success && Array.isArray(data.accounts)) {
+      setRamAccounts(data.accounts);
+      console.log("RAM accounts loaded:", data.accounts);
+    } else {
+      console.error("Gagal load RAM accounts:", data.message);
+    }
+  } catch (err) {
+    console.error("Error fetch RAM accounts:", err);
+  } finally {
+    setLoadingAccounts(false);
+  }
+};
 
   return (
     <div
@@ -1416,8 +1479,10 @@ const updateOrderUsername = async (orderId: number, newUsername: string) => {
           <div className="space-y-2 flex-1 min-w-0">
             <div className="flex items-center space-x-2">
   {editingUsername?.orderId === order.id ? (
-    // === MODE EDIT ===
-    <div className="flex items-center gap-2 flex-1">
+  // === MODE EDIT ===
+  <div className="flex flex-col gap-2 flex-1 min-w-0">
+    {/* Input + Tombol */}
+    <div className="flex items-center gap-2">
       <input
         type="text"
         value={editingUsername.value}
@@ -1426,16 +1491,29 @@ const updateOrderUsername = async (orderId: number, newUsername: string) => {
         }
         onKeyDown={(e) => {
           if (e.key === "Enter") {
-            updateOrderUsername(order.id, editingUsername.value);
+            const trimmed = editingUsername.value.trim();
+            if (isUsernameUsedInOtherCards(trimmed, order.id)) {
+              alert(`Username "${trimmed}" sudah dipakai di card lain!`);
+              return;
+            }
+            updateOrderUsername(order.id, trimmed);
           } else if (e.key === "Escape") {
             setEditingUsername(null);
           }
         }}
         autoFocus
+        placeholder="Ketik atau pilih dari dropdown..."
         className="bg-slate-50 dark:bg-slate-950 border border-violet-500 rounded-lg px-3 py-1.5 text-sm font-bold text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-violet-500/50 min-w-0 flex-1"
       />
       <button
-        onClick={() => updateOrderUsername(order.id, editingUsername.value)}
+        onClick={() => {
+          const trimmed = editingUsername.value.trim();
+          if (isUsernameUsedInOtherCards(trimmed, order.id)) {
+            alert(`Username "${trimmed}" sudah dipakai di card lain!`);
+            return;
+          }
+          updateOrderUsername(order.id, trimmed);
+        }}
         className="w-7 h-7 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white flex items-center justify-center transition shrink-0"
         title="Simpan"
       >
@@ -1449,7 +1527,65 @@ const updateOrderUsername = async (orderId: number, newUsername: string) => {
         <i className="fa-solid fa-xmark text-xs"></i>
       </button>
     </div>
-  ) : (
+
+    {/* Dropdown Akun dari RAM */}
+    {loadingAccounts ? (
+      <div className="text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-2 px-2">
+        <i className="fa-solid fa-spinner fa-spin text-[10px]"></i>
+        Memuat akun dari RAM...
+      </div>
+    ) : ramAccounts.length > 0 ? (
+      <div className="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg max-h-48 overflow-y-auto custom-scrollbar">
+        <div className="text-[10px] font-bold text-slate-500 dark:text-slate-400 px-2 py-1 border-b border-slate-200 dark:border-slate-800 uppercase tracking-wider">
+          Akun di RAM ({ramAccounts.length})
+        </div>
+        {ramAccounts.map((acc) => {
+          const isUsed = isUsernameUsedInOtherCards(acc.Username, order.id);
+          const isCurrent = acc.Username.toLowerCase() === editingUsername.value.toLowerCase();
+
+          return (
+            <button
+              key={acc.UserID}
+              onClick={() => {
+                if (isUsed) return;
+                setEditingUsername({
+                  orderId: order.id,
+                  value: acc.Username
+                });
+              }}
+              disabled={isUsed}
+              className={`w-full text-left px-2 py-1.5 text-xs flex items-center justify-between gap-2 transition border-b border-slate-100 dark:border-slate-800/50 last:border-0 ${
+                isUsed
+                  ? "text-slate-400 dark:text-slate-600 cursor-not-allowed bg-slate-100/50 dark:bg-slate-900/30"
+                  : isCurrent
+                  ? "bg-violet-100 dark:bg-violet-500/20 text-violet-700 dark:text-violet-300 font-bold"
+                  : "text-slate-700 dark:text-slate-300 hover:bg-violet-50 dark:hover:bg-violet-500/10 cursor-pointer"
+              }`}
+            >
+              <span className="truncate font-mono">{acc.Username}</span>
+              <span className="flex items-center gap-1.5 shrink-0">
+                {isUsed && (
+                  <span className="text-[9px] font-bold bg-rose-100 dark:bg-rose-500/20 text-rose-600 dark:text-rose-400 px-1.5 py-0.5 rounded">
+                    DIPAKAI
+                  </span>
+                )}
+                {acc.Alias && (
+                  <span className="text-[10px] text-slate-400 dark:text-slate-500 truncate max-w-20">
+                    {acc.Alias}
+                  </span>
+                )}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    ) : (
+      <div className="text-[11px] text-slate-500 dark:text-slate-400 italic px-2">
+        Tidak ada akun di RAM atau gagal load.
+      </div>
+    )}
+  </div>
+) : (
     // === MODE VIEW ===
     <>
       <h4 className={`font-extrabold text-base md:text-lg truncate ${
@@ -1462,12 +1598,13 @@ const updateOrderUsername = async (orderId: number, newUsername: string) => {
       
       {/* Icon Pensil untuk Edit Username */}
       <button
-        onClick={() =>
+        onClick={() => {
           setEditingUsername({
             orderId: order.id,
             value: order.roblox_username || "",
-          })
-        }
+          });
+          fetchRamAccounts(); // ← Fetch saat buka edit
+        }}
         className="w-6 h-6 rounded-md text-slate-400 hover:text-violet-600 dark:hover:text-violet-400 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center transition shrink-0"
         title="Edit Username"
       >
