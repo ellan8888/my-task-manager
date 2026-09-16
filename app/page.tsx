@@ -1535,7 +1535,7 @@ const fetchRamAccounts = async () => {
         Memuat akun dari RAM...
       </div>
     ) : ramAccounts.length > 0 ? (
-      <div className="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg max-h-48 overflow-y-auto custom-scrollbar">
+      <div className="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg max-h-48 overflow-y-auto scrollbar-hide">
         <div className="text-[10px] font-bold text-slate-500 dark:text-slate-400 px-2 py-1 border-b border-slate-200 dark:border-slate-800 uppercase tracking-wider">
           Akun di RAM ({ramAccounts.length})
         </div>
