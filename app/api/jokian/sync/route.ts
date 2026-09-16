@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
+
 export async function POST(request: Request) {
   try {
     const body = await request.json();
@@ -31,25 +32,28 @@ export async function POST(request: Request) {
       );
     }
 
+    // ✅ CLEAN ORDER ID — hapus suffix (ID), (MY), (SG), dll
+    const cleanedOrderId = order_id.replace(/\s*\([A-Z]{2}\)\s*$/, "").trim();
+
     // Masukkan / update data berdasarkan order_id
     const { data, error } = await supabaseAdmin
-  .from("joki_orders")
-  .upsert(
-    {
-      order_id,
-      roblox_username: roblox_username || null,
-      product: product || null,
-      joki_name: joki_name || null,
-      schedule_date,
-      schedule_time,
-      note: note || null,
-    },
-    {
-      onConflict: "order_id",
-    }
-  )
-  .select()
-  .single();
+      .from("joki_orders")
+      .upsert(
+        {
+          order_id: cleanedOrderId,   // ← PAKAI YANG CLEAN
+          roblox_username: roblox_username || null,
+          product: product || null,
+          joki_name: joki_name || null,
+          schedule_date,
+          schedule_time,
+          note: note || null,
+        },
+        {
+          onConflict: "order_id",
+        }
+      )
+      .select()
+      .single();
 
     if (error) {
       console.error(
