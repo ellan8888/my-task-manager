@@ -28,9 +28,11 @@ type JokiOrder = {
   note: string | null;
   reminder_sent: boolean;
   completed: boolean;
-  completed_by_bot: boolean;       // ← TAMBAH
-  completed_at: string | null;     // ← TAMBAH
+  completed_by_bot: boolean;
+  completed_at: string | null;
   created_at: string;
+  estimated_end_at: string | null;  // ← TAMBAH INI
+  queue_status: string | null;       // ← TAMBAH INI (opsional, biar konsisten)
 };
 
 export default function Home() {
@@ -141,6 +143,13 @@ const [loadingAccounts, setLoadingAccounts] = useState(false);
     setJokiOrders(data || []);
   };
 
+  const [now, setNow] = useState(Date.now());
+
+useEffect(() => {
+  const interval = setInterval(() => setNow(Date.now()), 1000);
+  return () => clearInterval(interval);
+}, []);
+
   useEffect(() => {
     const link = document.createElement("link");
     link.rel = "stylesheet";
@@ -168,18 +177,11 @@ const [loadingAccounts, setLoadingAccounts] = useState(false);
     .channel("joki_orders_realtime")
     .on(
       "postgres_changes",
-      { event: "UPDATE", schema: "public", table: "joki_orders" },
+      { event: "*", schema: "public", table: "joki_orders" },
       (payload) => {
-        console.log("Joki order updated:", payload);
-        const updated = payload.new as JokiOrder;
-
-        setJokiOrders((current) =>
-          current.map((item) =>
-            item.id === updated.id
-              ? { ...item, ...updated }
-              : item
-          )
-        );
+        console.log("[Home] Joki order changed:", payload);
+        // Reload full biar aman — handle UPDATE, INSERT, DELETE
+        loadJokiOrders();
       }
     )
     .subscribe();
@@ -1418,27 +1420,7 @@ const updateOrderUsername = async (orderId: number, newUsername: string) => {
   const isProcessing = processingOrders.has(order.id);  // ← TAMBAH INI
   
 
-// =========================
-// FETCH RAM ACCOUNTS
-// =========================
-const fetchRamAccounts = async () => {
-  setLoadingAccounts(true);
-  try {
-    const res = await fetch("/api/get-accounts");
-    const data = await res.json();
-    
-    if (data.success && Array.isArray(data.accounts)) {
-      setRamAccounts(data.accounts);
-      console.log("RAM accounts loaded:", data.accounts);
-    } else {
-      console.error("Gagal load RAM accounts:", data.message);
-    }
-  } catch (err) {
-    console.error("Error fetch RAM accounts:", err);
-  } finally {
-    setLoadingAccounts(false);
-  }
-};
+
 
   return (
     <div
@@ -1688,6 +1670,54 @@ const fetchRamAccounts = async () => {
           )}
         </div>
       </div>
+      {/* COUNTDOWN + JAM SELESAI */}
+{order.estimated_end_at && (
+  <div className="pt-3 mt-3 border-t border-slate-200 dark:border-slate-800/60 space-y-2">
+    {/* Row 1: Sisa Waktu (countdown) */}
+    <div className="flex items-center justify-between">
+      <span className="text-[10px] text-slate-500 dark:text-slate-400 uppercase tracking-wider font-bold flex items-center gap-1.5">
+        <i className="fa-regular fa-clock text-amber-500 dark:text-amber-400"></i>
+        Sisa Waktu
+      </span>
+      <span
+        className={`text-sm font-black font-mono tracking-tight ${
+          new Date(order.estimated_end_at).getTime() - now <= 0
+            ? "text-rose-500 dark:text-rose-400"
+            : "text-amber-600 dark:text-amber-400"
+        }`}
+      >
+        {(() => {
+          const remaining = Math.max(
+            0,
+            new Date(order.estimated_end_at!).getTime() - now
+          );
+          const h = Math.floor(remaining / 3600000);
+          const m = Math.floor((remaining % 3600000) / 60000);
+          const s = Math.floor((remaining % 60000) / 1000);
+          if (remaining === 0) return "SEGERA SELESAI";
+          return `${h > 0 ? h + ":" : ""}${m
+            .toString()
+            .padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
+        })()}
+      </span>
+    </div>
+
+    {/* Row 2: Jam Selesai */}
+    <div className="flex items-center justify-between">
+      <span className="text-[10px] text-slate-500 dark:text-slate-400 uppercase tracking-wider font-bold flex items-center gap-1.5">
+        <i className="fa-solid fa-flag-checkered text-emerald-500 dark:text-emerald-400"></i>
+        Selesai Jam
+      </span>
+      <span className="text-sm font-black font-mono tracking-tight text-emerald-600 dark:text-emerald-400">
+        {new Date(order.estimated_end_at).toLocaleTimeString("id-ID", {
+          hour: "2-digit",
+          minute: "2-digit",
+        })}{" "}
+        WIB
+      </span>
+    </div>
+  </div>
+)}
     </div>
   );
 })
