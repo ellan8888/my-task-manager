@@ -36,6 +36,10 @@ type JokiOrder = {
 export default function Home() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [processingOrders, setProcessingOrders] = useState<Set<number>>(new Set());
+  const [editingUsername, setEditingUsername] = useState<{
+  orderId: number;
+  value: string;
+} | null>(null);
   const [jokiOrders, setJokiOrders] = useState<JokiOrder[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -470,6 +474,42 @@ const handleCompleteOrder = async (order: JokiOrder) => {
       }
     }
   );
+};
+
+// =========================
+// UPDATE ORDER USERNAME
+// =========================
+const updateOrderUsername = async (orderId: number, newUsername: string) => {
+  if (!newUsername.trim()) {
+    alert("Username tidak boleh kosong!");
+    return;
+  }
+
+  try {
+    const { error } = await supabase
+      .from("joki_orders")
+      .update({ roblox_username: newUsername.trim() })
+      .eq("id", orderId);
+
+    if (error) {
+      console.error(error);
+      alert("Gagal mengupdate username!");
+      return;
+    }
+
+    // Update UI
+    setJokiOrders((current) =>
+      current.map((item) =>
+        item.id === orderId ? { ...item, roblox_username: newUsername.trim() } : item
+      )
+    );
+
+    // Tutup dialog edit
+    setEditingUsername(null);
+  } catch (err) {
+    console.error(err);
+    alert("Gagal mengupdate username!");
+  }
 };
 
   // =========================
@@ -1375,26 +1415,81 @@ const handleCompleteOrder = async (order: JokiOrder) => {
 
           <div className="space-y-2 flex-1 min-w-0">
             <div className="flex items-center space-x-2">
-              <h4 className={`font-extrabold text-base md:text-lg truncate ${
-                isCompletedByBot
-                  ? "text-slate-400 dark:text-slate-500 line-through"
-                  : "text-slate-900 dark:text-white"
-              }`}>
-                {order.roblox_username || "Pembeli"}
-              </h4>
-              {isCompletedByBot && (
-                <span className="inline-flex items-center gap-1 bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 px-2 py-0.5 rounded-md text-[10px] font-bold border border-emerald-200 dark:border-emerald-500/30">
-                  <i className="fa-solid fa-robot text-[9px]"></i>
-                  Bot Selesai
-                </span>
-              )}
-              {isProcessing && (
-                <span className="inline-flex items-center gap-1 bg-blue-100 dark:bg-blue-500/20 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded-md text-[10px] font-bold border border-blue-200 dark:border-blue-500/30 animate-pulse">
-                  <i className="fa-solid fa-spinner fa-spin text-[9px]"></i>
-                  Memproses...
-                </span>
-              )}
-            </div>
+  {editingUsername?.orderId === order.id ? (
+    // === MODE EDIT ===
+    <div className="flex items-center gap-2 flex-1">
+      <input
+        type="text"
+        value={editingUsername.value}
+        onChange={(e) =>
+          setEditingUsername({ orderId: order.id, value: e.target.value })
+        }
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            updateOrderUsername(order.id, editingUsername.value);
+          } else if (e.key === "Escape") {
+            setEditingUsername(null);
+          }
+        }}
+        autoFocus
+        className="bg-slate-50 dark:bg-slate-950 border border-violet-500 rounded-lg px-3 py-1.5 text-sm font-bold text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-violet-500/50 min-w-0 flex-1"
+      />
+      <button
+        onClick={() => updateOrderUsername(order.id, editingUsername.value)}
+        className="w-7 h-7 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white flex items-center justify-center transition shrink-0"
+        title="Simpan"
+      >
+        <i className="fa-solid fa-check text-xs"></i>
+      </button>
+      <button
+        onClick={() => setEditingUsername(null)}
+        className="w-7 h-7 rounded-lg bg-slate-300 dark:bg-slate-700 hover:bg-slate-400 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 flex items-center justify-center transition shrink-0"
+        title="Batal"
+      >
+        <i className="fa-solid fa-xmark text-xs"></i>
+      </button>
+    </div>
+  ) : (
+    // === MODE VIEW ===
+    <>
+      <h4 className={`font-extrabold text-base md:text-lg truncate ${
+        isCompletedByBot
+          ? "text-slate-400 dark:text-slate-500 line-through"
+          : "text-slate-900 dark:text-white"
+      }`}>
+        {order.roblox_username || "Pembeli"}
+      </h4>
+      
+      {/* Icon Pensil untuk Edit Username */}
+      <button
+        onClick={() =>
+          setEditingUsername({
+            orderId: order.id,
+            value: order.roblox_username || "",
+          })
+        }
+        className="w-6 h-6 rounded-md text-slate-400 hover:text-violet-600 dark:hover:text-violet-400 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center transition shrink-0"
+        title="Edit Username"
+      >
+        <i className="fa-solid fa-pen text-[10px]"></i>
+      </button>
+
+      {isCompletedByBot && (
+        <span className="inline-flex items-center gap-1 bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 px-2 py-0.5 rounded-md text-[10px] font-bold border border-emerald-200 dark:border-emerald-500/30">
+          <i className="fa-solid fa-robot text-[9px]"></i>
+          Bot Selesai
+        </span>
+      )}
+    </>
+  )}
+  
+  {isProcessing && (
+    <span className="inline-flex items-center gap-1 bg-blue-100 dark:bg-blue-500/20 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded-md text-[10px] font-bold border border-blue-200 dark:border-blue-500/30 animate-pulse">
+      <i className="fa-solid fa-spinner fa-spin text-[9px]"></i>
+      Memproses...
+    </span>
+  )}
+</div>
             <div className="flex items-center space-x-2 text-xs text-slate-500 dark:text-slate-400 font-mono">
               <span>
                 Order{" "}
