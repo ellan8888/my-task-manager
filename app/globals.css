@@ -1,5 +1,9 @@
 @import "tailwindcss";
 
+/* Custom variant untuk dark mode */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* Tema */
 :root {
   --background: #ffffff;
   --foreground: #171717;
@@ -25,6 +29,7 @@ body {
   font-family: Arial, Helvetica, sans-serif;
 }
 
+/* Animasi modal */
 @keyframes modal-in {
   from { opacity: 0; transform: scale(0.95) translateY(10px); }
   to   { opacity: 1; transform: scale(1) translateY(0); }
@@ -33,7 +38,7 @@ body {
   animation: modal-in 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
-/* Bikin icon date & time picker terlihat di dark mode */
+/* Date & time picker di dark mode */
 input[type="date"]::-webkit-calendar-picker-indicator,
 input[type="time"]::-webkit-calendar-picker-indicator {
   filter: invert(1);
@@ -47,11 +52,22 @@ input[type="time"]::-webkit-calendar-picker-indicator:hover {
   opacity: 1;
 }
 
-/* (Opsional) Bikin text "dd/mm/yyyy" lebih terang */
 input[type="date"],
 input[type="time"] {
   color-scheme: dark;
 }
 
-@import "tailwindcss";
-@custom-variant dark (&:where(.dark, .dark *));
+/* ============================================
+   HIDE SCROLLBAR (tapi tetap bisa scroll)
+   ============================================ */
+.scrollbar-hide::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+  background: transparent !important;
+}
+
+.scrollbar-hide {
+  -ms-overflow-style: none !important;
+  scrollbar-width: none !important;
+}
