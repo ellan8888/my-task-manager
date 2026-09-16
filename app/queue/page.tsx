@@ -8,10 +8,13 @@ type QueueOrder = {
   order_id: string;
   roblox_username: string | null;
   product: string | null;
+  joki_name: string | null;         // ← TAMBAH
   queue_status: string;
   queue_position: number | null;
   processing_started_at: string | null;
   estimated_end_at: string | null;
+  schedule_date: string;             // ← TAMBAH
+  schedule_time: string;             // ← TAMBAH
 };
 // ... (import dll)
 
