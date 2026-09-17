@@ -777,12 +777,24 @@ const updateOrderUsername = async (orderId: number, newUsername: string) => {
               </div>
             </div>
 
-            <nav className="mt-6 space-y-2">
+                        <nav className="mt-6 space-y-2">
               <a href="#" className="flex items-center space-x-3.5 px-4 py-3 rounded-2xl bg-violet-100 dark:bg-violet-500/15 text-violet-700 dark:text-violet-200 font-semibold text-sm border border-violet-200 dark:border-violet-500/40 transition-all">
                 <i className="fa-solid fa-list-check w-5 text-center text-violet-600 dark:text-violet-300"></i>
                 <span>Daftar Order Jokian</span>
                 <span className="ml-auto bg-violet-600 text-white text-xs px-2.5 py-0.5 rounded-full font-bold">
                   {jokiOrders.length}
+                </span>
+              </a>
+
+              {/* MENU QUEUE — BARU */}
+              <a
+                href="/queue"
+                className="flex items-center space-x-3.5 px-4 py-3 rounded-2xl text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800/60 hover:text-slate-900 dark:hover:text-slate-200 text-sm font-medium transition-all group"
+              >
+                <i className="fa-solid fa-list-ol w-5 text-center group-hover:text-violet-500 dark:group-hover:text-violet-400 transition"></i>
+                <span>Queue Jokian</span>
+                <span className="ml-auto text-[10px] bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 px-2 py-0.5 rounded font-mono">
+                  Live
                 </span>
               </a>
 
