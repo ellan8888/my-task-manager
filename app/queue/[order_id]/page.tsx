@@ -17,6 +17,7 @@ type QueueOrder = {
   estimated_end_at: string | null;
   schedule_date: string;
   schedule_time: string;
+  completed_by_bot: boolean;
 };
 
 export default function QueueDetailPage() {
@@ -112,7 +113,6 @@ export default function QueueDetailPage() {
       }
       setShowAddTime(false);
       setAddValue("");
-      // loadOrder otomatis update via realtime channel
     } catch (err) {
       console.error(err);
       alert("Terjadi kesalahan");
@@ -177,6 +177,12 @@ export default function QueueDetailPage() {
   const isWaiting = order.queue_status === "waiting_confirm";
   const isQueued = order.queue_status === "queued";
 
+  // ✅ Order dianggap "selesai" kalau:
+  // 1. queue_status = "completed" (dari API check-completed)
+  // 2. ATAU completed_by_bot = true (dari API jokian/complete via bot)
+  const isCompleted =
+    order.queue_status === "completed" || order.completed_by_bot === true;
+
   const endTime = order.estimated_end_at
     ? new Date(order.estimated_end_at).getTime()
     : 0;
@@ -185,7 +191,32 @@ export default function QueueDetailPage() {
   const minutes = Math.floor((remaining % 3600000) / 60000);
   const seconds = Math.floor((remaining % 60000) / 1000);
 
-  const statusConfig = isProcessing
+  // ✅ Cek dulu countdown udah lewat atau belum
+  const isOverdue = isProcessing && remaining === 0;
+
+  const statusConfig = isCompleted
+    ? {
+        bg: "bg-emerald-500/10",
+        border: "border-emerald-500/40",
+        text: "text-emerald-300",
+        iconBg: "bg-emerald-500/20",
+        iconColor: "text-emerald-400",
+        icon: "fa-solid fa-circle-check",
+        title: "SELESAI",
+        subtitle: "Jokian sudah selesai, terimakasih!",
+      }
+    : isProcessing && isOverdue
+    ? {
+        bg: "bg-emerald-500/10",
+        border: "border-emerald-500/40",
+        text: "text-emerald-300",
+        iconBg: "bg-emerald-500/20",
+        iconColor: "text-emerald-400",
+        icon: "fa-solid fa-circle-check",
+        title: "PROSES AKHIR",
+        subtitle: "Jokian kamu hampir selesai, mohon tunggu ya",
+      }
+    : isProcessing
     ? {
         bg: "bg-amber-500/10",
         border: "border-amber-500/40",
@@ -269,20 +300,18 @@ export default function QueueDetailPage() {
             <p className="text-sm text-slate-400">{statusConfig.subtitle}</p>
           </div>
 
-          {isProcessing && (
+          {isProcessing && !isOverdue && !isCompleted && (
             <div className="mt-6 pt-6 border-t border-amber-500/20">
               <p className="text-[11px] text-slate-400 mb-2 text-center uppercase tracking-wider font-bold flex items-center justify-center gap-1.5">
                 <i className="fa-regular fa-clock"></i>
                 Estimasi Selesai
               </p>
               <p className="text-3xl md:text-4xl font-black text-center font-mono tracking-tight text-amber-400">
-                {remaining === 0
-                  ? "SEGERA SELESAI"
-                  : `${hours > 0 ? hours + ":" : ""}${minutes
-                      .toString()
-                      .padStart(2, "0")}:${seconds
-                      .toString()
-                      .padStart(2, "0")}`}
+                {`${hours > 0 ? hours + ":" : ""}${minutes
+                  .toString()
+                  .padStart(2, "0")}:${seconds
+                  .toString()
+                  .padStart(2, "0")}`}
               </p>
               {order.estimated_end_at && (
                 <p className="text-xs text-slate-400 text-center mt-3 flex items-center justify-center gap-1.5">
@@ -297,7 +326,6 @@ export default function QueueDetailPage() {
                 </p>
               )}
 
-              {/* TOMBOL ADMIN */}
               {isAdmin && (
                 <button
                   onClick={() => setShowAddTime(true)}
@@ -307,6 +335,46 @@ export default function QueueDetailPage() {
                   Tambah Waktu
                 </button>
               )}
+            </div>
+          )}
+
+          {/* ✅ Countdown lewat tapi status masih processing → pesan kalem */}
+          {isProcessing && isOverdue && !isCompleted && (
+            <div className="mt-6 pt-6 border-t border-emerald-500/20">
+              <div className="text-center">
+                <i className="fa-solid fa-circle-check text-emerald-400 text-3xl mb-3"></i>
+                <p className="text-sm text-slate-300 font-medium">
+                  Jokian kamu sudah dalam proses penyelesaian.
+                </p>
+                <p className="text-xs text-slate-400 mt-1">
+                  Mohon tunggu sebentar ya kak, penjoki sedang menyelesaikan
+                </p>
+              </div>
+
+              {isAdmin && (
+                <button
+                  onClick={() => setShowAddTime(true)}
+                  className="mt-5 w-full flex items-center justify-center gap-2 bg-slate-950/40 hover:bg-slate-950/60 border border-emerald-500/40 hover:border-emerald-500/60 text-emerald-300 font-bold py-2.5 rounded-xl transition text-sm"
+                >
+                  <i className="fa-solid fa-plus"></i>
+                  Tambah Waktu
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* ✅ Kalau completed → pesan selesai */}
+          {isCompleted && (
+            <div className="mt-6 pt-6 border-t border-emerald-500/20">
+              <div className="text-center">
+                <i className="fa-solid fa-flag-checkered text-emerald-400 text-3xl mb-3"></i>
+                <p className="text-sm text-slate-300 font-medium">
+                  Jokian selesai!
+                </p>
+                <p className="text-xs text-slate-400 mt-1">
+                  Terimakasih sudah order. Silakan cek item kamu ya
+                </p>
+              </div>
             </div>
           )}
         </div>
@@ -334,18 +402,18 @@ export default function QueueDetailPage() {
               value={order.joki_name || "Ellan"}
             />
             <DetailRow
-  icon="fa-regular fa-calendar"
-  label="Jadwal"
-  value={
-    order.schedule_date && order.schedule_time
-      ? `${new Date(order.schedule_date).toLocaleDateString("id-ID", {
-          day: "numeric",
-          month: "long",
-          year: "numeric",
-        })} • ${order.schedule_time.slice(0, 5)} WIB`
-      : "Belum dijadwalkan"
-  }
-/>
+              icon="fa-regular fa-calendar"
+              label="Jadwal"
+              value={
+                order.schedule_date && order.schedule_time
+                  ? `${new Date(order.schedule_date).toLocaleDateString("id-ID", {
+                      day: "numeric",
+                      month: "long",
+                      year: "numeric",
+                    })} • ${order.schedule_time.slice(0, 5)} WIB`
+                  : "Belum dijadwalkan"
+              }
+            />
           </div>
         </div>
 
@@ -361,7 +429,6 @@ export default function QueueDetailPage() {
       {isAdmin && showAddTime && (
         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
           <div className="bg-slate-900 border border-slate-800 rounded-3xl max-w-md w-full p-6 shadow-2xl">
-            {/* Header */}
             <div className="flex items-center gap-3 mb-5">
               <div className="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-400 border border-amber-500/30 flex items-center justify-center">
                 <i className="fa-solid fa-clock-rotate-left"></i>
@@ -374,7 +441,6 @@ export default function QueueDetailPage() {
               </div>
             </div>
 
-            {/* Info waktu saat ini */}
             {order.estimated_end_at && (
               <div className="mb-4 bg-slate-950/50 border border-slate-800 rounded-xl px-4 py-3 flex items-center gap-2.5">
                 <i className="fa-regular fa-clock text-amber-400 text-sm"></i>
@@ -393,7 +459,6 @@ export default function QueueDetailPage() {
               </div>
             )}
 
-            {/* Preset Buttons */}
             <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
               Pilih Cepat
             </label>
@@ -417,7 +482,6 @@ export default function QueueDetailPage() {
               ))}
             </div>
 
-            {/* Divider */}
             <div className="flex items-center gap-3 mb-5">
               <div className="flex-1 h-px bg-slate-800"></div>
               <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
@@ -426,7 +490,6 @@ export default function QueueDetailPage() {
               <div className="flex-1 h-px bg-slate-800"></div>
             </div>
 
-            {/* Custom Input */}
             <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
               Tambah Custom
             </label>
@@ -462,7 +525,6 @@ export default function QueueDetailPage() {
               </button>
             </div>
 
-            {/* Tombol Batal */}
             <button
               onClick={() => {
                 setShowAddTime(false);
