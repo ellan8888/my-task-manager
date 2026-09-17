@@ -1454,7 +1454,9 @@ body::-webkit-scrollbar {
     ? new Date(`${order.schedule_date}T${order.schedule_time}`)
     : null;
   const isToday = scheduleDate ? scheduleDate.toDateString() === new Date().toDateString() : false;
-  const isCompletedByBot = order.completed_by_bot === true;
+const isCompletedByBot = 
+  order.completed_by_bot === true || 
+  order.queue_status === "completed";
   const isProcessing = processingOrders.has(order.id);  // ← TAMBAH INI
   
 
