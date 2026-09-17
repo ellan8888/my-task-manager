@@ -23,8 +23,8 @@ type JokiOrder = {
   roblox_username: string | null;
   product: string | null;
   joki_name: string | null;
-  schedule_date: string;
-  schedule_time: string;
+  schedule_date: string | null;
+  schedule_time: string | null;
   note: string | null;
   reminder_sent: boolean;
   completed: boolean;
@@ -696,8 +696,18 @@ const updateOrderUsername = async (orderId: number, newUsername: string) => {
   const completedTasks = tasks.filter((task) => task.completed).length;
   const pendingTasks = tasks.filter((task) => !task.completed).length;
 
-  const jokiToday = jokiOrders.filter(o => new Date(`${o.schedule_date}T${o.schedule_time}`).toDateString() === new Date().toDateString()).length;
-  const jokiScheduled = jokiOrders.length - jokiToday;
+  const jokiToday = jokiOrders.filter(o =>
+    o.schedule_date &&
+    o.schedule_time &&
+    new Date(`${o.schedule_date}T${o.schedule_time}`).toDateString() === new Date().toDateString()
+  ).length;
+  const jokiScheduled = jokiOrders.filter(o => 
+    !o.schedule_date || !o.schedule_time
+  ).length + jokiOrders.filter(o =>
+    o.schedule_date &&
+    o.schedule_time &&
+    new Date(`${o.schedule_date}T${o.schedule_time}`).toDateString() !== new Date().toDateString()
+  ).length;
 
   return (
     <>
@@ -1414,8 +1424,10 @@ const updateOrderUsername = async (orderId: number, newUsername: string) => {
                     </div>
                   ) : (
                     jokiOrders.map((order) => {
-  const scheduleDate = new Date(`${order.schedule_date}T${order.schedule_time}`);
-  const isToday = scheduleDate.toDateString() === new Date().toDateString();
+    const scheduleDate = order.schedule_date && order.schedule_time
+    ? new Date(`${order.schedule_date}T${order.schedule_time}`)
+    : null;
+  const isToday = scheduleDate ? scheduleDate.toDateString() === new Date().toDateString() : false;
   const isCompletedByBot = order.completed_by_bot === true;
   const isProcessing = processingOrders.has(order.id);  // ← TAMBAH INI
   
@@ -1630,20 +1642,24 @@ const updateOrderUsername = async (orderId: number, newUsername: string) => {
                 <i className="fa-regular fa-user text-[11px]"></i>
                 <span>{order.joki_name || "Ellan"}</span>
               </span>
-              <span className="inline-flex items-center space-x-1.5 bg-slate-100 dark:bg-slate-800/80 text-slate-700 dark:text-slate-300 px-2.5 py-1 rounded-lg font-semibold border border-slate-200 dark:border-slate-700/50">
-                <i className="fa-regular fa-clock text-[11px] text-amber-500 dark:text-amber-400"></i>
-                <span>{order.schedule_time.slice(0, 5)}</span>
-              </span>
-              <span className="inline-flex items-center space-x-1.5 bg-slate-100 dark:bg-slate-800/80 text-slate-700 dark:text-slate-300 px-2.5 py-1 rounded-lg font-semibold border border-slate-200 dark:border-slate-700/50">
-                <i className="fa-regular fa-calendar-days text-[11px] text-indigo-500 dark:text-indigo-400"></i>
-                <span>
-                  {new Date(`${order.schedule_date}T00:00:00`).toLocaleDateString("id-ID", {
-                    day: "numeric",
-                    month: "long",
-                    year: "numeric",
-                  })}
+                            {order.schedule_time && (
+                <span className="inline-flex items-center space-x-1.5 bg-slate-100 dark:bg-slate-800/80 text-slate-700 dark:text-slate-300 px-2.5 py-1 rounded-lg font-semibold border border-slate-200 dark:border-slate-700/50">
+                  <i className="fa-regular fa-clock text-[11px] text-amber-500 dark:text-amber-400"></i>
+                  <span>{order.schedule_time.slice(0, 5)}</span>
                 </span>
-              </span>
+              )}
+              {order.schedule_date && (
+                <span className="inline-flex items-center space-x-1.5 bg-slate-100 dark:bg-slate-800/80 text-slate-700 dark:text-slate-300 px-2.5 py-1 rounded-lg font-semibold border border-slate-200 dark:border-slate-700/50">
+                  <i className="fa-regular fa-calendar-days text-[11px] text-indigo-500 dark:text-indigo-400"></i>
+                  <span>
+                    {new Date(`${order.schedule_date}T00:00:00`).toLocaleDateString("id-ID", {
+                      day: "numeric",
+                      month: "long",
+                      year: "numeric",
+                    })}
+                  </span>
+                </span>
+              )}
               {order.note && (
                 <span className="inline-flex items-center space-x-1.5 bg-violet-100 dark:bg-violet-500/10 text-violet-700 dark:text-violet-300 px-2.5 py-1 rounded-lg font-mono text-[11px] border border-violet-200 dark:border-violet-500/20">
                   <i className="fa-regular fa-note-sticky text-[11px] text-violet-500 dark:text-violet-400"></i>
@@ -1654,7 +1670,7 @@ const updateOrderUsername = async (orderId: number, newUsername: string) => {
           </div>
         </div>
 
-        <div className="flex items-center justify-between sm:justify-end space-x-3 pt-3 sm:pt-0 border-t sm:border-t-0 border-slate-200 dark:border-slate-800/60">
+                <div className="flex items-center justify-between sm:justify-end space-x-3 pt-3 sm:pt-0 border-t sm:border-t-0 border-slate-200 dark:border-slate-800/60">
           {isCompletedByBot ? (
             <span className="bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-500/30 text-[11px] font-bold px-3 py-1.5 rounded-xl flex items-center gap-1.5">
               <i className="fa-solid fa-check text-xs"></i> Selesai oleh Bot
@@ -1663,9 +1679,13 @@ const updateOrderUsername = async (orderId: number, newUsername: string) => {
             <span className="bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-500/30 text-[11px] font-bold px-3 py-1.5 rounded-xl flex items-center gap-1.5">
               <i className="fa-solid fa-fire text-xs text-amber-500 dark:text-amber-400"></i> Hari Ini
             </span>
-          ) : (
+          ) : order.schedule_date && order.schedule_time ? (
             <span className="bg-indigo-100 dark:bg-indigo-500/20 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-500/30 text-[11px] font-bold px-3 py-1.5 rounded-xl flex items-center gap-1.5">
               <i className="fa-solid fa-calendar text-xs"></i> Terjadwal
+            </span>
+          ) : (
+            <span className="bg-slate-100 dark:bg-slate-800/80 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700/50 text-[11px] font-bold px-3 py-1.5 rounded-xl flex items-center gap-1.5">
+              <i className="fa-solid fa-clock text-xs"></i> Belum dijadwalkan
             </span>
           )}
         </div>
@@ -1744,10 +1764,12 @@ const updateOrderUsername = async (orderId: number, newUsername: string) => {
                   <div className="space-y-3 flex-1 min-h-50">
                     {jokiOrders
                       .filter(
-                        (o) =>
-                          new Date(`${o.schedule_date}T${o.schedule_time}`).toDateString() ===
-                          new Date().toDateString()
-                      )
+  (o) =>
+    o.schedule_date &&
+    o.schedule_time &&
+    new Date(`${o.schedule_date}T${o.schedule_time}`).toDateString() ===
+    new Date().toDateString()
+)
                       .map((order) => (
                         <div
                           key={order.id}
@@ -1769,9 +1791,9 @@ const updateOrderUsername = async (orderId: number, newUsername: string) => {
                               {order.joki_name || "Ellan"}
                             </span>
                             <span className="font-mono text-amber-600 dark:text-amber-400">
-                              <i className="fa-regular fa-clock mr-1"></i>
-                              {order.schedule_time.slice(0, 5)}
-                            </span>
+  <i className="fa-regular fa-clock mr-1"></i>
+  {order.schedule_time ? order.schedule_time.slice(0, 5) : "-"}
+</span>
                           </div>
                         </div>
                       ))}
@@ -1790,10 +1812,12 @@ const updateOrderUsername = async (orderId: number, newUsername: string) => {
                       {jokiScheduled}
                     </span>
                   </div>
-                  <div className="space-y-3 flex-1 min-h-50">
+                                    <div className="space-y-3 flex-1 min-h-50">
                     {jokiOrders
                       .filter(
                         (o) =>
+                          !o.schedule_date ||
+                          !o.schedule_time ||
                           new Date(`${o.schedule_date}T${o.schedule_time}`).toDateString() !==
                           new Date().toDateString()
                       )
@@ -1818,9 +1842,9 @@ const updateOrderUsername = async (orderId: number, newUsername: string) => {
                               {order.joki_name || "Ellan"}
                             </span>
                             <span className="font-mono text-amber-600 dark:text-amber-400">
-                              <i className="fa-regular fa-clock mr-1"></i>
-                              {order.schedule_time.slice(0, 5)}
-                            </span>
+  <i className="fa-regular fa-clock mr-1"></i>
+  {order.schedule_time ? order.schedule_time.slice(0, 5) : "-"}
+</span>
                           </div>
                         </div>
                       ))}

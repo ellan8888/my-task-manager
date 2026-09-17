@@ -334,17 +334,18 @@ export default function QueueDetailPage() {
               value={order.joki_name || "Ellan"}
             />
             <DetailRow
-              icon="fa-regular fa-calendar"
-              label="Jadwal"
-              value={`${new Date(order.schedule_date).toLocaleDateString(
-                "id-ID",
-                {
-                  day: "numeric",
-                  month: "long",
-                  year: "numeric",
-                }
-              )} • ${order.schedule_time.slice(0, 5)} WIB`}
-            />
+  icon="fa-regular fa-calendar"
+  label="Jadwal"
+  value={
+    order.schedule_date && order.schedule_time
+      ? `${new Date(order.schedule_date).toLocaleDateString("id-ID", {
+          day: "numeric",
+          month: "long",
+          year: "numeric",
+        })} • ${order.schedule_time.slice(0, 5)} WIB`
+      : "Belum dijadwalkan"
+  }
+/>
           </div>
         </div>
 

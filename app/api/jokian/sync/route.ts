@@ -17,17 +17,9 @@ export async function POST(request: Request) {
     } = body;
 
     // Validasi data wajib
-    if (
-      !order_id ||
-      !schedule_date ||
-      !schedule_time
-    ) {
+    if (!order_id) {   // ← cuma order_id yang wajib
       return NextResponse.json(
-        {
-          success: false,
-          error:
-            "order_id, schedule_date, dan schedule_time wajib diisi.",
-        },
+        { success: false, error: "order_id wajib diisi." },
         { status: 400 }
       );
     }
@@ -40,12 +32,12 @@ export async function POST(request: Request) {
       .from("joki_orders")
       .upsert(
         {
-          order_id: cleanedOrderId,   // ← PAKAI YANG CLEAN
+          order_id: cleanedOrderId,
           roblox_username: roblox_username || null,
           product: product || null,
           joki_name: joki_name || null,
-          schedule_date,
-          schedule_time,
+          schedule_date: schedule_date || null,   // ← optional
+          schedule_time: schedule_time || null,   // ← optional
           note: note || null,
         },
         {
