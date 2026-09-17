@@ -31,8 +31,10 @@ type JokiOrder = {
   completed_by_bot: boolean;
   completed_at: string | null;
   created_at: string;
-  estimated_end_at: string | null;  // ← TAMBAH INI
-  queue_status: string | null;       // ← TAMBAH INI (opsional, biar konsisten)
+  estimated_end_at: string | null;
+  queue_status: string | null;
+  buyer_confirmed: boolean;          // ← TAMBAH
+  confirm_token: string | null;      // ← TAMBAH
 };
 
 export default function Home() {
@@ -446,7 +448,7 @@ const fetchRamAccounts = async () => {
 // =========================
 
 const handleCompleteOrder = async (order: JokiOrder) => {
-  // 1. Show confirm dialog DULU (JANGAN set processing di sini!)
+  // 1. Show confirm dialog DULU
   showConfirm(
     order.completed_by_bot ? "Konfirmasi Jokian Selesai?" : "Selesaikan Jokian?",
     order.completed_by_bot
@@ -458,22 +460,23 @@ const handleCompleteOrder = async (order: JokiOrder) => {
       // 2. Tutup dialog langsung
       closeConfirm();
 
-      // 3. BARU set processing (trigger animasi) — SETELAH klik "Ya"
+      // 3. Set processing (trigger animasi)
       setProcessingOrders((prev) => new Set(prev).add(order.id));
-
-      // 4. Tunggu 50ms supaya React render perubahan className ke DOM
       await new Promise((resolve) => setTimeout(resolve, 50));
 
       try {
-        // 5. Hapus dari Supabase
-        const { error } = await supabase
-          .from("joki_orders")
-          .delete()
-          .eq("id", order.id);
+        // ✅ 4. Panggil API baru — close roblox + hapus card
+        // (logika sama persis kayak yang lama, tapi di-extract ke API)
+        const res = await fetch("/api/queue/complete-order", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ order_id: order.order_id }),
+        });
+        const data = await res.json();
 
-        if (error) {
-          console.error(error);
-          alert("Gagal menyelesaikan Jokian!");
+        if (!data.success) {
+          console.error(data);
+          alert(data.message || "Gagal menyelesaikan Jokian!");
           setProcessingOrders((prev) => {
             const next = new Set(prev);
             next.delete(order.id);
@@ -482,25 +485,15 @@ const handleCompleteOrder = async (order: JokiOrder) => {
           return;
         }
 
-        // 6. Hapus dari RAM (background, tanpa await)
-        if (order.roblox_username) {
-          fetch("/api/remove-account", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ username: order.roblox_username }),
-          })
-            .then((res) => res.json())
-            .then((data) => console.log("RAM response:", data))
-            .catch((err) => console.error("Gagal hapus dari RAM:", err));
-        }
-
-        // 7. TUNGGU ANIMASI CSS SELESAI (durasi transition)
+        // ✅ 5. Tunggu animasi CSS selesai
         await new Promise((resolve) => setTimeout(resolve, 700));
 
-        // 8. Hapus card dari UI
-        setJokiOrders((current) => current.filter((item) => item.id !== order.id));
+        // ✅ 6. Hapus card dari UI
+        setJokiOrders((current) =>
+          current.filter((item) => item.id !== order.id)
+        );
 
-        // 9. Cleanup
+        // 7. Cleanup
         setProcessingOrders((prev) => {
           const next = new Set(prev);
           next.delete(order.id);
@@ -508,6 +501,7 @@ const handleCompleteOrder = async (order: JokiOrder) => {
         });
       } catch (err) {
         console.error(err);
+        alert("Terjadi kesalahan");
         setProcessingOrders((prev) => {
           const next = new Set(prev);
           next.delete(order.id);
@@ -1702,10 +1696,16 @@ body::-webkit-scrollbar {
           </div>
         </div>
 
-                <div className="flex items-center justify-between sm:justify-end space-x-3 pt-3 sm:pt-0 border-t sm:border-t-0 border-slate-200 dark:border-slate-800/60">
-          {isCompletedByBot ? (
+                        <div className="flex items-center justify-between sm:justify-end space-x-3 pt-3 sm:pt-0 border-t sm:border-t-0 border-slate-200 dark:border-slate-800/60">
+          {isCompletedByBot && order.buyer_confirmed ? (
+            // ✅ Buyer udah konfirmasi
             <span className="bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-500/30 text-[11px] font-bold px-3 py-1.5 rounded-xl flex items-center gap-1.5">
-              <i className="fa-solid fa-check text-xs"></i> Selesai oleh Bot
+              <i className="fa-solid fa-circle-check text-xs"></i> Buyer Konfirmasi
+            </span>
+          ) : isCompletedByBot ? (
+            // ⏳ Jokian selesai, nunggu buyer konfirmasi
+            <span className="bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-500/30 text-[11px] font-bold px-3 py-1.5 rounded-xl flex items-center gap-1.5">
+              <i className="fa-solid fa-hourglass-half text-xs"></i> Menunggu Buyer
             </span>
           ) : isToday ? (
             <span className="bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-500/30 text-[11px] font-bold px-3 py-1.5 rounded-xl flex items-center gap-1.5">

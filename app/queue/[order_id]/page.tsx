@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { useParams } from "next/navigation";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 
 type QueueOrder = {
   id: number;
@@ -18,14 +19,25 @@ type QueueOrder = {
   schedule_date: string;
   schedule_time: string;
   completed_by_bot: boolean;
+  buyer_confirmed: boolean;
+  confirm_token: string | null;
 };
 
 export default function QueueDetailPage() {
+  // === ROUTING & STATE DULU ===
   const params = useParams();
   const orderId = params?.order_id as string | undefined;
+  const searchParams = useSearchParams();
+  const token = searchParams.get("token");
+
   const [order, setOrder] = useState<QueueOrder | null>(null);
   const [notFound, setNotFound] = useState(false);
   const [now, setNow] = useState(Date.now());
+
+  // === BUYER CONFIRM STATE ===
+  const [buyerConfirmed, setBuyerConfirmed] = useState(false);
+  const [confirming, setConfirming] = useState(false);
+  const [confirmMessage, setConfirmMessage] = useState("");
 
   // === ADMIN STATE ===
   const [isAdmin, setIsAdmin] = useState(false);
@@ -33,6 +45,40 @@ export default function QueueDetailPage() {
   const [addValue, setAddValue] = useState("");
   const [addUnit, setAddUnit] = useState<"minutes" | "hours">("minutes");
   const [saving, setSaving] = useState(false);
+
+  // === SYNC buyer_confirmed DARI ORDER ===
+  useEffect(() => {
+    if (order?.buyer_confirmed) setBuyerConfirmed(true);
+  }, [order?.buyer_confirmed]);
+
+  // === HANDLE CONFIRM BUYER ===
+  const handleConfirm = async () => {
+    if (!order || !token) return;
+    setConfirming(true);
+    setConfirmMessage("");
+    try {
+      const res = await fetch("/api/queue/confirm", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ order_id: order.order_id, token }),
+      });
+      const data = await res.json();
+
+      if (data.success) {
+        setBuyerConfirmed(true);
+        setConfirmMessage(data.message || "Konfirmasi berhasil!");
+        if (data.auto_closed) {
+          setTimeout(() => (window.location.href = "/queue"), 3000);
+        }
+      } else {
+        setConfirmMessage(data.message || "Gagal konfirmasi");
+      }
+    } catch (err) {
+      setConfirmMessage("Terjadi kesalahan");
+    } finally {
+      setConfirming(false);
+    }
+  };
 
   // Update time tiap detik
   useEffect(() => {
@@ -424,6 +470,52 @@ export default function QueueDetailPage() {
           </p>
         </div>
       </div>
+
+      {isCompleted && token && !buyerConfirmed && (
+  <div className="mt-6 bg-slate-900/70 backdrop-blur-xl rounded-2xl p-5 md:p-6 border border-emerald-500/40">
+    <div className="text-center mb-4">
+      <i className="fa-solid fa-circle-check text-emerald-400 text-3xl mb-3"></i>
+      <h3 className="text-lg font-extrabold text-white mb-1">
+        Konfirmasi Jokian Selesai
+      </h3>
+      <p className="text-xs text-slate-400">
+        Klik tombol di bawah untuk konfirmasi. Akun roblox akan otomatis di-logout.
+      </p>
+    </div>
+    <button
+      onClick={handleConfirm}
+      disabled={confirming}
+      className="w-full bg-linear-to-r from-emerald-600 to-green-600 hover:from-emerald-500 hover:to-green-500 disabled:opacity-50 text-white font-bold py-3 rounded-xl transition shadow-lg shadow-emerald-600/30 flex items-center justify-center gap-2"
+    >
+      {confirming ? (
+        <>
+          <i className="fa-solid fa-spinner fa-spin"></i>
+          Memproses...
+        </>
+      ) : (
+        <>
+          <i className="fa-solid fa-circle-check"></i>
+          Konfirmasi Selesai
+        </>
+      )}
+    </button>
+    {confirmMessage && (
+      <p className="text-center text-xs mt-3 text-emerald-400">{confirmMessage}</p>
+    )}
+  </div>
+)}
+
+{buyerConfirmed && (
+  <div className="mt-6 bg-emerald-500/10 backdrop-blur-xl rounded-2xl p-5 md:p-6 border border-emerald-500/40 text-center">
+    <i className="fa-solid fa-circle-check text-emerald-400 text-3xl mb-3"></i>
+    <h3 className="text-lg font-extrabold text-emerald-300 mb-1">
+      Sudah Dikonfirmasi
+    </h3>
+    <p className="text-xs text-slate-400">
+      Terimakasih! Jokian sudah dikonfirmasi selesai.
+    </p>
+  </div>
+)}
 
       {/* MODAL TAMBAH WAKTU */}
       {isAdmin && showAddTime && (
