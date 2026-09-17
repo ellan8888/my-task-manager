@@ -19,6 +19,9 @@ type QueueOrder = {
 };
 
 export default function QueuePage() {
+  const [maxParallel, setMaxParallel] = useState(11);
+const [isAdmin, setIsAdmin] = useState(false);
+const [savingSlot, setSavingSlot] = useState(false);
   const [orders, setOrders] = useState<QueueOrder[]>([]);
   const [now, setNow] = useState(Date.now());
   const [loading, setLoading] = useState(true);
@@ -59,6 +62,50 @@ export default function QueuePage() {
     };
   }, []);
 
+  useEffect(() => {
+  // Load max_parallel dari API
+  fetch("/api/queue/settings")
+    .then((r) => r.json())
+    .then((d) => {
+      if (d.success) setMaxParallel(d.max_parallel);
+    })
+    .catch((err) => console.error("Gagal load max_parallel:", err));
+
+  // Cek admin
+  fetch("/api/auth/check")
+    .then((r) => r.json())
+    .then((d) => setIsAdmin(d.isAdmin))
+    .catch(() => setIsAdmin(false));
+}, []);
+const updateMaxParallel = async (newValue: number) => {
+  if (newValue < 1 || newValue > 100) {
+    alert("Slot harus antara 1-100");
+    return;
+  }
+
+  setSavingSlot(true);
+  try {
+    const res = await fetch("/api/queue/settings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ max_parallel: newValue }),
+    });
+    const data = await res.json();
+
+    if (!res.ok) {
+      alert(data.error || "Gagal update slot");
+      return;
+    }
+
+    setMaxParallel(data.max_parallel);
+  } catch (err) {
+    console.error(err);
+    alert("Terjadi kesalahan");
+  } finally {
+    setSavingSlot(false);
+  }
+};
+
   const processing = orders.filter((o) => o.queue_status === "processing");
   const waiting = orders.filter((o) => o.queue_status === "waiting_confirm");
   const queued = orders.filter((o) => o.queue_status === "queued");
@@ -66,7 +113,7 @@ export default function QueuePage() {
 
   return (
     <>
-      <style>{`
+            <style>{`
         @keyframes pulse-ring {
           0% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.5); }
           70% { box-shadow: 0 0 0 8px rgba(245, 158, 11, 0); }
@@ -81,6 +128,36 @@ export default function QueuePage() {
         .queue-card-in {
           animation: queue-card-in 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
         }
+          /* Hide scrollbar — tapi tetap bisa scroll */
+html, body {
+  scrollbar-width: none;       /* Firefox */
+  -ms-overflow-style: none;    /* IE 10+ */
+}
+html::-webkit-scrollbar,
+body::-webkit-scrollbar {
+  display: none;               /* Chrome, Safari, Edge */
+}
+
+        /* ============================================== */
+        /* HIDE SCROLLBAR — tapi tetap bisa scroll        */
+        /* ============================================== */
+        .hide-scrollbar {
+          scrollbar-width: none;        /* Firefox */
+          -ms-overflow-style: none;     /* IE 10+ */
+        }
+        .hide-scrollbar::-webkit-scrollbar {
+          display: none;                /* Chrome, Safari, Edge */
+        }
+
+        /* Fallback — hide scrollbar untuk body */
+        html, body {
+          scrollbar-width: none;
+          -ms-overflow-style: none;
+        }
+        html::-webkit-scrollbar,
+        body::-webkit-scrollbar {
+          display: none;
+        }
       `}</style>
 
       {/* Selalu dark: pakai bg-slate-950 langsung, tanpa dark: */}
@@ -89,7 +166,18 @@ export default function QueuePage() {
         <header className="border-b border-slate-800/60 bg-slate-950/80 backdrop-blur-xl sticky top-0 z-20">
           <div className="w-full px-4 md:px-6 lg:px-8 py-5">
             <div className="flex items-center justify-between flex-wrap gap-4">
-              <div className="flex items-center gap-4">
+                          <div className="flex items-center gap-4">
+                {/* TOMBOL KEMBALI — cuma admin */}
+                {isAdmin && (
+                  <Link
+                    href="/"
+                    className="w-10 h-10 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 flex items-center justify-center transition text-slate-300 hover:text-white shrink-0"
+                    title="Kembali ke Home"
+                  >
+                    <i className="fa-solid fa-arrow-left text-sm"></i>
+                  </Link>
+                )}
+
                 <div className="w-12 h-12 rounded-2xl bg-linear-to-tr from-violet-600 via-indigo-600 to-purple-500 flex items-center justify-center shadow-lg shadow-violet-600/30 ring-2 ring-violet-500/20">
                   <i className="fa-solid fa-list-check text-white text-lg"></i>
                 </div>
@@ -105,17 +193,42 @@ export default function QueuePage() {
               </div>
 
               <div className="flex items-center gap-2 bg-slate-900/60 border border-slate-800/80 rounded-2xl px-4 py-2.5">
-                <i className="fa-solid fa-server text-violet-400 text-sm"></i>
-                <span className="text-sm font-bold text-slate-300">Slot Aktif</span>
-                <span
-                  className={`text-sm font-black ${
-                    totalActive >= 11 ? "text-rose-400" : "text-emerald-400"
-                  }`}
-                >
-                  {totalActive}
-                </span>
-                <span className="text-slate-500 text-sm font-bold">/ 11</span>
-              </div>
+  <i className="fa-solid fa-server text-violet-400 text-sm"></i>
+  <span className="text-sm font-bold text-slate-300">Slot Aktif</span>
+  <span
+    className={`text-sm font-black ${
+      totalActive >= maxParallel ? "text-rose-400" : "text-emerald-400"
+    }`}
+  >
+    {totalActive}
+  </span>
+  <span className="text-slate-500 text-sm font-bold">/ {maxParallel}</span>
+
+  {/* KONTROL ADMIN — cuma muncul kalau isAdmin */}
+  {isAdmin && (
+    <div className="flex items-center gap-1 ml-2 pl-2 border-l border-slate-700/60">
+      <button
+        onClick={() => updateMaxParallel(maxParallel - 1)}
+        disabled={savingSlot || maxParallel <= 1}
+        className="w-6 h-6 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center transition disabled:opacity-40 disabled:cursor-not-allowed"
+        title="Kurangi slot"
+      >
+        <i className="fa-solid fa-minus text-[10px]"></i>
+      </button>
+      <button
+        onClick={() => updateMaxParallel(maxParallel + 1)}
+        disabled={savingSlot || maxParallel >= 100}
+        className="w-6 h-6 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center transition disabled:opacity-40 disabled:cursor-not-allowed"
+        title="Tambah slot"
+      >
+        <i className="fa-solid fa-plus text-[10px]"></i>
+      </button>
+      {savingSlot && (
+        <i className="fa-solid fa-spinner fa-spin text-violet-400 text-xs"></i>
+      )}
+    </div>
+  )}
+</div>
             </div>
           </div>
         </header>

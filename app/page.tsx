@@ -743,6 +743,26 @@ const updateOrderUsername = async (orderId: number, newUsername: string) => {
         body, aside, main, header {
           transition: background-color 0.25s ease, color 0.25s ease, border-color 0.25s ease;
         }
+          /* ============================================== */
+/* HIDE SCROLLBAR — tapi tetap bisa scroll        */
+/* ============================================== */
+.custom-scrollbar {
+  scrollbar-width: none;        /* Firefox */
+  -ms-overflow-style: none;     /* IE 10+ */
+}
+.custom-scrollbar::-webkit-scrollbar {
+  display: none;                /* Chrome, Safari, Edge */
+}
+
+/* Hide scrollbar di html/body juga (kalau ada) */
+html, body {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+html::-webkit-scrollbar,
+body::-webkit-scrollbar {
+  display: none;
+}
       `}</style>
 
       <div className="min-h-screen bg-slate-100 dark:bg-slate-950 text-slate-900 dark:text-slate-100 font-sans antialiased selection:bg-violet-500 selection:text-white flex flex-col relative">

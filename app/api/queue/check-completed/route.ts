@@ -31,13 +31,14 @@ export async function POST() {
     const expiredIds = expired.map(o => o.order_id);
     
     const { error: updateError } = await supabaseAdmin
-      .from("joki_orders")
-      .update({
-        queue_status: "completed",
-        completed: true,
-        completed_at: now,
-      })
-      .in("order_id", expiredIds);
+  .from("joki_orders")
+  .update({
+    queue_status: "completed",
+    completed_by_bot: true,     // ← TAMBAH INI (biar buram + badge "Selesai oleh Bot")
+    completed_at: now,          // ← TAMBAH INI (biar ada timestamp selesai)
+    // ❌ JANGAN set completed = true — biar card tetap muncul di home
+  })
+  .in("order_id", expiredIds);
     
     if (updateError) {
       return NextResponse.json({ error: updateError.message }, { status: 500 });
