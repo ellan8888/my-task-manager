@@ -13,31 +13,69 @@ export async function POST(request: Request) {
   try {
     const body = await request.json();
     let { order_id, ...updates } = body;
-    
+
     if (!order_id) {
-      return NextResponse.json({ success: false, message: "order_id required" }, { status: 400 });
+      return NextResponse.json(
+        { success: false, message: "order_id required" },
+        { status: 400 }
+      );
     }
-    
+
     // ✅ CLEAN ORDER ID — hapus suffix (ID), (MY), (SG), dll
-    order_id = order_id.replace(/\s*\([A-Z]{2}\)\s*$/, "").trim();
-    
-    const { error } = await supabaseAdmin
+    const cleanedOrderId = order_id.replace(/\s*\([A-Z]{2}\)\s*$/, "").trim();
+
+    console.log(`[Queue Update] ${order_id} → ${cleanedOrderId}`);
+    console.log(`[Queue Update] Fields:`, updates);
+
+    // ✅ PAKAI .select() — biar tau berapa row yang ke-update
+    const { data, error } = await supabaseAdmin
       .from("joki_orders")
       .update(updates)
-      .eq("order_id", order_id);
-    
+      .eq("order_id", cleanedOrderId)
+      .select();
+
     if (error) {
-      return NextResponse.json({ success: false, message: error.message }, { status: 500 });
+      console.error(`❌ Error update:`, error);
+      return NextResponse.json(
+        { success: false, message: error.message },
+        { status: 500 }
+      );
     }
-    
+
+    // ✅ CEK: apakah beneran ada row yang di-update
+    if (!data || data.length === 0) {
+      console.warn(`⚠️ 0 row updated untuk: ${cleanedOrderId}`);
+      return NextResponse.json(
+        {
+          success: false,
+          message: `Order ${cleanedOrderId} tidak ditemukan di database`,
+          order_id_input: order_id,
+          order_id_cleaned: cleanedOrderId,
+          rows_affected: 0,
+        },
+        { status: 404 }
+      );
+    }
+
+    console.log(`✅ Updated ${data.length} row:`, data[0]);
+
     // Kalau update adalah "completed", naikkan antrian
     if (updates.queue_status === "completed" || updates.completed === true) {
-      const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
+      const baseUrl =
+        process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
       fetch(`${baseUrl}/api/queue/promote`, { method: "POST" }).catch(() => {});
     }
-    
-    return NextResponse.json({ success: true });
+
+    return NextResponse.json({
+      success: true,
+      data: data[0],
+      rows_affected: data.length,
+    });
   } catch (error: any) {
-    return NextResponse.json({ success: false, message: error.message }, { status: 500 });
+    console.error("❌ API error:", error);
+    return NextResponse.json(
+      { success: false, message: error.message },
+      { status: 500 }
+    );
   }
 }
