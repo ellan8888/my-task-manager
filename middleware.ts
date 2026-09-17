@@ -6,7 +6,20 @@ import type { NextRequest } from "next/server";
 const PUBLIC_PATHS = ["/queue"];
 
 // Path yang selalu di-bypass (aset Next.js, favicon, dll)
-const BYPASS_PATHS = ["/_next", "/favicon.ico", "/login", "/api/auth"];
+// Tambah "/api/jokian" biar bot Python bisa akses tanpa cookie
+const BYPASS_PATHS = [
+  "/_next",
+  "/favicon.ico",
+  "/login",
+  "/api/auth",
+  "/api/jokian",       // ← TAMBAH INI
+  "/api/queue",        // ← TAMBAH INI (kalau bot Python manggil queue)
+  "/api/push",         // ← TAMBAH INI (kalau bot Python manggil push)
+  "/api/reminder",     // ← TAMBAH INI
+  "/api/get-accounts", // ← TAMBAH INI
+  "/api/remove-account", // ← TAMBAH INI
+  "/api/telegram",     // ← TAMBAH INI
+];
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
