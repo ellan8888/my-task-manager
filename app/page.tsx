@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { registerPushSubscription } from "@/lib/push";
+import Link from "next/link";
 
 type Task = {
   id: number;
@@ -66,7 +67,7 @@ const [loadingAccounts, setLoadingAccounts] = useState(false);
   const [category, setCategory] = useState("");
   const [search, setSearch] = useState("");
   const [isDark, setIsDark] = useState(true);
-  const [filter, setFilter] = useState<"All" | "Today" | "Upcoming" | "Overdue">("All");
+  const [filter, setFilter] = useState<"All" | "Today" | "NotScheduled" | "Overdue">("All");
 
   const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>("default");
   const [defaultReminder, setDefaultReminder] = useState("20:00");
@@ -74,6 +75,9 @@ const [loadingAccounts, setLoadingAccounts] = useState(false);
 
   const [currentView, setCurrentView] = useState<"list" | "kanban">("list");
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const formatRupiah = (num: number): string => {
+  return "Rp " + num.toLocaleString("id-ID");
+};
 
   const [confirmDialog, setConfirmDialog] = useState<{
     open: boolean;
@@ -249,6 +253,31 @@ useEffect(() => {
   useEffect(() => {
     localStorage.setItem("sidebarOpen", String(sidebarOpen));
   }, [sidebarOpen]);
+
+  const [income, setIncome] = useState<{
+  hariIni: number;
+  mingguIni: number;
+  bulanIni: number;
+  perJoki: Record<string, number>;
+  totalOrders: number;
+} | null>(null);
+
+// Fetch saat mount + tiap 30 detik
+useEffect(() => {
+  const fetchIncome = async () => {
+    try {
+      const res = await fetch("/api/stats/income");
+      const data = await res.json();
+      if (data.success) setIncome(data);
+    } catch (err) {
+      console.error("Error fetch income:", err);
+    }
+  };
+
+  fetchIncome();
+  const interval = setInterval(fetchIncome, 30000); // refresh tiap 30s
+  return () => clearInterval(interval);
+}, []);
 
   // =========================
   // ADD TASK
@@ -659,8 +688,11 @@ const updateOrderUsername = async (orderId: number, newUsername: string) => {
     });
   };
 
-  const filteredTasks = tasks
+    const filteredTasks = tasks
     .filter((task) => {
+      // ★ Filter "Belum Dijadwalkan" cuma buat jokian — task nggak pernah masuk sini
+      if (filter === "NotScheduled") return false;
+
       const matchesSearch =
         task.title.toLowerCase().includes(search.toLowerCase()) ||
         task.category.toLowerCase().includes(search.toLowerCase());
@@ -674,7 +706,6 @@ const updateOrderUsername = async (orderId: number, newUsername: string) => {
       taskDate.setHours(0, 0, 0, 0);
 
       if (filter === "Today") return taskDate.getTime() === today.getTime();
-      if (filter === "Upcoming") return taskDate.getTime() > today.getTime();
       if (filter === "Overdue") return taskDate.getTime() < today.getTime() && !task.completed;
 
       return true;
@@ -683,24 +714,77 @@ const updateOrderUsername = async (orderId: number, newUsername: string) => {
       return new Date(a.deadline + "T00:00:00").getTime() - new Date(b.deadline + "T00:00:00").getTime();
     });
 
-  // =========================
+      // =========================================================
+  // FILTER JOKIAN — berdasarkan filter yang dipilih
+  // =========================================================
+  const filteredJokiOrders = jokiOrders.filter((o) => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    if (filter === "All") return true;
+
+    // Filter berdasarkan estimated_end_at (jadwal selesai)
+    if (filter === "Today") {
+      if (o.completed_by_bot || o.queue_status === "completed") return false;
+      if (!o.estimated_end_at) return false;
+
+      const endDate = new Date(o.estimated_end_at);
+      endDate.setHours(0, 0, 0, 0);
+      return endDate.getTime() === today.getTime();
+    }
+
+    if (filter === "NotScheduled") {
+      return (
+        !o.estimated_end_at &&
+        o.completed_by_bot !== true &&
+        o.queue_status !== "completed"
+      );
+    }
+
+    if (filter === "Overdue") {
+      if (o.completed_by_bot || o.queue_status === "completed") return false;
+      if (!o.estimated_end_at) return false;
+
+      const endDate = new Date(o.estimated_end_at);
+      endDate.setHours(0, 0, 0, 0);
+      return endDate.getTime() < today.getTime();
+    }
+
+    return true;
+  });
+
+    // =========================
   // STATISTICS
   // =========================
 
   const completedTasks = tasks.filter((task) => task.completed).length;
   const pendingTasks = tasks.filter((task) => !task.completed).length;
 
-  const jokiToday = jokiOrders.filter(o =>
-    o.schedule_date &&
-    o.schedule_time &&
-    new Date(`${o.schedule_date}T${o.schedule_time}`).toDateString() === new Date().toDateString()
+  // =========================================================
+  // HITUNG STATISTIK JOKIAN BERDASARKAN estimated_end_at
+  // =========================================================
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  // Hari Ini: estimated_end_at == hari ini (dan belum completed_by_bot)
+  const jokiToday = jokiOrders.filter((o) => {
+    if (o.completed_by_bot || o.queue_status === "completed") return false;
+    if (!o.estimated_end_at) return false;
+
+    const endDate = new Date(o.estimated_end_at);
+    endDate.setHours(0, 0, 0, 0);
+    return endDate.getTime() === today.getTime();
+  }).length;
+
+  // Belum Dijadwalkan: order yang belum punya estimated_end_at
+  const jokiNotScheduled = jokiOrders.filter((o) => 
+    !o.estimated_end_at &&
+    o.completed_by_bot !== true &&
+    o.queue_status !== "completed"
   ).length;
-  const jokiScheduled = jokiOrders.filter(o => 
-    !o.schedule_date || !o.schedule_time
-  ).length + jokiOrders.filter(o =>
-    o.schedule_date &&
-    o.schedule_time &&
-    new Date(`${o.schedule_date}T${o.schedule_time}`).toDateString() !== new Date().toDateString()
+
+  // Selesai: yang udah completed_by_bot atau queue_status === "completed"
+  const jokiCompleted = jokiOrders.filter((o) => 
+    o.completed_by_bot === true || o.queue_status === "completed"
   ).length;
 
   return (
@@ -759,7 +843,7 @@ body::-webkit-scrollbar {
 }
       `}</style>
 
-      <div className="min-h-screen bg-slate-100 dark:bg-slate-950 text-slate-900 dark:text-slate-100 font-sans antialiased selection:bg-violet-500 selection:text-white flex flex-col relative">
+      <div className="h-screen overflow-hidden bg-slate-100 dark:bg-slate-950 text-slate-900 dark:text-slate-100 font-sans antialiased selection:bg-violet-500 selection:text-white flex flex-col relative">
 
         {/* SIDEBAR */}
         {sidebarOpen && (
@@ -812,14 +896,6 @@ body::-webkit-scrollbar {
                 </span>
               </a>
 
-              <button className="w-full flex items-center space-x-3.5 px-4 py-3 rounded-2xl text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800/60 hover:text-slate-900 dark:hover:text-slate-200 text-sm font-medium transition-all group">
-                <i className="fa-solid fa-share-nodes w-5 text-center group-hover:text-violet-500 dark:group-hover:text-violet-400 transition"></i>
-                <span>Rekap Teks WA / Discord</span>
-                <span className="ml-auto text-[10px] bg-indigo-100 dark:bg-indigo-500/20 text-indigo-700 dark:text-indigo-300 px-2 py-0.5 rounded font-mono">
-                  Export
-                </span>
-              </button>
-
               <button
                 onClick={() => setShowSettings(!showSettings)}
                 className="w-full flex items-center space-x-3.5 px-4 py-3 rounded-2xl text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800/60 hover:text-slate-900 dark:hover:text-slate-200 text-sm font-medium transition-all group"
@@ -849,28 +925,43 @@ body::-webkit-scrollbar {
             </div>
           </div>
 
-          <div className="space-y-4 pt-4 border-t border-slate-200 dark:border-slate-800/80">
-            <div className="flex items-center justify-between p-3 rounded-2xl bg-slate-100 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800/80">
+                    <div className="space-y-4 pt-4 border-t border-slate-200 dark:border-slate-800/80">
+            {/* ★ Admin Panel Link */}
+            <Link
+              href="/admin"
+              className="flex items-center justify-between p-3 rounded-2xl bg-slate-100 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800/80 hover:border-violet-500/50 hover:bg-violet-50 dark:hover:bg-violet-500/10 transition-all group cursor-pointer"
+            >
               <div className="flex items-center space-x-3">
                 <div className="relative">
-                  <div className="w-9 h-9 rounded-xl bg-violet-100 dark:bg-violet-600/20 text-violet-600 dark:text-violet-400 border border-violet-200 dark:border-violet-500/30 flex items-center justify-center font-bold">
+                  <div className="w-9 h-9 rounded-xl bg-violet-100 dark:bg-violet-600/20 text-violet-600 dark:text-violet-400 border border-violet-200 dark:border-violet-500/30 flex items-center justify-center font-bold group-hover:scale-110 transition-transform">
                     E
                   </div>
                   <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-emerald-500 border-2 border-white dark:border-slate-900 rounded-full"></span>
                 </div>
                 <div>
-                  <p className="text-sm font-bold text-slate-800 dark:text-slate-200">Ellan Worker</p>
-                  <p className="text-[11px] text-slate-500 dark:text-slate-400">Administrator</p>
+                  <p className="text-sm font-bold text-slate-800 dark:text-slate-200 group-hover:text-violet-700 dark:group-hover:text-violet-300 transition">
+                    Ellan Worker
+                  </p>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 group-hover:text-violet-600 dark:group-hover:text-violet-400 transition flex items-center gap-1">
+                    <i className="fa-solid fa-shield-halved text-[9px]"></i>
+                    Administrator
+                  </p>
                 </div>
               </div>
-              <button
-                onClick={toggleTheme}
-                className="w-9 h-9 rounded-xl bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 flex items-center justify-center hover:bg-slate-300 dark:hover:bg-slate-700 transition"
-                title={isDark ? "Mode Terang" : "Mode Gelap"}
-              >
-                <i className={`fa-solid ${isDark ? "fa-sun" : "fa-moon"} text-sm`}></i>
-              </button>
-            </div>
+              <i className="fa-solid fa-chevron-right text-slate-400 group-hover:text-violet-600 dark:group-hover:text-violet-400 group-hover:translate-x-0.5 transition-all text-xs"></i>
+            </Link>
+
+            {/* Toggle Theme — pindah ke baris sendiri */}
+            <button
+              onClick={toggleTheme}
+              className="w-full flex items-center justify-center space-x-2 p-3 rounded-2xl bg-slate-100 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800/80 hover:bg-slate-200 dark:hover:bg-slate-800 transition"
+              title={isDark ? "Mode Terang" : "Mode Gelap"}
+            >
+              <i className={`fa-solid ${isDark ? "fa-sun" : "fa-moon"} text-sm text-slate-700 dark:text-slate-300`}></i>
+              <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                {isDark ? "Mode Terang" : "Mode Gelap"}
+              </span>
+            </button>
           </div>
         </aside>
 
@@ -880,6 +971,9 @@ body::-webkit-scrollbar {
             sidebarOpen ? "md:ml-72" : "md:ml-0"
           }`}
         >
+          {/* ============================================================ */}
+          {/* HEADER — STICKY (NGGAK IKUT SCROLL)                          */}
+          {/* ============================================================ */}
           <header className="h-16 border-b border-slate-200 dark:border-slate-800/80 bg-white/80 dark:bg-slate-950/60 backdrop-blur-md px-4 md:px-8 flex items-center justify-between z-20 shrink-0">
             <div className="flex items-center space-x-3">
               <button
@@ -922,74 +1016,19 @@ body::-webkit-scrollbar {
             </div>
           </header>
 
-          <div className="flex-1 overflow-y-auto custom-scrollbar p-4 md:p-8 space-y-6">
-            {/* Settings Panel */}
-            {showSettings && (
-              <div className="bg-white dark:bg-slate-900/50 backdrop-blur-xl border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-sm">
-                <div className="mb-4">
-                  <h2 className="text-base font-semibold text-slate-900 dark:text-white flex items-center gap-2">
-                    <i className="fa-solid fa-bell text-violet-600 dark:text-violet-400"></i>
-                    <span>Notification Settings</span>
-                  </h2>
-                  <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-                    Atur pengaturan reminder My Task Manager.
-                  </p>
-                </div>
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between gap-4">
-                    <div>
-                      <p className="text-sm font-medium text-slate-800 dark:text-slate-200">
-                        Push Notification
-                      </p>
-                      <p className="text-xs text-slate-500">
-                        Terima reminder meskipun aplikasi tidak sedang dibuka.
-                      </p>
-                    </div>
-                    <span
-                      className={`rounded-full px-3 py-1 text-xs font-semibold ${
-                        notificationPermission === "granted"
-                          ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400"
-                          : "bg-slate-200 text-slate-600 dark:bg-slate-800 dark:text-slate-400"
-                      }`}
-                    >
-                      {notificationPermission === "granted" ? "ON" : "OFF"}
-                    </span>
-                  </div>
-                  <div>
-                    <label className="mb-1.5 block text-sm font-medium text-slate-700 dark:text-slate-300">
-                      Default Daily Reminder
-                    </label>
-                    <input
-                      type="time"
-                      value={defaultReminder}
-                      onChange={(e) => updateDefaultReminder(e.target.value)}
-                      className="w-full rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 px-4 py-3 text-sm text-slate-900 dark:text-slate-200 outline-none transition focus:border-violet-500"
-                    />
-                    <p className="mt-1 text-xs text-slate-500">
-                      Waktu ini akan menjadi default saat membuat task baru.
-                    </p>
-                  </div>
-                  {notificationPermission !== "granted" && (
-                    <button
-                      onClick={enableNotifications}
-                      className="w-full rounded-xl bg-slate-200 dark:bg-slate-800 px-4 py-3 text-sm font-semibold text-slate-800 dark:text-slate-200 hover:bg-slate-300 dark:hover:bg-slate-700 transition flex items-center justify-center gap-2"
-                    >
-                      <i className="fa-solid fa-bell"></i>
-                      <span>Enable Push Notification</span>
-                    </button>
-                  )}
-                </div>
-              </div>
-            )}
+          {/* ============================================================ */}
+          {/* METRICS + TOOLBAR — STICKY (NGGAK IKUT SCROLL)               */}
+          {/* ============================================================ */}
+          <div className="shrink-0 px-4 md:px-8 py-4 bg-slate-100 dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800/60 space-y-4">
 
             {/* Metrics Summary Cards */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
               <div className="bg-white dark:bg-slate-900/50 backdrop-blur-xl border border-slate-200 dark:border-slate-800 rounded-2xl p-4 md:p-5 relative overflow-hidden group hover:border-violet-500/50 transition-all duration-300">
                 <div className="absolute -right-4 -bottom-4 w-20 h-20 bg-violet-500/10 dark:bg-violet-600/10 rounded-full blur-xl transition"></div>
                 <div className="flex justify-between items-start">
                   <div>
                     <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                      Total Order
+                      Total Task
                     </p>
                     <h3 className="text-2xl md:text-3xl font-black text-slate-900 dark:text-white mt-1">
                       {tasks.length + jokiOrders.length}
@@ -1032,20 +1071,20 @@ body::-webkit-scrollbar {
                 <div className="flex justify-between items-start">
                   <div>
                     <p className="text-xs font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-wider flex items-center gap-1.5">
-                      <i className="fa-solid fa-calendar-days text-xs"></i>
-                      <span>Terjadwal</span>
+                      <i className="fa-solid fa-clock text-xs"></i>
+                      <span>Belum Dijadwalkan</span>
                     </p>
                     <h3 className="text-2xl md:text-3xl font-black text-indigo-600 dark:text-indigo-300 mt-1">
-                      {jokiScheduled}
+                      {jokiNotScheduled}
                     </h3>
                   </div>
                   <div className="w-10 h-10 rounded-xl bg-indigo-100 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 flex items-center justify-center border border-indigo-200 dark:border-indigo-500/20">
-                    <i className="fa-solid fa-calendar-day text-base"></i>
+                    <i className="fa-solid fa-clock text-base"></i>
                   </div>
                 </div>
                 <div className="mt-3 flex items-center text-[11px] font-semibold text-indigo-600 dark:text-indigo-400">
-                  <i className="fa-solid fa-list-ol mr-1.5"></i>
-                  <span>Antrean Berikutnya</span>
+                  <i className="fa-solid fa-hourglass-half mr-1.5"></i>
+                  <span>Nunggu Jadwal</span>
                 </div>
               </div>
 
@@ -1070,52 +1109,76 @@ body::-webkit-scrollbar {
                   <span>Sudah Tuntas</span>
                 </div>
               </div>
+
+                            <div className="bg-white dark:bg-slate-900/50 backdrop-blur-xl border border-slate-200 dark:border-slate-800 rounded-2xl p-4 md:p-5 relative overflow-hidden group hover:border-green-500/50 transition-all duration-300">
+                <div className="absolute -right-4 -bottom-4 w-20 h-20 bg-green-500/10 dark:bg-green-600/10 rounded-full blur-xl transition"></div>
+                <div className="flex justify-between items-start">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs font-bold text-green-600 dark:text-green-400 uppercase tracking-wider flex items-center gap-1.5">
+                      <i className="fa-solid fa-money-bill-wave text-xs"></i>
+                      <span>Hari Ini</span>
+                    </p>
+                    <h3 className="text-lg md:text-xl font-black text-green-600 dark:text-green-400 mt-1 truncate">
+                      {income ? formatRupiah(income.hariIni) : "—"}
+                    </h3>
+                  </div>
+                  <div className="w-10 h-10 rounded-xl bg-green-100 dark:bg-green-500/10 text-green-600 dark:text-green-400 flex items-center justify-center border border-green-200 dark:border-green-500/20 shrink-0">
+                    <i className="fa-solid fa-coins text-base"></i>
+                  </div>
+                </div>
+                <div className="mt-3 flex items-center text-[11px] font-semibold text-green-600 dark:text-green-400">
+                  <i className="fa-solid fa-arrow-trend-up mr-1.5"></i>
+                  <span className="truncate">
+                    Minggu: {income ? formatRupiah(income.mingguIni) : "—"}
+                  </span>
+                </div>
+              </div>
             </div>
 
             {/* Controls Toolbar */}
             <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-white dark:bg-slate-900/60 p-4 rounded-2xl border border-slate-200 dark:border-slate-800/80 shadow-sm">
               <div className="flex items-center space-x-1.5 overflow-x-auto pb-2 lg:pb-0 custom-scrollbar">
-                <button
-                  onClick={() => setFilter("All")}
-                  className={`px-4 py-2 rounded-xl text-xs font-bold transition ${
-                    filter === "All"
-                      ? "bg-violet-600 text-white shadow-md shadow-violet-600/30"
-                      : "bg-slate-100 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700"
-                  }`}
-                >
-                  Semua ({tasks.length})
-                </button>
-                <button
-                  onClick={() => setFilter("Today")}
-                  className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 ${
-                    filter === "Today"
-                      ? "bg-violet-600 text-white shadow-md shadow-violet-600/30"
-                      : "bg-slate-100 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700"
-                  }`}
-                >
-                  <span className="w-2 h-2 rounded-full bg-amber-400"></span> Hari Ini
-                </button>
-                <button
-                  onClick={() => setFilter("Upcoming")}
-                  className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 ${
-                    filter === "Upcoming"
-                      ? "bg-violet-600 text-white shadow-md shadow-violet-600/30"
-                      : "bg-slate-100 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700"
-                  }`}
-                >
-                  <span className="w-2 h-2 rounded-full bg-indigo-400"></span> Terjadwal
-                </button>
-                <button
-                  onClick={() => setFilter("Overdue")}
-                  className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 ${
-                    filter === "Overdue"
-                      ? "bg-violet-600 text-white shadow-md shadow-violet-600/30"
-                      : "bg-slate-100 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700"
-                  }`}
-                >
-                  <span className="w-2 h-2 rounded-full bg-rose-400"></span> Overdue
-                </button>
-              </div>
+  <button
+    onClick={() => setFilter("All")}
+    className={`px-4 py-2 rounded-xl text-xs font-bold transition ${
+      filter === "All"
+        ? "bg-violet-600 text-white shadow-md shadow-violet-600/30"
+        : "bg-slate-100 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700"
+    }`}
+  >
+    Semua ({tasks.length + jokiOrders.length})
+  </button>
+  <button
+    onClick={() => setFilter("Today")}
+    className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 ${
+      filter === "Today"
+        ? "bg-violet-600 text-white shadow-md shadow-violet-600/30"
+        : "bg-slate-100 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700"
+    }`}
+  >
+    <span className="w-2 h-2 rounded-full bg-amber-400"></span> Hari Ini
+  </button>
+  <button
+    onClick={() => setFilter("NotScheduled")}
+    className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 ${
+      filter === "NotScheduled"
+        ? "bg-violet-600 text-white shadow-md shadow-violet-600/30"
+        : "bg-slate-100 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700"
+    }`}
+  >
+    <span className="w-2 h-2 rounded-full bg-indigo-400"></span> Belum Dijadwalkan
+  </button>
+  <button
+    onClick={() => setFilter("Overdue")}
+    className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 ${
+      filter === "Overdue"
+        ? "bg-violet-600 text-white shadow-md shadow-violet-600/30"
+        : "bg-slate-100 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700"
+    }`}
+  >
+    <span className="w-2 h-2 rounded-full bg-rose-400"></span> Overdue
+  </button>
+</div>
 
               <div className="flex items-center space-x-3">
                 <div className="relative flex-1 md:w-64">
@@ -1158,8 +1221,78 @@ body::-webkit-scrollbar {
                 </div>
               </div>
             </div>
+          </div>
 
-            {/* Form Modal */}
+          {/* ============================================================ */}
+          {/* SCROLLABLE SECTION: LIST + KANBAN                            */}
+          {/* ============================================================ */}
+                    <div className="flex-1 overflow-y-auto custom-scrollbar">
+            {/* ============================================================ */}
+            {/* SETTINGS PANEL                                               */}
+            {/* ============================================================ */}
+            {showSettings && (
+              <div className="px-4 md:px-8 pt-6">
+                <div className="bg-white dark:bg-slate-900/50 backdrop-blur-xl border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-sm">
+                  <div className="mb-4">
+                    <h2 className="text-base font-semibold text-slate-900 dark:text-white flex items-center gap-2">
+                      <i className="fa-solid fa-bell text-violet-600 dark:text-violet-400"></i>
+                      <span>Notification Settings</span>
+                    </h2>
+                    <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                      Atur pengaturan reminder My Task Manager.
+                    </p>
+                  </div>
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between gap-4">
+                      <div>
+                        <p className="text-sm font-medium text-slate-800 dark:text-slate-200">
+                          Push Notification
+                        </p>
+                        <p className="text-xs text-slate-500">
+                          Terima reminder meskipun aplikasi tidak sedang dibuka.
+                        </p>
+                      </div>
+                      <span
+                        className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                          notificationPermission === "granted"
+                            ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400"
+                            : "bg-slate-200 text-slate-600 dark:bg-slate-800 dark:text-slate-400"
+                        }`}
+                      >
+                        {notificationPermission === "granted" ? "ON" : "OFF"}
+                      </span>
+                    </div>
+                    <div>
+                      <label className="mb-1.5 block text-sm font-medium text-slate-700 dark:text-slate-300">
+                        Default Daily Reminder
+                      </label>
+                      <input
+                        type="time"
+                        value={defaultReminder}
+                        onChange={(e) => updateDefaultReminder(e.target.value)}
+                        className="w-full rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 px-4 py-3 text-sm text-slate-900 dark:text-slate-200 outline-none transition focus:border-violet-500"
+                      />
+                      <p className="mt-1 text-xs text-slate-500">
+                        Waktu ini akan menjadi default saat membuat task baru.
+                      </p>
+                    </div>
+                    {notificationPermission !== "granted" && (
+                      <button
+                        onClick={enableNotifications}
+                        className="w-full rounded-xl bg-slate-200 dark:bg-slate-800 px-4 py-3 text-sm font-semibold text-slate-800 dark:text-slate-200 hover:bg-slate-300 dark:hover:bg-slate-700 transition flex items-center justify-center gap-2"
+                      >
+                        <i className="fa-solid fa-bell"></i>
+                        <span>Enable Push Notification</span>
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* ============================================================ */}
+            {/* FORM MODAL                                                   */}
+            {/* ============================================================ */}
             {showForm && (
               <div className="fixed inset-0 bg-slate-950/40 dark:bg-slate-950/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
                 <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 max-w-lg w-full p-6 md:p-8 shadow-2xl relative max-h-[90vh] overflow-y-auto custom-scrollbar">
@@ -1291,8 +1424,10 @@ body::-webkit-scrollbar {
               </div>
             )}
 
-            {/* Header Section Banner */}
-            <div className="flex items-center justify-between pt-1">
+            {/* ============================================================ */}
+            {/* HEADER SECTION BANNER                                        */}
+            {/* ============================================================ */}
+            <div className="flex items-center justify-between px-4 md:px-8 pt-6 pb-2">
               <div className="flex items-center space-x-2.5">
                 <div className="w-7 h-7 rounded-lg bg-violet-100 dark:bg-violet-600/20 text-violet-600 dark:text-violet-400 border border-violet-200 dark:border-violet-500/30 flex items-center justify-center text-xs">
                   <i className="fa-solid fa-gamepad"></i>
@@ -1301,204 +1436,237 @@ body::-webkit-scrollbar {
                   Jadwal Task & Jokian Aktif
                 </h3>
               </div>
-              <p className="text-xs text-slate-500 dark:text-slate-400">
-                Menampilkan {filteredTasks.length} task • {jokiOrders.length} jokian
+                            <p className="text-xs text-slate-500 dark:text-slate-400">
+                Menampilkan {filteredTasks.length} task • {filteredJokiOrders.length} jokian
               </p>
             </div>
 
-            {/* LIST VIEW CONTAINER */}
+            {/* ============================================================ */}
+            {/* LIST VIEW CONTAINER                                          */}
+            {/* ============================================================ */}
             {currentView === "list" && (
-              <div className="space-y-3.5">
-                {/* MY TASKS SECTION */}
-                <div className="mb-4">
-                  <h3 className="text-sm font-bold text-slate-700 dark:text-slate-300 mb-3 flex items-center gap-2">
-                    <i className="fa-solid fa-clipboard-list text-violet-600 dark:text-violet-400"></i>
-                    <span>My Tasks</span>
-                  </h3>
-                  {filteredTasks.length === 0 ? (
-                    <div className="bg-white dark:bg-slate-900/50 backdrop-blur-xl border border-slate-200 dark:border-slate-800 rounded-3xl p-8 text-center">
-                      <div className="w-14 h-14 rounded-2xl bg-violet-100 dark:bg-violet-600/10 text-violet-600 dark:text-violet-400 flex items-center justify-center mx-auto mb-3 border border-violet-200 dark:border-violet-500/20">
-                        <i className="fa-regular fa-clipboard text-2xl"></i>
-                      </div>
-                      <h4 className="font-bold text-slate-700 dark:text-slate-200 text-sm">
-                        Tidak ada task ditemukan
-                      </h4>
-                      <p className="text-xs text-slate-500 mt-1">
-                        Coba ubah filter atau tambah task baru.
-                      </p>
+              <>
+                {/* ===================================================== */}
+                {/* MY TASKS SECTION — Section header sticky sendiri      */}
+                {/* ===================================================== */}
+                                {filter !== "NotScheduled" && (
+                  <section className="px-4 md:px-8">
+                    <div className="sticky top-0 z-20 -mx-4 md:-mx-8 px-4 md:px-8 py-3 bg-slate-100 dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800/60">
+                      <h3 className="text-sm font-bold text-slate-700 dark:text-slate-300 flex items-center gap-2">
+                        <i className="fa-solid fa-clipboard-list text-violet-600 dark:text-violet-400"></i>
+                        <span>My Tasks</span>
+                      </h3>
                     </div>
-                  ) : (
-                    filteredTasks.map((task) => {
-                      const deadlineStatus = getDeadlineStatus(task.deadline);
 
-                      return (
-                        <div
-                          key={task.id}
-                          className={`relative bg-white dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 md:p-5 mb-3 hover:border-slate-300 dark:hover:border-slate-700 transition-all duration-300 ${
-                            task.completed ? "opacity-60" : ""
-                          }`}
-                        >
-                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                            <div className="flex items-start gap-4 min-w-0 flex-1">
-                              <button
-                                onClick={() => toggleTask(task.id)}
-                                className={`mt-1 w-6 h-6 rounded-lg border-2 flex items-center justify-center shrink-0 transition-all ${
-                                  task.completed
-                                    ? "bg-emerald-500 border-emerald-500 text-white"
-                                    : "border-slate-300 dark:border-slate-600 bg-transparent hover:border-violet-500 text-transparent"
-                                }`}
-                              >
-                                <i className="fa-solid fa-check text-xs"></i>
-                              </button>
+                    <div className="pt-4 pb-6 space-y-3.5">
+                      {filteredTasks.length === 0 ? (
+                        <div className="bg-white dark:bg-slate-900/50 backdrop-blur-xl border border-slate-200 dark:border-slate-800 rounded-3xl p-8 text-center">
+                          <div className="w-14 h-14 rounded-2xl bg-violet-100 dark:bg-violet-600/10 text-violet-600 dark:text-violet-400 flex items-center justify-center mx-auto mb-3 border border-violet-200 dark:border-violet-500/20">
+                            <i className="fa-regular fa-clipboard text-2xl"></i>
+                          </div>
+                          <h4 className="font-bold text-slate-700 dark:text-slate-200 text-sm">
+                            Tidak ada task ditemukan
+                          </h4>
+                          <p className="text-xs text-slate-500 mt-1">
+                            Coba ubah filter atau tambah task baru.
+                          </p>
+                        </div>
+                      ) : (
+                        filteredTasks.map((task) => {
+                          const deadlineStatus = getDeadlineStatus(task.deadline);
 
-                              <div className="min-w-0 flex-1">
-                                <div className="flex items-center gap-2.5">
-                                  <h4
-                                    className={`font-extrabold text-base md:text-lg text-slate-900 dark:text-white truncate ${
-                                      task.completed ? "line-through text-slate-400 dark:text-slate-400" : ""
+                          return (
+                            <div
+                              key={task.id}
+                              className={`relative bg-white dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 md:p-5 hover:border-slate-300 dark:hover:border-slate-700 transition-all duration-300 ${
+                                task.completed ? "opacity-60" : ""
+                              }`}
+                            >
+                              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                                <div className="flex items-start gap-4 min-w-0 flex-1">
+                                  <button
+                                    onClick={() => toggleTask(task.id)}
+                                    className={`mt-1 w-6 h-6 rounded-lg border-2 flex items-center justify-center shrink-0 transition-all ${
+                                      task.completed
+                                        ? "bg-emerald-500 border-emerald-500 text-white"
+                                        : "border-slate-300 dark:border-slate-600 bg-transparent hover:border-violet-500 text-transparent"
                                     }`}
                                   >
-                                    {task.title}
-                                  </h4>
+                                    <i className="fa-solid fa-check text-xs"></i>
+                                  </button>
+
+                                  <div className="min-w-0 flex-1">
+                                    <div className="flex items-center gap-2.5">
+                                      <h4
+                                        className={`font-extrabold text-base md:text-lg text-slate-900 dark:text-white truncate ${
+                                          task.completed ? "line-through text-slate-400 dark:text-slate-400" : ""
+                                        }`}
+                                      >
+                                        {task.title}
+                                      </h4>
+                                    </div>
+
+                                    <div className="flex flex-wrap items-center gap-2 mt-3">
+                                      <span className="inline-flex items-center gap-1.5 bg-violet-100 dark:bg-violet-500/10 text-violet-700 dark:text-violet-300 px-3 py-1.5 rounded-xl text-xs font-semibold border border-violet-200 dark:border-violet-500/20">
+                                        <i className="fa-regular fa-user text-[11px]"></i>
+                                        <span>Ellan</span>
+                                      </span>
+
+                                      {task.reminder && (
+                                        <span className="inline-flex items-center gap-1.5 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 px-3 py-1.5 rounded-xl text-xs font-semibold border border-slate-200 dark:border-slate-700/70">
+                                          <i className="fa-regular fa-clock text-[11px] text-amber-500 dark:text-amber-400"></i>
+                                          <span>{task.reminder.slice(0, 5)}</span>
+                                        </span>
+                                      )}
+
+                                      <span className="inline-flex items-center gap-1.5 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 px-3 py-1.5 rounded-xl text-xs font-semibold border border-slate-200 dark:border-slate-700/70">
+                                        <i className="fa-regular fa-calendar text-[11px] text-indigo-500 dark:text-indigo-400"></i>
+                                        <span>{formatDate(task.deadline)}</span>
+                                      </span>
+
+                                      {(task.notes || task.category) && (
+                                        <span className="inline-flex items-center gap-1.5 bg-violet-100 dark:bg-violet-500/10 text-violet-700 dark:text-violet-300 px-3 py-1.5 rounded-xl text-xs font-semibold border border-violet-200 dark:border-violet-500/20">
+                                          <i className="fa-regular fa-note-sticky text-[11px] text-violet-500 dark:text-violet-400"></i>
+                                          <span className="truncate max-w-45">
+                                            {task.notes || task.category}
+                                          </span>
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
                                 </div>
 
-                                <div className="flex flex-wrap items-center gap-2 mt-3">
-                                  <span className="inline-flex items-center gap-1.5 bg-violet-100 dark:bg-violet-500/10 text-violet-700 dark:text-violet-300 px-3 py-1.5 rounded-xl text-xs font-semibold border border-violet-200 dark:border-violet-500/20">
-                                    <i className="fa-regular fa-user text-[11px]"></i>
-                                    <span>Ellan</span>
-                                  </span>
-
-                                  {task.reminder && (
-                                    <span className="inline-flex items-center gap-1.5 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 px-3 py-1.5 rounded-xl text-xs font-semibold border border-slate-200 dark:border-slate-700/70">
-                                      <i className="fa-regular fa-clock text-[11px] text-amber-500 dark:text-amber-400"></i>
-                                      <span>{task.reminder.slice(0, 5)}</span>
+                                <div className="flex items-center gap-3 shrink-0">
+                                  {!task.completed ? (
+                                    <span
+                                      className={`hidden md:inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold border ${deadlineStatus.className}`}
+                                    >
+                                      <i className={`fa-solid ${deadlineStatus.icon} text-[11px]`}></i>
+                                      {deadlineStatus.displayText}
+                                    </span>
+                                  ) : (
+                                    <span className="hidden md:inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-500/30">
+                                      <i className="fa-solid fa-check text-[11px]"></i>
+                                      Selesai
                                     </span>
                                   )}
 
-                                  <span className="inline-flex items-center gap-1.5 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 px-3 py-1.5 rounded-xl text-xs font-semibold border border-slate-200 dark:border-slate-700/70">
-                                    <i className="fa-regular fa-calendar text-[11px] text-indigo-500 dark:text-indigo-400"></i>
-                                    <span>{formatDate(task.deadline)}</span>
-                                  </span>
+                                  <button
+                                    onClick={() => editTask(task)}
+                                    className="w-9 h-9 flex items-center justify-center rounded-xl text-slate-400 hover:text-violet-600 dark:hover:text-violet-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+                                    title="Edit Task"
+                                  >
+                                    <i className="fa-solid fa-pen-to-square text-base"></i>
+                                  </button>
 
-                                  {(task.notes || task.category) && (
-                                    <span className="inline-flex items-center gap-1.5 bg-violet-100 dark:bg-violet-500/10 text-violet-700 dark:text-violet-300 px-3 py-1.5 rounded-xl text-xs font-semibold border border-violet-200 dark:border-violet-500/20">
-                                      <i className="fa-regular fa-note-sticky text-[11px] text-violet-500 dark:text-violet-400"></i>
-                                      <span className="truncate max-w-45">
-                                        {task.notes || task.category}
-                                      </span>
-                                    </span>
-                                  )}
+                                  <button
+                                    onClick={() => deleteTask(task.id)}
+                                    className="w-9 h-9 flex items-center justify-center rounded-xl text-slate-400 hover:text-rose-500 dark:hover:text-rose-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+                                    title="Hapus Task"
+                                  >
+                                    <i className="fa-regular fa-trash-can text-base"></i>
+                                  </button>
                                 </div>
                               </div>
                             </div>
-
-                            <div className="flex items-center gap-3 shrink-0">
-                              {!task.completed ? (
-                                <span
-                                  className={`hidden md:inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold border ${deadlineStatus.className}`}
-                                >
-                                  <i className={`fa-solid ${deadlineStatus.icon} text-[11px]`}></i>
-                                  {deadlineStatus.displayText}
-                                </span>
-                              ) : (
-                                <span className="hidden md:inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-500/30">
-                                  <i className="fa-solid fa-check text-[11px]"></i>
-                                  Selesai
-                                </span>
-                              )}
-
-                              <button
-                                onClick={() => editTask(task)}
-                                className="w-9 h-9 flex items-center justify-center rounded-xl text-slate-400 hover:text-violet-600 dark:hover:text-violet-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
-                                title="Edit Task"
-                              >
-                                <i className="fa-solid fa-pen-to-square text-base"></i>
-                              </button>
-
-                              <button
-                                onClick={() => deleteTask(task.id)}
-                                className="w-9 h-9 flex items-center justify-center rounded-xl text-slate-400 hover:text-rose-500 dark:hover:text-rose-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
-                                title="Hapus Task"
-                              >
-                                <i className="fa-regular fa-trash-can text-base"></i>
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })
-                  )}
-                </div>
-
-                {/* JOKIAN SECTION */}
-                <div className="mt-6">
-                  <h3 className="text-sm font-bold text-slate-700 dark:text-slate-300 mb-3 flex items-center gap-2">
-                    <i className="fa-solid fa-gamepad text-violet-600 dark:text-violet-400"></i>
-                    <span>Jadwal Jokian</span>
-                  </h3>
-                  {jokiOrders.length === 0 ? (
-                    <div className="bg-white dark:bg-slate-900/50 backdrop-blur-xl border border-slate-200 dark:border-slate-800 rounded-3xl p-12 text-center">
-                      <div className="w-16 h-16 rounded-2xl bg-violet-100 dark:bg-violet-600/10 text-violet-600 dark:text-violet-400 flex items-center justify-center mx-auto mb-4 border border-violet-200 dark:border-violet-500/20">
-                        <i className="fa-solid fa-folder-open text-2xl"></i>
-                      </div>
-                      <h4 className="font-bold text-slate-700 dark:text-slate-200 text-base">
-                        Tidak ada jadwal jokian
-                      </h4>
-                      <p className="text-xs text-slate-500 mt-1">
-                        Jadwal dari Tokoku-bot akan muncul otomatis di sini.
-                      </p>
+                          );
+                        })
+                      )}
                     </div>
-                  ) : (
-                    jokiOrders.map((order) => {
-    const scheduleDate = order.schedule_date && order.schedule_time
-    ? new Date(`${order.schedule_date}T${order.schedule_time}`)
-    : null;
-  const isToday = scheduleDate ? scheduleDate.toDateString() === new Date().toDateString() : false;
-const isCompletedByBot = 
-  order.completed_by_bot === true || 
-  order.queue_status === "completed";
-  const isProcessing = processingOrders.has(order.id);  // ← TAMBAH INI
-  
+                  </section>
+                )}
 
+                {/* ===================================================== */}
+                {/* JADWAL JOKIAN SECTION — Section header sticky sendiri */}
+                {/* ===================================================== */}
+                <section className="px-4 md:px-8">
+                  <div className="sticky top-0 z-20 -mx-4 md:-mx-8 px-4 md:px-8 py-3 bg-slate-100 dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800/60">
+                    <h3 className="text-sm font-bold text-slate-700 dark:text-slate-300 flex items-center gap-2">
+                      <i className="fa-solid fa-gamepad text-violet-600 dark:text-violet-400"></i>
+                      <span>Jadwal Jokian</span>
+                    </h3>
+                  </div>
 
+                  <div className="pt-4 pb-6 space-y-3.5">
+  {/* ★ Cek: apakah ada jokian yang sesuai filter? */}
+  {filteredJokiOrders.length === 0 ? (
+    <div className="bg-white dark:bg-slate-900/50 backdrop-blur-xl border border-slate-200 dark:border-slate-800 rounded-3xl p-12 text-center">
+      <div className="w-16 h-16 rounded-2xl bg-violet-100 dark:bg-violet-600/10 text-violet-600 dark:text-violet-400 flex items-center justify-center mx-auto mb-4 border border-violet-200 dark:border-violet-500/20">
+        <i className="fa-solid fa-folder-open text-2xl"></i>
+      </div>
+      <h4 className="font-bold text-slate-700 dark:text-slate-200 text-base">
+        Tidak ada jadwal jokian ditemukan
+      </h4>
+      <p className="text-xs text-slate-500 mt-1">
+        Coba ubah filter atau tunggu order baru dari Tokoku-bot.
+      </p>
+    </div>
+  ) : (
+    filteredJokiOrders.map((order) => {
+                        const isCompletedByBot =
+                          order.completed_by_bot === true ||
+                          order.queue_status === "completed";
+                        const isProcessing = processingOrders.has(order.id);
 
-  return (
-    <div
-      key={order.id}
-      className={`bg-white dark:bg-slate-900/50 backdrop-blur-xl border rounded-2xl p-4 md:p-5 mb-3 transition-all duration-500 ease-out ${
-        isProcessing
-          ? "opacity-0 scale-95 blur-sm pointer-events-none"  // ← ANIMASI SAAT PROCESSING
-          : isCompletedByBot
-          ? "border-emerald-300 dark:border-emerald-500/40 opacity-60"
-          : isToday
-          ? "border-amber-300 dark:border-amber-500/30 shadow-[0_0_15px_rgba(245,158,11,0.15)]"
-          : "border-slate-200 dark:border-slate-800 hover:border-violet-300 dark:hover:border-violet-500/40"
-      }`}
-    >
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="flex items-start space-x-3.5 flex-1 min-w-0">
+                        const endDate = order.estimated_end_at
+                          ? new Date(order.estimated_end_at)
+                          : null;
 
-          {/* Tombol Checklist / Konfirmasi */}
-          <button
-            onClick={() => handleCompleteOrder(order)}  // ← GANTI HANDLER
-            disabled={isProcessing}
-            className={`mt-1 w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all shrink-0 ${
-              isProcessing
-                ? "border-emerald-500 bg-emerald-500 text-white cursor-wait"  // ← SPINNER STATE
-                : isCompletedByBot
-                ? "bg-emerald-500 border-emerald-500 text-white hover:bg-emerald-600"
-                : "border-slate-300 dark:border-slate-600 hover:border-violet-500 text-transparent"
-            }`}
-            title={isCompletedByBot ? "Konfirmasi Selesai" : "Selesaikan"}
-          >
-            {isProcessing ? (
-              <i className="fa-solid fa-spinner fa-spin text-xs"></i>  // ← SPINNER
-            ) : (
-              <i className="fa-solid fa-check text-xs"></i>
-            )}
-          </button>
+                        const todayMidnight = new Date();
+                        todayMidnight.setHours(0, 0, 0, 0);
 
-          <div className="space-y-2 flex-1 min-w-0">
+                        let daysLeft = null;
+                        let isToday = false;
+                        let isOverdue = false;
+
+                        if (endDate) {
+                          const endDateMidnight = new Date(endDate);
+                          endDateMidnight.setHours(0, 0, 0, 0);
+
+                          const diffMs = endDateMidnight.getTime() - todayMidnight.getTime();
+                          daysLeft = Math.round(diffMs / (1000 * 60 * 60 * 24));
+
+                          isToday = daysLeft === 0;
+                          isOverdue = daysLeft < 0;
+                        }
+
+                        return (
+                          <div
+                            key={order.id}
+                            className={`bg-white dark:bg-slate-900/50 backdrop-blur-xl border rounded-2xl p-4 md:p-5 transition-all duration-500 ease-out ${
+                              isProcessing
+                                ? "opacity-0 scale-95 blur-sm pointer-events-none"
+                                : isCompletedByBot
+                                ? "border-emerald-300 dark:border-emerald-500/40 opacity-60"
+                                : isToday
+                                ? "border-amber-300 dark:border-amber-500/30 shadow-[0_0_15px_rgba(245,158,11,0.15)]"
+                                : "border-slate-200 dark:border-slate-800 hover:border-violet-300 dark:hover:border-violet-500/40"
+                            }`}
+                          >
+                            {/* ... (ISI CARD JOKIAN — SAMA PERSIS KAYAK SEBELUMNYA, JANGAN DIUBAH) ... */}
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                              <div className="flex items-start space-x-3.5 flex-1 min-w-0">
+                                <button
+                                  onClick={() => handleCompleteOrder(order)}
+                                  disabled={isProcessing}
+                                  className={`mt-1 w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all shrink-0 ${
+                                    isProcessing
+                                      ? "border-emerald-500 bg-emerald-500 text-white cursor-wait"
+                                      : isCompletedByBot
+                                      ? "bg-emerald-500 border-emerald-500 text-white hover:bg-emerald-600"
+                                      : "border-slate-300 dark:border-slate-600 hover:border-violet-500 text-transparent"
+                                  }`}
+                                  title={isCompletedByBot ? "Konfirmasi Selesai" : "Selesaikan"}
+                                >
+                                  {isProcessing ? (
+                                    <i className="fa-solid fa-spinner fa-spin text-xs"></i>
+                                  ) : (
+                                    <i className="fa-solid fa-check text-xs"></i>
+                                  )}
+                                </button>
+
+                                {/* ... sisa konten card jokian SAMA PERSIS ... */}
+                                <div className="space-y-2 flex-1 min-w-0">
             <div className="flex items-center space-x-2">
   {editingUsername?.orderId === order.id ? (
   // === MODE EDIT ===
@@ -1699,30 +1867,43 @@ const isCompletedByBot =
         </div>
 
                         <div className="flex items-center justify-between sm:justify-end space-x-3 pt-3 sm:pt-0 border-t sm:border-t-0 border-slate-200 dark:border-slate-800/60">
-          {isCompletedByBot && order.buyer_confirmed ? (
-            // ✅ Buyer udah konfirmasi
-            <span className="bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-500/30 text-[11px] font-bold px-3 py-1.5 rounded-xl flex items-center gap-1.5">
-              <i className="fa-solid fa-circle-check text-xs"></i> Buyer Konfirmasi
-            </span>
-          ) : isCompletedByBot ? (
-            // ⏳ Jokian selesai, nunggu buyer konfirmasi
-            <span className="bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-500/30 text-[11px] font-bold px-3 py-1.5 rounded-xl flex items-center gap-1.5">
-              <i className="fa-solid fa-hourglass-half text-xs"></i> Menunggu Buyer
-            </span>
-          ) : isToday ? (
-            <span className="bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-500/30 text-[11px] font-bold px-3 py-1.5 rounded-xl flex items-center gap-1.5">
-              <i className="fa-solid fa-fire text-xs text-amber-500 dark:text-amber-400"></i> Hari Ini
-            </span>
-          ) : order.schedule_date && order.schedule_time ? (
-            <span className="bg-indigo-100 dark:bg-indigo-500/20 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-500/30 text-[11px] font-bold px-3 py-1.5 rounded-xl flex items-center gap-1.5">
-              <i className="fa-solid fa-calendar text-xs"></i> Terjadwal
-            </span>
-          ) : (
-            <span className="bg-slate-100 dark:bg-slate-800/80 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700/50 text-[11px] font-bold px-3 py-1.5 rounded-xl flex items-center gap-1.5">
-              <i className="fa-solid fa-clock text-xs"></i> Belum dijadwalkan
-            </span>
-          )}
-        </div>
+  {isCompletedByBot && order.buyer_confirmed ? (
+    // ✅ Buyer udah konfirmasi
+    <span className="bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-500/30 text-[11px] font-bold px-3 py-1.5 rounded-xl flex items-center gap-1.5">
+      <i className="fa-solid fa-circle-check text-xs"></i> Buyer Konfirmasi
+    </span>
+  ) : isCompletedByBot ? (
+    // ⏳ Jokian selesai, nunggu buyer konfirmasi
+    <span className="bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-500/30 text-[11px] font-bold px-3 py-1.5 rounded-xl flex items-center gap-1.5">
+      <i className="fa-solid fa-hourglass-half text-xs"></i> Menunggu Buyer
+    </span>
+  ) : isOverdue ? (
+    // 🔴 Jokian udah lewat jadwal selesai
+    <span className="bg-rose-100 dark:bg-rose-500/20 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-500/30 text-[11px] font-bold px-3 py-1.5 rounded-xl flex items-center gap-1.5">
+      <i className="fa-solid fa-triangle-exclamation text-xs"></i> Overdue
+    </span>
+  ) : isToday ? (
+    // 🔥 Selesai hari ini
+    <span className="bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-500/30 text-[11px] font-bold px-3 py-1.5 rounded-xl flex items-center gap-1.5">
+      <i className="fa-solid fa-fire text-xs text-amber-500 dark:text-amber-400"></i> Hari Ini
+    </span>
+  ) : daysLeft === 1 ? (
+    // 🌤️ Besok
+    <span className="bg-yellow-100 dark:bg-yellow-500/20 text-yellow-700 dark:text-yellow-300 border border-yellow-200 dark:border-yellow-500/30 text-[11px] font-bold px-3 py-1.5 rounded-xl flex items-center gap-1.5">
+      <i className="fa-solid fa-calendar-day text-xs"></i> Besok
+    </span>
+  ) : daysLeft !== null && daysLeft > 1 ? (
+    // 📅 X hari lagi
+    <span className="bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-500/30 text-[11px] font-bold px-3 py-1.5 rounded-xl flex items-center gap-1.5">
+      <i className="fa-solid fa-calendar-check text-xs"></i> {daysLeft} hari lagi
+    </span>
+  ) : (
+    // ⚪ Belum ada estimated_end_at
+    <span className="bg-slate-100 dark:bg-slate-800/80 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700/50 text-[11px] font-bold px-3 py-1.5 rounded-xl flex items-center gap-1.5">
+      <i className="fa-solid fa-clock text-xs"></i> Belum dijadwalkan
+    </span>
+  )}
+</div>
       </div>
       {/* COUNTDOWN + JAM SELESAI */}
 {order.estimated_end_at && (
@@ -1777,10 +1958,13 @@ const isCompletedByBot =
 })
                   )}
                 </div>
-              </div>
+                </section>
+              </>
             )}
 
-            {/* KANBAN VIEW CONTAINER */}
+            {/* ============================================================ */}
+            {/* KANBAN VIEW CONTAINER                                        */}
+            {/* ============================================================ */}
             {currentView === "kanban" && (
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div className="bg-white dark:bg-slate-900/40 rounded-2xl p-4 border border-slate-200 dark:border-slate-800/80 space-y-3 flex flex-col">
@@ -1797,13 +1981,15 @@ const isCompletedByBot =
                   </div>
                   <div className="space-y-3 flex-1 min-h-50">
                     {jokiOrders
-                      .filter(
-  (o) =>
-    o.schedule_date &&
-    o.schedule_time &&
-    new Date(`${o.schedule_date}T${o.schedule_time}`).toDateString() ===
-    new Date().toDateString()
-)
+  .filter((o) => {
+    if (o.completed_by_bot || o.queue_status === "completed") return false;
+    if (!o.estimated_end_at) return false;
+    const endDate = new Date(o.estimated_end_at);
+    endDate.setHours(0, 0, 0, 0);
+    const todayMidnight = new Date();
+    todayMidnight.setHours(0, 0, 0, 0);
+    return endDate.getTime() === todayMidnight.getTime();
+  })
                       .map((order) => (
                         <div
                           key={order.id}
@@ -1834,26 +2020,24 @@ const isCompletedByBot =
                   </div>
                 </div>
 
-                <div className="bg-white dark:bg-slate-900/40 rounded-2xl p-4 border border-slate-200 dark:border-slate-800/80 space-y-3 flex flex-col">
+                                                <div className="bg-white dark:bg-slate-900/40 rounded-2xl p-4 border border-slate-200 dark:border-slate-800/80 space-y-3 flex flex-col">
                   <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800">
                     <div className="flex items-center space-x-2">
                       <span className="w-3 h-3 rounded-full bg-indigo-500"></span>
                       <h4 className="font-extrabold text-sm text-indigo-600 dark:text-indigo-400 flex items-center gap-1.5">
-                        <i className="fa-solid fa-calendar-days text-xs"></i> Terjadwal
+                        <i className="fa-solid fa-clock text-xs"></i> Belum Dijadwalkan
                       </h4>
                     </div>
                     <span className="text-xs bg-indigo-100 dark:bg-indigo-500/20 text-indigo-700 dark:text-indigo-300 px-2.5 py-0.5 rounded-full font-bold">
-                      {jokiScheduled}
+                      {jokiNotScheduled}
                     </span>
                   </div>
-                                    <div className="space-y-3 flex-1 min-h-50">
+                  <div className="space-y-3 flex-1 min-h-50">
                     {jokiOrders
-                      .filter(
-                        (o) =>
-                          !o.schedule_date ||
-                          !o.schedule_time ||
-                          new Date(`${o.schedule_date}T${o.schedule_time}`).toDateString() !==
-                          new Date().toDateString()
+                      .filter((o) => 
+                        !o.estimated_end_at &&
+                        o.completed_by_bot !== true &&
+                        o.queue_status !== "completed"
                       )
                       .map((order) => (
                         <div
@@ -1875,10 +2059,10 @@ const isCompletedByBot =
                               <i className="fa-regular fa-user mr-1 text-[11px]"></i>
                               {order.joki_name || "Ellan"}
                             </span>
-                            <span className="font-mono text-amber-600 dark:text-amber-400">
-  <i className="fa-regular fa-clock mr-1"></i>
-  {order.schedule_time ? order.schedule_time.slice(0, 5) : "-"}
-</span>
+                            <span className="font-mono text-slate-500 dark:text-slate-400">
+                              <i className="fa-solid fa-hourglass-half mr-1"></i>
+                              Belum dijadwalkan
+                            </span>
                           </div>
                         </div>
                       ))}

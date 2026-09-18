@@ -182,9 +182,9 @@ body::-webkit-scrollbar {
                   <i className="fa-solid fa-list-check text-white text-lg"></i>
                 </div>
                 <div>
-                  <h1 className="text-xl md:text-2xl font-extrabold tracking-tight">
+                  <h2 className="text-base md:text-xl font-extrabold text-slate-900 dark:text-white tracking-tight flex items-center gap-2">
                     Jokian Queue
-                  </h1>
+                  </h2>
                   <p className="text-xs text-slate-400 flex items-center gap-2 mt-0.5">
                     <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
                     Status real-time • Update otomatis
