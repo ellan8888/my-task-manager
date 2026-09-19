@@ -149,6 +149,7 @@ export default function StockPage() {
           roblox_cookie: cookie,
           kategori: finalKategori,
           added_by: addedBy,
+          status: "queued_for_sale",
         }),
       });
 

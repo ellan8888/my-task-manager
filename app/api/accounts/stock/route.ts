@@ -58,7 +58,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { username, password, roblox_cookie, kategori, added_by } = body;
+    const { username, password, roblox_cookie, kategori, added_by, status } = body;
 
     if (!username) {
       return NextResponse.json(
@@ -103,6 +103,7 @@ export async function POST(req: NextRequest) {
         added_by: added_by || "lan4337",
         used: false,
         logged_out: false,
+        status: status || "personal",
         
       })
       .select()
