@@ -16,6 +16,7 @@ export async function GET(req: NextRequest) {
     const kategori = searchParams.get("kategori");
     const used = searchParams.get("used");
     const loggedOut = searchParams.get("logged_out");
+    const status = searchParams.get("status");
 
     let query = supabase
       .from("accounts_stock")
@@ -27,6 +28,7 @@ export async function GET(req: NextRequest) {
     if (kategori) query = query.eq("kategori", kategori);
     if (used !== null) query = query.eq("used", used === "true");
     if (loggedOut !== null) query = query.eq("logged_out", loggedOut === "true");
+    if (status) query = query.eq("status", status);
 
     const { data, error } = await query;
 
@@ -100,6 +102,7 @@ export async function POST(req: NextRequest) {
         added_by: added_by || "lan4337",
         used: false,
         logged_out: false,
+        
       })
       .select()
       .single();

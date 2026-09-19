@@ -41,6 +41,8 @@ export default function AdminSidebar({ sidebarOpen, setSidebarOpen }: Props) {
     }
   };
 
+  
+
   // ══════════════════════════════════════════════════════
   // MENU ITEMS — tambah menu baru di sini aja
   // ══════════════════════════════════════════════════════
@@ -57,6 +59,8 @@ export default function AdminSidebar({ sidebarOpen, setSidebarOpen }: Props) {
       label: "Dashboard Admin",
       active: pathname === "/admin",
     },
+
+    { href: "/admin/stok-pribadi", icon: "fa-vault", label: "Stok Pribadi", active: pathname === "/admin/stok-pribadi" },
     {
       href: "/admin/stock",
       icon: "fa-boxes-stacked",
