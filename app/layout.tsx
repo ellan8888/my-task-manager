@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
-import Script from "next/script";
 import "./globals.css";
 import LoadingScreen from "@/components/LoadingScreen";
+import { ToastProvider } from "./components/ToastProvider";
+import ThemeScript from "./ThemeScript";
 
 export const metadata: Metadata = {
   title: "My Task Manager",
@@ -25,24 +26,12 @@ export default function RootLayout({
           referrerPolicy="no-referrer"
         />
 
-        <Script id="theme-init" strategy="beforeInteractive">
-          {`
-            try {
-              var theme = localStorage.getItem("theme");
-              var prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-              var dark = theme ? theme === "dark" : prefersDark;
-              if (dark) {
-                document.documentElement.classList.add("dark");
-              } else {
-                document.documentElement.classList.remove("dark");
-              }
-            } catch (e) {}
-          `}
-        </Script>
+        {/* ★ Theme init — pake component terpisah */}
+        <ThemeScript />
       </head>
       <body>
         <LoadingScreen duration={2000} />
-        {children}
+        <ToastProvider>{children}</ToastProvider>
       </body>
     </html>
   );
