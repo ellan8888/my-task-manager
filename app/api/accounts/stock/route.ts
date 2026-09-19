@@ -21,6 +21,7 @@ export async function GET(req: NextRequest) {
     let query = supabase
       .from("accounts_stock")
       .select("*")
+      .eq("deleted", false)
       .order("created_at", { ascending: false });
 
     // ★ WAJIB: filter by username (dipake bot buat cari cookie)
@@ -142,9 +143,13 @@ export async function DELETE(req: NextRequest) {
       );
     }
 
+    // ★ SOFT DELETE — set deleted = true
     const { error } = await supabase
       .from("accounts_stock")
-      .delete()
+      .update({
+        deleted: true,
+        deleted_at: new Date().toISOString(),
+      })
       .eq("username", username);
 
     if (error) {
@@ -154,7 +159,10 @@ export async function DELETE(req: NextRequest) {
       );
     }
 
-    return NextResponse.json({ success: true, message: `${username} dihapus` });
+    return NextResponse.json({
+      success: true,
+      message: `${username} di-queue untuk dihapus (bot akan hapus di itemku)`,
+    });
   } catch (err: any) {
     return NextResponse.json(
       { success: false, message: err.message },
