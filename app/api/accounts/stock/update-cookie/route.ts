@@ -38,7 +38,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // ★ Kalau udah logged_out, jangan update cookie
+    // ★ Guard: kalau udah logged_out, jangan update cookie
     if (existing.logged_out) {
       return NextResponse.json({
         success: false,
