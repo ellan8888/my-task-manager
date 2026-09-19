@@ -1,4 +1,3 @@
-// app/api/accounts/stock/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
@@ -7,46 +6,29 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-// === POST: Input stock baru ===
-export async function POST(req: NextRequest) {
+// ============================================================
+// GET — List stock (support filter ?username=, ?kategori=, ?used=)
+// ============================================================
+export async function GET(req: NextRequest) {
   try {
-    const body = await req.json();
-    const { username, password, roblox_cookie, kategori, added_by } = body;
+    const { searchParams } = new URL(req.url);
+    const username = searchParams.get("username");
+    const kategori = searchParams.get("kategori");
+    const used = searchParams.get("used");
+    const loggedOut = searchParams.get("logged_out");
 
-    if (!username) {
-      return NextResponse.json(
-        { success: false, message: "Username wajib diisi" },
-        { status: 400 }
-      );
-    }
-
-    // Cek duplikat
-    const { data: existing } = await supabase
+    let query = supabase
       .from("accounts_stock")
-      .select("id")
-      .eq("username", username)
-      .maybeSingle();
+      .select("*")
+      .order("created_at", { ascending: false });
 
-    if (existing) {
-      return NextResponse.json(
-        { success: false, message: "Username sudah ada di stock" },
-        { status: 409 }
-      );
-    }
+    // ★ WAJIB: filter by username (dipake bot buat cari cookie)
+    if (username) query = query.eq("username", username);
+    if (kategori) query = query.eq("kategori", kategori);
+    if (used !== null) query = query.eq("used", used === "true");
+    if (loggedOut !== null) query = query.eq("logged_out", loggedOut === "true");
 
-    const { data, error } = await supabase
-      .from("accounts_stock")
-      .insert({
-        username,
-        password,
-        roblox_cookie,
-        kategori,
-        added_by,
-        used: false,
-        logged_out: false,
-      })
-      .select()
-      .single();
+    const { data, error } = await query;
 
     if (error) {
       return NextResponse.json(
@@ -64,24 +46,48 @@ export async function POST(req: NextRequest) {
   }
 }
 
-// === GET: List stock ===
-export async function GET(req: NextRequest) {
+// ============================================================
+// POST — Input stock baru
+// ============================================================
+export async function POST(req: NextRequest) {
   try {
-    const { searchParams } = new URL(req.url);
-    const kategori = searchParams.get("kategori");
-    const used = searchParams.get("used");
-    const username = searchParams.get("username");   // ★ TAMBAH INI
+    const body = await req.json();
+    const { username, password, roblox_cookie, kategori, added_by } = body;
 
-    let query = supabase
+    if (!username) {
+      return NextResponse.json(
+        { success: false, message: "Username wajib diisi" },
+        { status: 400 }
+      );
+    }
+
+    // Cek duplikat
+    const { data: existing } = await supabase
       .from("accounts_stock")
-      .select("*")
-      .order("created_at", { ascending: false });
+      .select("id, username")
+      .eq("username", username)
+      .maybeSingle();
 
-    if (kategori) query = query.eq("kategori", kategori);
-    if (used !== null) query = query.eq("used", used === "true");
-    if (username) query = query.eq("username", username);   // ★ TAMBAH INI
+    if (existing) {
+      return NextResponse.json(
+        { success: false, message: `Username ${username} sudah ada di stock` },
+        { status: 409 }
+      );
+    }
 
-    const { data, error } = await query;
+    const { data, error } = await supabase
+      .from("accounts_stock")
+      .insert({
+        username,
+        password: password || null,
+        roblox_cookie: roblox_cookie || null,
+        kategori: kategori || "akun",
+        added_by: added_by || "lan4337",
+        used: false,
+        logged_out: false,
+      })
+      .select()
+      .single();
 
     if (error) {
       return NextResponse.json(
@@ -90,7 +96,47 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    return NextResponse.json({ success: true, data });
+    return NextResponse.json({
+      success: true,
+      message: `Stock ${username} berhasil ditambahkan`,
+      data,
+    });
+  } catch (err: any) {
+    return NextResponse.json(
+      { success: false, message: err.message },
+      { status: 500 }
+    );
+  }
+}
+
+// ============================================================
+// DELETE — Hapus stock (opsional)
+// ============================================================
+export async function DELETE(req: NextRequest) {
+  try {
+    const { searchParams } = new URL(req.url);
+    const username = searchParams.get("username");
+
+    if (!username) {
+      return NextResponse.json(
+        { success: false, message: "Username wajib" },
+        { status: 400 }
+      );
+    }
+
+    const { error } = await supabase
+      .from("accounts_stock")
+      .delete()
+      .eq("username", username);
+
+    if (error) {
+      return NextResponse.json(
+        { success: false, message: error.message },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json({ success: true, message: `${username} dihapus` });
   } catch (err: any) {
     return NextResponse.json(
       { success: false, message: err.message },

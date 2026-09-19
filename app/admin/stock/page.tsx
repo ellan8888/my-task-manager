@@ -12,6 +12,7 @@ type StockAccount = {
   added_by: string | null;
   used: boolean;
   logged_out: boolean;
+  logged_out_at: string | null;
   created_at: string;
 };
 
@@ -27,11 +28,17 @@ export default function StockPage() {
   const [addedBy, setAddedBy] = useState("lan4337");
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
+  const [filter, setFilter] = useState<"all" | "ready" | "used" | "logged_out">("all");
 
   const loadAccounts = async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/accounts/stock");
+      let url = "/api/accounts/stock";
+      if (filter === "ready") url += "?used=false&logged_out=false";
+      else if (filter === "used") url += "?used=true";
+      else if (filter === "logged_out") url += "?logged_out=true";
+
+      const res = await fetch(url);
       const data = await res.json();
       if (data.success) setAccounts(data.data || []);
     } finally {
@@ -41,7 +48,8 @@ export default function StockPage() {
 
   useEffect(() => {
     loadAccounts();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filter]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -64,7 +72,7 @@ export default function StockPage() {
       const data = await res.json();
 
       if (data.success) {
-        setMessage("✅ Stock berhasil ditambahkan!");
+        setMessage(`✅ ${data.message}`);
         setUsername("");
         setPassword("");
         setCookie("");
@@ -79,19 +87,35 @@ export default function StockPage() {
     }
   };
 
+  const handleDelete = async (uname: string) => {
+    if (!confirm(`Hapus ${uname}?`)) return;
+    try {
+      const res = await fetch(`/api/accounts/stock?username=${encodeURIComponent(uname)}`, {
+        method: "DELETE",
+      });
+      const data = await res.json();
+      if (data.success) {
+        setMessage(`🗑️ ${data.message}`);
+        loadAccounts();
+      } else {
+        setMessage(`⚠️ ${data.message}`);
+      }
+    } catch {
+      setMessage("⚠️ Gagal hapus");
+    }
+  };
+
   return (
     <div className="min-h-screen bg-slate-950 text-white p-4 md:p-8">
-      <div className="max-w-4xl mx-auto">
-        <h1 className="text-2xl font-extrabold mb-6">
-          📦 Stock Akun Roblox
-        </h1>
+      <div className="max-w-5xl mx-auto">
+        <h1 className="text-2xl font-extrabold mb-6">📦 Stock Akun Roblox</h1>
 
         {/* FORM INPUT */}
         <form
           onSubmit={handleSubmit}
           className="bg-slate-900 rounded-2xl p-6 border border-slate-800 mb-6"
         >
-          <h2 className="font-bold mb-4">Tambah Stock Baru</h2>
+          <h2 className="font-bold mb-4">➕ Tambah Stock Baru</h2>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
             <div>
@@ -134,7 +158,7 @@ export default function StockPage() {
               className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm font-mono focus:outline-none focus:border-violet-500 resize-none"
             />
             <p className="text-xs text-slate-500 mt-1">
-              Paste cookie dari browser (F12 → Application → Cookies → .ROBLOSECURITY)
+              Paste dari browser: F12 → Application → Cookies → .ROBLOSECURITY
             </p>
           </div>
 
@@ -181,16 +205,24 @@ export default function StockPage() {
             {saving ? "Menyimpan..." : "➕ Tambah Stock"}
           </button>
 
-          {message && (
-            <p className="text-center text-sm mt-3">{message}</p>
-          )}
+          {message && <p className="text-center text-sm mt-3">{message}</p>}
         </form>
 
         {/* LIST STOCK */}
         <div className="bg-slate-900 rounded-2xl p-6 border border-slate-800">
-          <h2 className="font-bold mb-4">
-            Daftar Stock ({accounts.length})
-          </h2>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="font-bold">Daftar Stock ({accounts.length})</h2>
+            <select
+              value={filter}
+              onChange={(e) => setFilter(e.target.value as any)}
+              className="bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs"
+            >
+              <option value="all">Semua</option>
+              <option value="ready">Ready (belum dipakai)</option>
+              <option value="used">Used</option>
+              <option value="logged_out">Logged Out</option>
+            </select>
+          </div>
 
           {loading ? (
             <p className="text-slate-400 text-sm">Loading...</p>
@@ -226,6 +258,12 @@ export default function StockPage() {
                         LOGGED OUT
                       </span>
                     )}
+                    <button
+                      onClick={() => handleDelete(acc.username)}
+                      className="px-2 py-1 bg-red-500/20 text-red-300 text-[10px] font-bold rounded-lg hover:bg-red-500/40"
+                    >
+                      ✕
+                    </button>
                   </div>
                 </div>
               ))}
