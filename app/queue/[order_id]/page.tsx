@@ -415,39 +415,45 @@ export default function QueueDetailPage() {
               <div className="text-center"></div>
 
               {/* 🔘 TOMBOL KONFIRMASI — hanya kalau ada token & belum dikonfirmasi */}
-              {token && !buyerConfirmed && (
-                <div className="mt-5">
-                  
-                  <button
-                    onClick={handleConfirm}
-                    disabled={confirming}
-                    className="w-full bg-linear-to-r from-emerald-600 to-green-600 hover:from-emerald-500 hover:to-green-500 disabled:opacity-50 text-white font-bold py-3 rounded-xl transition shadow-lg shadow-emerald-600/30 flex items-center justify-center gap-2"
-                  >
-                    {confirming ? (
-                      <>
-                        <i className="fa-solid fa-spinner fa-spin"></i>
-                        Memproses...
-                      </>
-                    ) : (
-                      <>
-                        <i className="fa-solid fa-circle-check"></i>
-                        Konfirmasi Selesai
-                      </>
-                    )}
-                  </button>
-                  <p className="text-[11px] text-slate-400 text-center mb-3 uppercase tracking-wider font-bold">
-                    Konfirmasi Jokian Selesai
-                  </p>
-                  <p className="text-xs text-slate-400 text-center mb-4">
-                    Klik tombol di bawah untuk konfirmasi. Akun roblox akan otomatis di-logout.
-                  </p>
-                  {confirmMessage && (
-                    <p className="text-center text-xs mt-3 text-emerald-400">
-                      {confirmMessage}
-                    </p>
-                  )}
-                </div>
-              )}
+{token && !buyerConfirmed && (
+  <div className="mt-5">
+    {/* 1️⃣ TOMBOL DULUAN */}
+    <button
+      onClick={handleConfirm}
+      disabled={confirming}
+      className="w-full bg-linear-to-r from-emerald-600 to-green-600 hover:from-emerald-500 hover:to-green-500 disabled:opacity-50 text-white font-bold py-3 rounded-xl transition shadow-lg shadow-emerald-600/30 flex items-center justify-center gap-2"
+    >
+      {confirming ? (
+        <>
+          <i className="fa-solid fa-spinner fa-spin"></i>
+          Memproses...
+        </>
+      ) : (
+        <>
+          <i className="fa-solid fa-circle-check"></i>
+          Konfirmasi Selesai
+        </>
+      )}
+    </button>
+
+    {/* 2️⃣ TEKS JUDUL DI BAWAH TOMBOL */}
+    <p className="text-[11px] text-slate-400 text-center mt-4 mb-1 uppercase tracking-wider font-bold">
+      Konfirmasi Jokian Selesai
+    </p>
+
+    {/* 3️⃣ TEKS KETERANGAN DI BAWAH JUDUL */}
+    <p className="text-xs text-slate-400 text-center mb-2">
+      Klik tombol di atas untuk konfirmasi. Akun roblox akan otomatis di-logout.
+    </p>
+
+    {/* 4️⃣ PESAN HASIL KONFIRMASI */}
+    {confirmMessage && (
+      <p className="text-center text-xs mt-3 text-emerald-400">
+        {confirmMessage}
+      </p>
+    )}
+  </div>
+)}
 
               {/* ✅ Kalau sudah dikonfirmasi */}
               {buyerConfirmed && (
