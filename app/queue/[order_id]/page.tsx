@@ -417,17 +417,18 @@ export default function QueueDetailPage() {
               {/* 🔘 TOMBOL KONFIRMASI — hanya kalau ada token & belum dikonfirmasi */}
               {token && !buyerConfirmed && (
                 <div className="mt-5">
-                  <p className="text-[11px] text-slate-400 text-center mb-3 uppercase tracking-wider font-bold">
-                    Konfirmasi Jokian Selesai
-                  </p>
-                  <p className="text-xs text-slate-400 text-center mb-4">
-                    Klik tombol di bawah untuk konfirmasi. Akun roblox akan otomatis di-logout.
-                  </p>
+                  
                   <button
                     onClick={handleConfirm}
                     disabled={confirming}
                     className="w-full bg-linear-to-r from-emerald-600 to-green-600 hover:from-emerald-500 hover:to-green-500 disabled:opacity-50 text-white font-bold py-3 rounded-xl transition shadow-lg shadow-emerald-600/30 flex items-center justify-center gap-2"
                   >
+                    <p className="text-[11px] text-slate-400 text-center mb-3 uppercase tracking-wider font-bold">
+                    Konfirmasi Jokian Selesai
+                  </p>
+                  <p className="text-xs text-slate-400 text-center mb-4">
+                    Klik tombol di bawah untuk konfirmasi. Akun roblox akan otomatis di-logout.
+                  </p>
                     {confirming ? (
                       <>
                         <i className="fa-solid fa-spinner fa-spin"></i>
