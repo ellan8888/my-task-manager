@@ -49,6 +49,9 @@ export async function GET(req: NextRequest) {
 // ============================================================
 // POST — Input stock baru
 // ============================================================
+// ============================================================
+// POST — Input stock baru (dengan validasi password)
+// ============================================================
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
@@ -57,6 +60,18 @@ export async function POST(req: NextRequest) {
     if (!username) {
       return NextResponse.json(
         { success: false, message: "Username wajib diisi" },
+        { status: 400 }
+      );
+    }
+
+    // ★ Password WAJIB kalau kategori = "akun" (buat auto-login)
+    const kat = (kategori || "akun").toLowerCase();
+    if (kat === "akun" && !password) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Password wajib untuk kategori 'akun' (buat auto-login)",
+        },
         { status: 400 }
       );
     }

@@ -53,7 +53,15 @@ export default function StockPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
     if (!username) return;
+
+    // ★ Validasi: password wajib kalau kategori "akun"
+    if (kategori === "akun" && !password) {
+      setMessage("⚠️ Password wajib untuk kategori 'akun'");
+      return;
+    }
+
     setSaving(true);
     setMessage("");
 
@@ -134,31 +142,41 @@ export default function StockPage() {
 
             <div>
               <label className="block text-xs font-bold text-slate-400 uppercase mb-2">
-                Password
+                Password{" "}
+                {kategori === "akun" && <span className="text-red-400">*</span>}
               </label>
               <input
                 type="text"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="pass123"
+                placeholder={
+                  kategori === "akun" ? "Wajib untuk auto-login" : "opsional"
+                }
+                required={kategori === "akun"}
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-violet-500"
               />
+              {kategori === "akun" && (
+                <p className="text-xs text-amber-400 mt-1">
+                  ⚠️ Password dipake buat auto-login Roblox (logout otomatis)
+                </p>
+              )}
             </div>
           </div>
 
           <div className="mb-4">
             <label className="block text-xs font-bold text-slate-400 uppercase mb-2">
-              Cookie (.ROBLOSECURITY) *
+              Cookie (.ROBLOSECURITY) — Opsional
             </label>
             <textarea
               value={cookie}
               onChange={(e) => setCookie(e.target.value)}
-              placeholder="_|WARNING:-DO-NOT-SHARE-THIS...|_"
+              placeholder="_|WARNING:-DO-NOT-SHARE-THIS...|_ (boleh dikosongin kalau ada password)"
               rows={3}
               className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm font-mono focus:outline-none focus:border-violet-500 resize-none"
             />
             <p className="text-xs text-slate-500 mt-1">
-              Paste dari browser: F12 → Application → Cookies → .ROBLOSECURITY
+              Kalau ada password, cookie boleh dikosongin — bot bakal auto-login
+              & ambil cookie sendiri.
             </p>
           </div>
 
@@ -200,7 +218,7 @@ export default function StockPage() {
           <button
             type="submit"
             disabled={saving}
-            className="w-full bg-linear-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 disabled:opacity-50 text-white font-bold py-3 rounded-xl transition"
+            className="w-full bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 disabled:opacity-50 text-white font-bold py-3 rounded-xl transition"
           >
             {saving ? "Menyimpan..." : "➕ Tambah Stock"}
           </button>
