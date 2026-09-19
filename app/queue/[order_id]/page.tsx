@@ -412,9 +412,7 @@ export default function QueueDetailPage() {
           {/* ✅ Kalau completed → pesan selesai + tombol konfirmasi */}
           {isCompleted && (
             <div className="mt-6 pt-6 border-t border-emerald-500/20">
-              <div className="text-center">
-                <i className="fa-solid fa-flag-checkered text-emerald-400 text-3xl mb-3"></i>
-              </div>
+              <div className="text-center"></div>
 
               {/* 🔘 TOMBOL KONFIRMASI — hanya kalau ada token & belum dikonfirmasi */}
               {token && !buyerConfirmed && (
