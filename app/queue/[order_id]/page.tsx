@@ -409,7 +409,7 @@ export default function QueueDetailPage() {
             </div>
           )}
 
-          {/* ✅ Kalau completed → pesan selesai */}
+          {/* ✅ Kalau completed → pesan selesai + tombol konfirmasi */}
           {isCompleted && (
             <div className="mt-6 pt-6 border-t border-emerald-500/20">
               <div className="text-center">
@@ -421,6 +421,53 @@ export default function QueueDetailPage() {
                   Terimakasih sudah order. Silakan cek item kamu ya
                 </p>
               </div>
+
+              {/* 🔘 TOMBOL KONFIRMASI — hanya kalau ada token & belum dikonfirmasi */}
+              {token && !buyerConfirmed && (
+                <div className="mt-5">
+                  <p className="text-[11px] text-slate-400 text-center mb-3 uppercase tracking-wider font-bold">
+                    Konfirmasi Jokian Selesai
+                  </p>
+                  <p className="text-xs text-slate-400 text-center mb-4">
+                    Klik tombol di bawah untuk konfirmasi. Akun roblox akan otomatis di-logout.
+                  </p>
+                  <button
+                    onClick={handleConfirm}
+                    disabled={confirming}
+                    className="w-full bg-linear-to-r from-emerald-600 to-green-600 hover:from-emerald-500 hover:to-green-500 disabled:opacity-50 text-white font-bold py-3 rounded-xl transition shadow-lg shadow-emerald-600/30 flex items-center justify-center gap-2"
+                  >
+                    {confirming ? (
+                      <>
+                        <i className="fa-solid fa-spinner fa-spin"></i>
+                        Memproses...
+                      </>
+                    ) : (
+                      <>
+                        <i className="fa-solid fa-circle-check"></i>
+                        Konfirmasi Selesai
+                      </>
+                    )}
+                  </button>
+                  {confirmMessage && (
+                    <p className="text-center text-xs mt-3 text-emerald-400">
+                      {confirmMessage}
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {/* ✅ Kalau sudah dikonfirmasi */}
+              {buyerConfirmed && (
+                <div className="mt-5 bg-emerald-500/10 rounded-xl p-4 border border-emerald-500/40 text-center">
+                  <i className="fa-solid fa-circle-check text-emerald-400 text-2xl mb-2"></i>
+                  <p className="text-sm font-extrabold text-emerald-300 mb-1">
+                    Sudah Dikonfirmasi
+                  </p>
+                  <p className="text-xs text-slate-400">
+                    Terimakasih! Jokian sudah dikonfirmasi selesai.
+                  </p>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -470,52 +517,6 @@ export default function QueueDetailPage() {
           </p>
         </div>
       </div>
-
-      {isCompleted && token && !buyerConfirmed && (
-  <div className="mt-6 bg-slate-900/70 backdrop-blur-xl rounded-2xl p-5 md:p-6 border border-emerald-500/40">
-    <div className="text-center mb-4">
-      <i className="fa-solid fa-circle-check text-emerald-400 text-3xl mb-3"></i>
-      <h3 className="text-lg font-extrabold text-white mb-1">
-        Konfirmasi Jokian Selesai
-      </h3>
-      <p className="text-xs text-slate-400">
-        Klik tombol di bawah untuk konfirmasi. Akun roblox akan otomatis di-logout.
-      </p>
-    </div>
-    <button
-      onClick={handleConfirm}
-      disabled={confirming}
-      className="w-full bg-linear-to-r from-emerald-600 to-green-600 hover:from-emerald-500 hover:to-green-500 disabled:opacity-50 text-white font-bold py-3 rounded-xl transition shadow-lg shadow-emerald-600/30 flex items-center justify-center gap-2"
-    >
-      {confirming ? (
-        <>
-          <i className="fa-solid fa-spinner fa-spin"></i>
-          Memproses...
-        </>
-      ) : (
-        <>
-          <i className="fa-solid fa-circle-check"></i>
-          Konfirmasi Selesai
-        </>
-      )}
-    </button>
-    {confirmMessage && (
-      <p className="text-center text-xs mt-3 text-emerald-400">{confirmMessage}</p>
-    )}
-  </div>
-)}
-
-{buyerConfirmed && (
-  <div className="mt-6 bg-emerald-500/10 backdrop-blur-xl rounded-2xl p-5 md:p-6 border border-emerald-500/40 text-center">
-    <i className="fa-solid fa-circle-check text-emerald-400 text-3xl mb-3"></i>
-    <h3 className="text-lg font-extrabold text-emerald-300 mb-1">
-      Sudah Dikonfirmasi
-    </h3>
-    <p className="text-xs text-slate-400">
-      Terimakasih! Jokian sudah dikonfirmasi selesai.
-    </p>
-  </div>
-)}
 
       {/* MODAL TAMBAH WAKTU */}
       {isAdmin && showAddTime && (
