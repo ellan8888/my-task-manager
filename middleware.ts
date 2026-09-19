@@ -19,7 +19,7 @@ const BYPASS_PATHS = [
   "/api/get-accounts", // ← TAMBAH INI
   "/api/remove-account", // ← TAMBAH INI
   "/api/telegram",     // ← TAMBAH INI
-  "/api/queue",
+  "/api/income",
 ];
 
 export function middleware(request: NextRequest) {

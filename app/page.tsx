@@ -75,9 +75,7 @@ const [loadingAccounts, setLoadingAccounts] = useState(false);
 
   const [currentView, setCurrentView] = useState<"list" | "kanban">("list");
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const formatRupiah = (num: number): string => {
-  return "Rp " + num.toLocaleString("id-ID");
-};
+
 
   const [confirmDialog, setConfirmDialog] = useState<{
     open: boolean;
@@ -253,31 +251,6 @@ useEffect(() => {
   useEffect(() => {
     localStorage.setItem("sidebarOpen", String(sidebarOpen));
   }, [sidebarOpen]);
-
-  const [income, setIncome] = useState<{
-  hariIni: number;
-  mingguIni: number;
-  bulanIni: number;
-  perJoki: Record<string, number>;
-  totalOrders: number;
-} | null>(null);
-
-// Fetch saat mount + tiap 30 detik
-useEffect(() => {
-  const fetchIncome = async () => {
-    try {
-      const res = await fetch("/api/stats/income");
-      const data = await res.json();
-      if (data.success) setIncome(data);
-    } catch (err) {
-      console.error("Error fetch income:", err);
-    }
-  };
-
-  fetchIncome();
-  const interval = setInterval(fetchIncome, 30000); // refresh tiap 30s
-  return () => clearInterval(interval);
-}, []);
 
   // =========================
   // ADD TASK
@@ -1016,13 +989,13 @@ body::-webkit-scrollbar {
             </div>
           </header>
 
+                    {/* ============================================================ */}
+          {/* SCROLLABLE SECTION: METRICS + TOOLBAR + LIST + KANBAN        */}
           {/* ============================================================ */}
-          {/* METRICS + TOOLBAR — STICKY (NGGAK IKUT SCROLL)               */}
-          {/* ============================================================ */}
-          <div className="shrink-0 px-4 md:px-8 py-4 bg-slate-100 dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800/60 space-y-4">
+          <div className="flex-1 overflow-y-auto custom-scrollbar">
+                      <div className="px-4 md:px-8 py-4 space-y-4">
 
-            {/* Metrics Summary Cards */}
-            <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
               <div className="bg-white dark:bg-slate-900/50 backdrop-blur-xl border border-slate-200 dark:border-slate-800 rounded-2xl p-4 md:p-5 relative overflow-hidden group hover:border-violet-500/50 transition-all duration-300">
                 <div className="absolute -right-4 -bottom-4 w-20 h-20 bg-violet-500/10 dark:bg-violet-600/10 rounded-full blur-xl transition"></div>
                 <div className="flex justify-between items-start">
@@ -1107,30 +1080,6 @@ body::-webkit-scrollbar {
                 <div className="mt-3 flex items-center text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">
                   <i className="fa-solid fa-square-check mr-1.5"></i>
                   <span>Sudah Tuntas</span>
-                </div>
-              </div>
-
-                            <div className="bg-white dark:bg-slate-900/50 backdrop-blur-xl border border-slate-200 dark:border-slate-800 rounded-2xl p-4 md:p-5 relative overflow-hidden group hover:border-green-500/50 transition-all duration-300">
-                <div className="absolute -right-4 -bottom-4 w-20 h-20 bg-green-500/10 dark:bg-green-600/10 rounded-full blur-xl transition"></div>
-                <div className="flex justify-between items-start">
-                  <div className="min-w-0 flex-1">
-                    <p className="text-xs font-bold text-green-600 dark:text-green-400 uppercase tracking-wider flex items-center gap-1.5">
-                      <i className="fa-solid fa-money-bill-wave text-xs"></i>
-                      <span>Hari Ini</span>
-                    </p>
-                    <h3 className="text-lg md:text-xl font-black text-green-600 dark:text-green-400 mt-1 truncate">
-                      {income ? formatRupiah(income.hariIni) : "—"}
-                    </h3>
-                  </div>
-                  <div className="w-10 h-10 rounded-xl bg-green-100 dark:bg-green-500/10 text-green-600 dark:text-green-400 flex items-center justify-center border border-green-200 dark:border-green-500/20 shrink-0">
-                    <i className="fa-solid fa-coins text-base"></i>
-                  </div>
-                </div>
-                <div className="mt-3 flex items-center text-[11px] font-semibold text-green-600 dark:text-green-400">
-                  <i className="fa-solid fa-arrow-trend-up mr-1.5"></i>
-                  <span className="truncate">
-                    Minggu: {income ? formatRupiah(income.mingguIni) : "—"}
-                  </span>
                 </div>
               </div>
             </div>
@@ -1221,12 +1170,8 @@ body::-webkit-scrollbar {
                 </div>
               </div>
             </div>
-          </div>
 
-          {/* ============================================================ */}
-          {/* SCROLLABLE SECTION: LIST + KANBAN                            */}
-          {/* ============================================================ */}
-                    <div className="flex-1 overflow-y-auto custom-scrollbar">
+                      
             {/* ============================================================ */}
             {/* SETTINGS PANEL                                               */}
             {/* ============================================================ */}
@@ -2131,6 +2076,7 @@ body::-webkit-scrollbar {
               </div>
             )}
           </div>
+          </div> 
         </main>
 
         {/* CUSTOM CONFIRM DIALOG */}
