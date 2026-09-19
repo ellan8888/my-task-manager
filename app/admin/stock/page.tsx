@@ -372,7 +372,7 @@ export default function StockPage() {
           <button
             type="submit"
             disabled={saving || loadingKategori}
-            className="w-full bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 disabled:opacity-50 text-white font-bold py-3 rounded-xl transition"
+            className="w-full bg-linear-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 disabled:opacity-50 text-white font-bold py-3 rounded-xl transition"
           >
             {saving ? "Menyimpan..." : "➕ Tambah Stock"}
           </button>
