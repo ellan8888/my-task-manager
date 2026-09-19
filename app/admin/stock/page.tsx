@@ -1,4 +1,3 @@
-// app/admin/stock/page.tsx
 "use client";
 
 import { useEffect, useState } from "react";
@@ -16,19 +15,50 @@ type StockAccount = {
   created_at: string;
 };
 
+type KategoriLink = {
+  id: number;
+  kategori: string;
+  link: string;
+  active: boolean;
+};
+
 export default function StockPage() {
   const [accounts, setAccounts] = useState<StockAccount[]>([]);
   const [loading, setLoading] = useState(true);
+  const [kategoriList, setKategoriList] = useState<KategoriLink[]>([]);
+  const [loadingKategori, setLoadingKategori] = useState(true);
 
   // Form state
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [cookie, setCookie] = useState("");
-  const [kategori, setKategori] = useState("akun");
+  const [kategori, setKategori] = useState("");
   const [addedBy, setAddedBy] = useState("lan4337");
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
   const [filter, setFilter] = useState<"all" | "ready" | "used" | "logged_out">("all");
+
+  // ★ STATE BARU: mode tambah kategori baru
+  const [isNewKategori, setIsNewKategori] = useState(false);
+  const [newKategoriName, setNewKategoriName] = useState("");
+  const [newKategoriLink, setNewKategoriLink] = useState("");
+
+  // Load kategori dari API
+  const loadKategori = async () => {
+    setLoadingKategori(true);
+    try {
+      const res = await fetch("/api/kategori/links");
+      const data = await res.json();
+      if (data.success) {
+        setKategoriList(data.list || []);
+        if (!kategori && data.list?.length > 0 && !isNewKategori) {
+          setKategori(data.list[0].kategori);
+        }
+      }
+    } finally {
+      setLoadingKategori(false);
+    }
+  };
 
   const loadAccounts = async () => {
     setLoading(true);
@@ -47,6 +77,7 @@ export default function StockPage() {
   };
 
   useEffect(() => {
+    loadKategori();
     loadAccounts();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filter]);
@@ -54,11 +85,8 @@ export default function StockPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!username) return;
-
-    // ★ Validasi: password wajib kalau kategori "akun"
-    if (kategori === "akun" && !password) {
-      setMessage("⚠️ Password wajib untuk kategori 'akun'");
+    if (!username) {
+      setMessage("⚠️ Username wajib diisi");
       return;
     }
 
@@ -66,6 +94,55 @@ export default function StockPage() {
     setMessage("");
 
     try {
+      // ══════════════════════════════════════════════════════
+      // ★ STEP 1: Kalau mode "tambah kategori baru", simpan
+      //           kategori dulu ke /api/kategori/links
+      // ══════════════════════════════════════════════════════
+      let finalKategori = kategori;
+
+      if (isNewKategori) {
+        if (!newKategoriName || !newKategoriLink) {
+          setMessage("⚠️ Nama kategori & link wajib diisi");
+          setSaving(false);
+          return;
+        }
+
+        console.log("📝 Menyimpan kategori baru:", newKategoriName);
+
+        const katRes = await fetch("/api/kategori/links", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            kategori: newKategoriName,
+            link: newKategoriLink,
+          }),
+        });
+
+        const katData = await katRes.json();
+
+        if (!katData.success) {
+          setMessage(`⚠️ Gagal simpan kategori: ${katData.message}`);
+          setSaving(false);
+          return;
+        }
+
+        console.log("✅ Kategori baru tersimpan:", newKategoriName);
+        finalKategori = newKategoriName.toLowerCase().trim();
+
+        // Refresh dropdown
+        await loadKategori();
+      }
+
+      // ══════════════════════════════════════════════════════
+      // ★ STEP 2: Simpan stock
+      // ══════════════════════════════════════════════════════
+      const butuhPassword = ["1b-5b/s", "akun"].includes(finalKategori.toLowerCase());
+      if (butuhPassword && !password) {
+        setMessage(`⚠️ Password wajib untuk kategori "${finalKategori}"`);
+        setSaving(false);
+        return;
+      }
+
       const res = await fetch("/api/accounts/stock", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -73,10 +150,11 @@ export default function StockPage() {
           username,
           password,
           roblox_cookie: cookie,
-          kategori,
+          kategori: finalKategori,
           added_by: addedBy,
         }),
       });
+
       const data = await res.json();
 
       if (data.success) {
@@ -84,6 +162,10 @@ export default function StockPage() {
         setUsername("");
         setPassword("");
         setCookie("");
+        // Reset kategori baru
+        setIsNewKategori(false);
+        setNewKategoriName("");
+        setNewKategoriLink("");
         loadAccounts();
       } else {
         setMessage(`⚠️ ${data.message}`);
@@ -98,9 +180,10 @@ export default function StockPage() {
   const handleDelete = async (uname: string) => {
     if (!confirm(`Hapus ${uname}?`)) return;
     try {
-      const res = await fetch(`/api/accounts/stock?username=${encodeURIComponent(uname)}`, {
-        method: "DELETE",
-      });
+      const res = await fetch(
+        `/api/accounts/stock?username=${encodeURIComponent(uname)}`,
+        { method: "DELETE" }
+      );
       const data = await res.json();
       if (data.success) {
         setMessage(`🗑️ ${data.message}`);
@@ -112,6 +195,10 @@ export default function StockPage() {
       setMessage("⚠️ Gagal hapus");
     }
   };
+
+  // Cek apakah kategori butuh password
+  const currentKategori = isNewKategori ? newKategoriName : kategori;
+  const butuhPassword = ["1b-5b/s", "akun"].includes(currentKategori.toLowerCase());
 
   return (
     <div className="min-h-screen bg-slate-950 text-white p-4 md:p-8">
@@ -134,7 +221,7 @@ export default function StockPage() {
                 type="text"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
-                placeholder="Patryarla827"
+                placeholder="TestAkun0029"
                 required
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-violet-500"
               />
@@ -142,22 +229,19 @@ export default function StockPage() {
 
             <div>
               <label className="block text-xs font-bold text-slate-400 uppercase mb-2">
-                Password{" "}
-                {kategori === "akun" && <span className="text-red-400">*</span>}
+                Password {butuhPassword && <span className="text-red-400">*</span>}
               </label>
               <input
                 type="text"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder={
-                  kategori === "akun" ? "Wajib untuk auto-login" : "opsional"
-                }
-                required={kategori === "akun"}
+                placeholder={butuhPassword ? "Wajib untuk auto-login" : "opsional"}
+                required={butuhPassword}
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-violet-500"
               />
-              {kategori === "akun" && (
+              {butuhPassword && (
                 <p className="text-xs text-amber-400 mt-1">
-                  ⚠️ Password dipake buat auto-login Roblox (logout otomatis)
+                  ⚠️ Password dipake buat auto-login Roblox
                 </p>
               )}
             </div>
@@ -170,35 +254,105 @@ export default function StockPage() {
             <textarea
               value={cookie}
               onChange={(e) => setCookie(e.target.value)}
-              placeholder="_|WARNING:-DO-NOT-SHARE-THIS...|_ (boleh dikosongin kalau ada password)"
+              placeholder="_|WARNING:-DO-NOT-SHARE-THIS...|_ (boleh dikosongin)"
               rows={3}
               className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm font-mono focus:outline-none focus:border-violet-500 resize-none"
             />
-            <p className="text-xs text-slate-500 mt-1">
-              Kalau ada password, cookie boleh dikosongin — bot bakal auto-login
-              & ambil cookie sendiri.
-            </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-            <div>
-              <label className="block text-xs font-bold text-slate-400 uppercase mb-2">
-                Kategori
+          {/* ══════════════════════════════════════════════════ */}
+          {/* ★ SECTION KATEGORI — Dropdown + Tombol Tambah Baru */}
+          {/* ══════════════════════════════════════════════════ */}
+          <div className="mb-4 p-4 bg-slate-950/50 rounded-xl border border-slate-800">
+            <div className="flex items-center justify-between mb-3">
+              <label className="block text-xs font-bold text-slate-400 uppercase">
+                Kategori *
               </label>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsNewKategori(!isNewKategori);
+                  setNewKategoriName("");
+                  setNewKategoriLink("");
+                }}
+                className={`text-xs font-bold px-3 py-1 rounded-lg transition ${
+                  isNewKategori
+                    ? "bg-red-500/20 text-red-300 hover:bg-red-500/40"
+                    : "bg-violet-500/20 text-violet-300 hover:bg-violet-500/40"
+                }`}
+              >
+                {isNewKategori ? "✕ Batal" : "➕ Tambah Kategori Baru"}
+              </button>
+            </div>
+
+            {!isNewKategori ? (
+              // MODE PILIH DARI DROPDOWN
               <select
                 value={kategori}
                 onChange={(e) => setKategori(e.target.value)}
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-violet-500"
+                required
+                disabled={loadingKategori}
+                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-violet-500 disabled:opacity-50"
               >
-                <option value="akun">Akun</option>
-                <option value="1500 diamond">1500 Diamond</option>
-                <option value="1000 diamond">1000 Diamond</option>
-                <option value="700 diamond">700 Diamond</option>
-                <option value="600 diamond">600 Diamond</option>
-                <option value="500 diamond">500 Diamond</option>
+                {loadingKategori ? (
+                  <option>Loading...</option>
+                ) : kategoriList.length === 0 ? (
+                  <option value="">Belum ada kategori — tambah baru</option>
+                ) : (
+                  kategoriList.map((k) => (
+                    <option key={k.id} value={k.kategori}>
+                      {k.kategori}
+                    </option>
+                  ))
+                )}
               </select>
-            </div>
+            ) : (
+              // MODE TAMBAH KATEGORI BARU
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-400 uppercase mb-2">
+                    Nama Kategori Baru *
+                  </label>
+                  <input
+                    type="text"
+                    value={newKategoriName}
+                    onChange={(e) => setNewKategoriName(e.target.value)}
+                    placeholder="3000 diamond"
+                    required={isNewKategori}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-violet-500"
+                  />
+                  <p className="text-xs text-slate-500 mt-1">
+                    Gunakan huruf kecil biar konsisten (contoh: <code className="text-violet-400">3000 diamond</code>)
+                  </p>
+                </div>
 
+                <div>
+                  <label className="block text-xs font-bold text-slate-400 uppercase mb-2">
+                    Link Itemku *
+                  </label>
+                  <input
+                    type="text"
+                    value={newKategoriLink}
+                    onChange={(e) => setNewKategoriLink(e.target.value)}
+                    placeholder="https://tokoku.itemku.com/pengiriman-otomatis/baru/XXXXXXX"
+                    required={isNewKategori}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-violet-500"
+                  />
+                  <p className="text-xs text-slate-500 mt-1">
+                    Copy URL dari itemku → produk → "Pengiriman Otomatis"
+                  </p>
+                </div>
+
+                <div className="bg-violet-500/10 border border-violet-500/30 rounded-lg p-3">
+                  <p className="text-xs text-violet-300">
+                    💡 Kategori ini bakal otomatis tersimpan & muncul di dropdown setelah disimpan
+                  </p>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
             <div>
               <label className="block text-xs font-bold text-slate-400 uppercase mb-2">
                 Added By
@@ -217,13 +371,15 @@ export default function StockPage() {
 
           <button
             type="submit"
-            disabled={saving}
-            className="w-full bg-linear-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 disabled:opacity-50 text-white font-bold py-3 rounded-xl transition"
+            disabled={saving || loadingKategori}
+            className="w-full bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 disabled:opacity-50 text-white font-bold py-3 rounded-xl transition"
           >
             {saving ? "Menyimpan..." : "➕ Tambah Stock"}
           </button>
 
-          {message && <p className="text-center text-sm mt-3">{message}</p>}
+          {message && (
+            <p className="text-center text-sm mt-3 whitespace-pre-line">{message}</p>
+          )}
         </form>
 
         {/* LIST STOCK */}
