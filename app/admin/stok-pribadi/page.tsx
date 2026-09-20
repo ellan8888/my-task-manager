@@ -17,7 +17,7 @@ type StockAccount = {
   used: boolean;
   logged_out: boolean;
   created_at: string;
-  used_at: string | null;    // ← ★ TAMBAH
+  used_at: string | null;
   listed_at: string | null;
 };
 
@@ -29,13 +29,45 @@ export default function StokPribadiPage() {
   const [selling, setSelling] = useState<Set<number>>(new Set());
   const { sidebarOpen, toggleSidebar } = useSidebar();
 
-  // Form
+  // Form tambah
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [cookie, setCookie] = useState("");
   const [kategori, setKategori] = useState("");
   const [addedBy, setAddedBy] = useState("lan4337");
   const [saving, setSaving] = useState(false);
+
+  // ★ State edit
+  const [editingAccount, setEditingAccount] = useState<StockAccount | null>(null);
+  const [editUsername, setEditUsername] = useState("");
+  const [editPassword, setEditPassword] = useState("");
+  const [editCookie, setEditCookie] = useState("");
+  const [editKategori, setEditKategori] = useState("");
+  const [editAddedBy, setEditAddedBy] = useState("");
+  const [editSaving, setEditSaving] = useState(false);
+
+    // ★ State confirm modal
+  const [confirmDialog, setConfirmDialog] = useState<{
+    open: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+    variant: "danger" | "primary" | "warning";
+  } | null>(null);
+
+  
+// Helper: buka confirm
+const showConfirm = (
+  title: string,
+  message: string,
+  onConfirm: () => void,
+  variant: "danger" | "primary" | "warning" = "primary"
+) => {
+  setConfirmDialog({ open: true, title, message, onConfirm, variant });
+};
+
+// Helper: tutup confirm
+const closeConfirm = () => setConfirmDialog(null);
 
   // Load kategori
   const loadKategori = async () => {
@@ -49,18 +81,17 @@ export default function StokPribadiPage() {
     } catch {}
   };
 
-  // Load akun dengan status personal
- const loadAccounts = async () => {
-  setLoading(true);
-  try {
-    // ★ Cuma akun personal yang belum laku
-    const res = await fetch("/api/accounts/stock?status=personal&logged_out=false");
-    const data = await res.json();
-    if (data.success) setAccounts(data.data || []);
-  } finally {
-    setLoading(false);
-  }
-};
+  // Load akun
+  const loadAccounts = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch("/api/accounts/stock?status=personal&logged_out=false");
+      const data = await res.json();
+      if (data.success) setAccounts(data.data || []);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
     loadKategori();
@@ -88,7 +119,7 @@ export default function StokPribadiPage() {
           roblox_cookie: cookie,
           kategori,
           added_by: addedBy,
-          status: "personal", // ← ★ default personal
+          status: "personal",
         }),
       });
 
@@ -110,57 +141,135 @@ export default function StokPribadiPage() {
     }
   };
 
-  // ★ Klik "Jual" → update status → bot detect
-  const handleSell = async (uname: string) => {
-    if (!confirm(`Jual akun "${uname}"?\n\nBot akan otomatis input ke itemku.`)) return;
+  // Jual akun
+  const handleSell = (uname: string) => {
+  showConfirm(
+    "Jual Akun?",
+    `Jual akun "${uname}"?\n\nBot akan otomatis input ke itemku.`,
+    async () => {
+      closeConfirm();
 
-    setSelling((prev) =>
-      new Set(prev).add(accounts.find((a) => a.username === uname)!.id)
-    );
+      setSelling((prev) =>
+        new Set(prev).add(accounts.find((a) => a.username === uname)!.id)
+      );
 
-    try {
-      const res = await fetch("/api/accounts/stock/sell", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username: uname }),
-      });
+      try {
+        const res = await fetch("/api/accounts/stock/sell", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ username: uname }),
+        });
 
-      const data = await res.json();
+        const data = await res.json();
 
-      if (data.success) {
-        toast.success(data.message);
-        setAccounts((current) => current.filter((a) => a.username !== uname));
-      } else {
-        toast.error(data.message);
+        if (data.success) {
+          toast.success(data.message);
+          setAccounts((current) => current.filter((a) => a.username !== uname));
+        } else {
+          toast.error(data.message);
+        }
+      } catch {
+        toast.error("Gagal jual akun");
+      } finally {
+        setSelling((prev) => {
+          const next = new Set(prev);
+          next.delete(accounts.find((a) => a.username === uname)?.id || 0);
+          return next;
+        });
       }
-    } catch {
-      toast.error("Gagal jual akun");
-    } finally {
-      setSelling((prev) => {
-        const next = new Set(prev);
-        next.delete(accounts.find((a) => a.username === uname)?.id || 0);
-        return next;
-      });
-    }
-  };
+    },
+    "primary"
+  );
+};
 
   // Hapus akun
-  const handleDelete = async (uname: string) => {
-    if (!confirm(`Hapus "${uname}"?`)) return;
+  const handleDelete = (uname: string) => {
+  showConfirm(
+    "Hapus Akun?",
+    `Akun "${uname}" akan dihapus permanen. Lanjutkan?`,
+    async () => {
+      closeConfirm();
+      try {
+        const res = await fetch(
+          `/api/accounts/stock?username=${encodeURIComponent(uname)}`,
+          { method: "DELETE" }
+        );
+        const data = await res.json();
+        if (data.success) {
+          toast.success(data.message);
+          loadAccounts();
+        } else {
+          toast.error(data.message);
+        }
+      } catch {
+        toast.error("Gagal hapus");
+      }
+    },
+    "danger"
+  );
+};
+
+  // ★ Buka modal edit
+  const handleEditClick = (acc: StockAccount) => {
+    setEditingAccount(acc);
+    setEditUsername(acc.username);
+    setEditPassword(acc.password || "");
+    setEditCookie(acc.roblox_cookie || "");
+    setEditKategori(acc.kategori || "");
+    setEditAddedBy(acc.added_by || "lan4337");
+  };
+
+  // ★ Tutup modal edit
+  const handleCloseEdit = () => {
+    setEditingAccount(null);
+    setEditUsername("");
+    setEditPassword("");
+    setEditCookie("");
+    setEditKategori("");
+    setEditAddedBy("");
+  };
+
+  // ★ Simpan edit
+  const handleSaveEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!editingAccount) return;
+
+    if (!editUsername) {
+      toast.warning("Username wajib diisi");
+      return;
+    }
+
+    setEditSaving(true);
     try {
       const res = await fetch(
-        `/api/accounts/stock?username=${encodeURIComponent(uname)}`,
-        { method: "DELETE" }
+        `/api/accounts/stock?username=${encodeURIComponent(editingAccount.username)}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            username: editUsername,
+            password: editPassword,
+            roblox_cookie: editCookie,
+            kategori: editKategori,
+            added_by: editAddedBy,
+          }),
+        }
       );
+
       const data = await res.json();
+
       if (data.success) {
         toast.success(data.message);
+        handleCloseEdit();
         loadAccounts();
       } else {
         toast.error(data.message);
       }
     } catch {
-      toast.error("Gagal hapus");
+      toast.error("Gagal edit akun");
+    } finally {
+      setEditSaving(false);
     }
   };
 
@@ -204,7 +313,7 @@ export default function StokPribadiPage() {
       {/* Content */}
       <div className="flex-1 overflow-y-auto custom-scrollbar p-4 md:p-8">
         <div className="max-w-5xl mx-auto">
-          {/* Form */}
+          {/* Form Tambah */}
           <form
             onSubmit={handleSubmit}
             className="bg-white dark:bg-slate-900/60 rounded-2xl p-6 border border-slate-200 dark:border-slate-800 mb-6 shadow-sm"
@@ -358,6 +467,15 @@ export default function StokPribadiPage() {
                           <span>{isSelling ? "Proses..." : "Jual"}</span>
                         </button>
 
+                        {/* ★ Tombol Edit */}
+                        <button
+                          onClick={() => handleEditClick(acc)}
+                          className="w-7 h-7 flex items-center justify-center bg-blue-100 dark:bg-blue-500/20 text-blue-600 dark:text-blue-300 rounded-lg hover:bg-blue-500/40 transition"
+                          title="Edit"
+                        >
+                          <i className="fa-solid fa-pen text-xs"></i>
+                        </button>
+
                         {/* Tombol Hapus */}
                         <button
                           onClick={() => handleDelete(acc.username)}
@@ -374,6 +492,202 @@ export default function StokPribadiPage() {
           </div>
         </div>
       </div>
+
+      {/* ★ MODAL CONFIRM */}
+{confirmDialog?.open && (
+  <div
+    className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-60 flex items-center justify-center p-4"
+    onClick={closeConfirm}
+  >
+    <div
+      className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl w-full max-w-md"
+      onClick={(e) => e.stopPropagation()}
+    >
+      {/* Icon + Title */}
+      <div className="p-6 text-center">
+        <div
+          className={`w-16 h-16 mx-auto rounded-full flex items-center justify-center mb-4 ${
+            confirmDialog.variant === "danger"
+              ? "bg-red-100 dark:bg-red-500/20 text-red-600 dark:text-red-400"
+              : confirmDialog.variant === "warning"
+              ? "bg-amber-100 dark:bg-amber-500/20 text-amber-600 dark:text-amber-400"
+              : "bg-blue-100 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400"
+          }`}
+        >
+          <i
+            className={`fa-solid text-2xl ${
+              confirmDialog.variant === "danger"
+                ? "fa-triangle-exclamation"
+                : confirmDialog.variant === "warning"
+                ? "fa-circle-exclamation"
+                : "fa-circle-question"
+            }`}
+          ></i>
+        </div>
+
+        <h3 className="text-lg font-extrabold text-slate-900 dark:text-white mb-2">
+          {confirmDialog.title}
+        </h3>
+        <p className="text-sm text-slate-500 dark:text-slate-400 whitespace-pre-line">
+          {confirmDialog.message}
+        </p>
+      </div>
+
+      {/* Buttons */}
+      <div className="flex gap-2 p-4 border-t border-slate-200 dark:border-slate-800">
+        <button
+          onClick={closeConfirm}
+          className="flex-1 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold py-3 rounded-xl transition"
+        >
+          Batal
+        </button>
+        <button
+          onClick={confirmDialog.onConfirm}
+          className={`flex-1 font-bold py-3 rounded-xl transition text-white ${
+            confirmDialog.variant === "danger"
+              ? "bg-linear-to-r from-red-600 to-red-500 hover:from-red-500 hover:to-red-400"
+              : confirmDialog.variant === "warning"
+              ? "bg-linear-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400"
+              : "bg-linear-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500"
+          }`}
+        >
+          {confirmDialog.variant === "danger" ? "Hapus" : "Ya, Lanjutkan"}
+        </button>
+      </div>
+    </div>
+  </div>
+)}
+
+      {/* ★ MODAL EDIT */}
+      {editingAccount && (
+        <div
+          className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+          onClick={handleCloseEdit}
+        >
+          <div
+            className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header Modal */}
+            <div className="flex items-center justify-between p-6 border-b border-slate-200 dark:border-slate-800">
+              <h2 className="font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                <i className="fa-solid fa-pen-to-square text-blue-600 dark:text-blue-400"></i>
+                <span>Edit Akun</span>
+              </h2>
+              <button
+                onClick={handleCloseEdit}
+                className="w-8 h-8 flex items-center justify-center rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-red-500/20 hover:text-red-500 transition"
+              >
+                <i className="fa-solid fa-xmark"></i>
+              </button>
+            </div>
+
+            {/* Form Edit */}
+            <form onSubmit={handleSaveEdit} className="p-6 space-y-4">
+              {/* Username */}
+              <div>
+                <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-2">
+                  Username *
+                </label>
+                <input
+                  type="text"
+                  value={editUsername}
+                  onChange={(e) => setEditUsername(e.target.value)}
+                  required
+                  className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm text-slate-900 dark:text-white focus:outline-none focus:border-blue-500"
+                />
+                {editUsername !== editingAccount.username && (
+                  <p className="text-xs text-amber-600 dark:text-amber-400 mt-1 flex items-center gap-1">
+                    <i className="fa-solid fa-triangle-exclamation text-[10px]"></i>
+                    Username berubah dari <code>{editingAccount.username}</code>
+                  </p>
+                )}
+              </div>
+
+              {/* Password */}
+              <div>
+                <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-2">
+                  Password
+                </label>
+                <input
+                  type="text"
+                  value={editPassword}
+                  onChange={(e) => setEditPassword(e.target.value)}
+                  placeholder="opsional"
+                  className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm text-slate-900 dark:text-white focus:outline-none focus:border-blue-500"
+                />
+              </div>
+
+              {/* Cookie */}
+              <div>
+                <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-2">
+                  Cookie (.ROBLOSECURITY)
+                </label>
+                <textarea
+                  value={editCookie}
+                  onChange={(e) => setEditCookie(e.target.value)}
+                  placeholder="opsional"
+                  rows={2}
+                  className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm font-mono text-slate-900 dark:text-white resize-none focus:outline-none focus:border-blue-500"
+                />
+              </div>
+
+              {/* Kategori */}
+              <div>
+                <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-2">
+                  Kategori
+                </label>
+                <KategoriDropdown
+                  value={editKategori}
+                  onChange={setEditKategori}
+                  options={kategoriList.map((k) => ({
+                    id: k.id,
+                    kategori: k.kategori,
+                  }))}
+                  placeholder="Pilih kategori..."
+                />
+              </div>
+
+              {/* Added By */}
+              <div>
+                <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-2">
+                  Added By
+                </label>
+                <KategoriDropdown
+                  value={editAddedBy}
+                  onChange={setEditAddedBy}
+                  options={[
+                    { id: 1, kategori: "lan4337" },
+                    { id: 2, kategori: "ushouldrunn" },
+                    { id: 3, kategori: "rizki" },
+                  ]}
+                />
+              </div>
+
+              {/* Buttons */}
+              <div className="flex gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={handleCloseEdit}
+                  className="flex-1 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold py-3 rounded-xl transition"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  disabled={editSaving}
+                  className="flex-1 bg-linear-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 disabled:opacity-50 text-white font-bold py-3 rounded-xl transition flex items-center justify-center gap-2"
+                >
+                  <i
+                    className={`fa-solid ${editSaving ? "fa-spinner fa-spin" : "fa-check"}`}
+                  ></i>
+                  <span>{editSaving ? "Menyimpan..." : "Simpan"}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </>
   );
 }

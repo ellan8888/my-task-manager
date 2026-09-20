@@ -134,6 +134,105 @@ export async function POST(req: NextRequest) {
 }
 
 // ============================================================
+// PATCH — Edit akun (username, password, cookie, kategori, added_by)
+// ============================================================
+export async function PATCH(req: NextRequest) {
+  try {
+    const body = await req.json();
+    const { username, password, roblox_cookie, kategori, added_by } = body;
+    const { searchParams } = new URL(req.url);
+    const targetUsername = searchParams.get("username");
+
+    if (!targetUsername) {
+      return NextResponse.json(
+        { success: false, message: "Username target wajib" },
+        { status: 400 }
+      );
+    }
+
+    // Cek existing
+    const { data: existing, error: fetchErr } = await supabase
+      .from("accounts_stock")
+      .select("username, status, used, logged_out")
+      .eq("username", targetUsername)
+      .maybeSingle();
+
+    if (fetchErr) {
+      return NextResponse.json(
+        { success: false, message: fetchErr.message },
+        { status: 500 }
+      );
+    }
+
+    if (!existing) {
+      return NextResponse.json(
+        { success: false, message: "Akun nggak ada di stock" },
+        { status: 404 }
+      );
+    }
+
+    // Guard: jangan edit kalau udah laku
+    if (existing.logged_out) {
+      return NextResponse.json(
+        { success: false, message: "Akun udah laku — nggak bisa diedit" },
+        { status: 400 }
+      );
+    }
+
+    // Kalau username baru beda, cek dulu apakah udah ada
+    if (username && username !== targetUsername) {
+      const { data: dupe } = await supabase
+        .from("accounts_stock")
+        .select("id")
+        .eq("username", username)
+        .maybeSingle();
+
+      if (dupe) {
+        return NextResponse.json(
+          { success: false, message: `Username "${username}" udah ada` },
+          { status: 409 }
+        );
+      }
+    }
+
+    // Build update object — cuma field yang dikirim
+    const updateData: any = {
+      updated_at: new Date().toISOString(),
+    };
+    if (username !== undefined) updateData.username = username;
+    if (password !== undefined) updateData.password = password || null;
+    if (roblox_cookie !== undefined) updateData.roblox_cookie = roblox_cookie || null;
+    if (kategori !== undefined) updateData.kategori = kategori;
+    if (added_by !== undefined) updateData.added_by = added_by;
+
+    const { data, error } = await supabase
+      .from("accounts_stock")
+      .update(updateData)
+      .eq("username", targetUsername)
+      .select()
+      .single();
+
+    if (error) {
+      return NextResponse.json(
+        { success: false, message: error.message },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json({
+      success: true,
+      message: `Akun "${targetUsername}" berhasil diupdate`,
+      data,
+    });
+  } catch (err: any) {
+    return NextResponse.json(
+      { success: false, message: err.message },
+      { status: 500 }
+    );
+  }
+}
+
+// ============================================================
 // DELETE — Hapus stock (opsional)
 // ============================================================
 export async function DELETE(req: NextRequest) {
