@@ -3,9 +3,9 @@ import type { MetadataRoute } from "next";
 export default function manifest(): MetadataRoute.Manifest {
   return {
     name: "My Task Manager",
-    short_name: "My Tasks",
+    short_name: "Admin",
     description: "Personal task manager and reminder",
-    start_url: "/",
+    start_url: "/admin",
     display: "standalone",
     background_color: "#ffffff",
     theme_color: "#111827",
