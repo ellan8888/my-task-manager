@@ -6,9 +6,12 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
+// ============================================================
+// POST — Mark stock sebagai USED (setelah input ke itemku)
+// ============================================================
 export async function POST(req: NextRequest) {
   try {
-    const { username } = await req.json();
+    const { username, order_id } = await req.json();
 
     if (!username) {
       return NextResponse.json(
@@ -20,7 +23,7 @@ export async function POST(req: NextRequest) {
     // Guard: cek existing
     const { data: existing, error: fetchErr } = await supabase
       .from("accounts_stock")
-      .select("username, switched")
+      .select("username, used")
       .eq("username", username)
       .maybeSingle();
 
@@ -38,10 +41,10 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    if (existing.switched) {
+    if (existing.used) {
       return NextResponse.json({
         success: true,
-        message: "Udah pernah di-switch",
+        message: "Udah pernah di-mark used",
         skipped: true,
       });
     }
@@ -49,8 +52,11 @@ export async function POST(req: NextRequest) {
     const { error } = await supabase
       .from("accounts_stock")
       .update({
-        switched: true,
-        switched_at: new Date().toISOString(),
+        used: true,                                    // ← ★ INI
+        status: "listed",                              // ← ★ INI
+        used_at: new Date().toISOString(),             // ← ★ INI
+        used_order_id: order_id || null,
+        listed_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       })
       .eq("username", username);
@@ -64,7 +70,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      message: `${username} di-mark switched`,
+      message: `${username} di-mark used`,
     });
   } catch (err: any) {
     return NextResponse.json(
