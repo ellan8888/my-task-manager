@@ -17,35 +17,6 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Guard: cek existing
-    const { data: existing, error: fetchErr } = await supabase
-      .from("accounts_stock")
-      .select("username, switched")
-      .eq("username", username)
-      .maybeSingle();
-
-    if (fetchErr) {
-      return NextResponse.json(
-        { success: false, message: fetchErr.message },
-        { status: 500 }
-      );
-    }
-
-    if (!existing) {
-      return NextResponse.json(
-        { success: false, message: "Username nggak ada di stock" },
-        { status: 404 }
-      );
-    }
-
-    if (existing.switched) {
-      return NextResponse.json({
-        success: true,
-        message: "Udah pernah di-switch",
-        skipped: true,
-      });
-    }
-
     const { error } = await supabase
       .from("accounts_stock")
       .update({

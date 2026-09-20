@@ -31,6 +31,10 @@ export async function GET(req: NextRequest) {
     if (loggedOut !== null) query = query.eq("logged_out", loggedOut === "true");
     if (status) query = query.eq("status", status);
 
+    const switched = searchParams.get("switched");
+// ...
+if (switched !== null) query = query.eq("switched", switched === "true");
+
     const { data, error } = await query;
 
     if (error) {
