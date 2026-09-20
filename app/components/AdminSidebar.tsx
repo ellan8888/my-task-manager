@@ -67,6 +67,13 @@ export default function AdminSidebar({ sidebarOpen, setSidebarOpen }: Props) {
       label: "Stock Akun",
       active: pathname === "/admin/stock",
     },
+
+    {
+    href: "/admin/akun-laku",
+    icon: "fa-circle-check",
+    label: "Akun Laku",
+    active: pathname === "/admin/akun-laku",
+  },
     {
       href: "/admin/kategori",
       icon: "fa-folder-tree",

@@ -17,6 +17,8 @@ type StockAccount = {
   used: boolean;
   logged_out: boolean;
   created_at: string;
+  used_at: string | null;    // ← ★ TAMBAH
+  listed_at: string | null;
 };
 
 export default function StokPribadiPage() {
@@ -48,16 +50,17 @@ export default function StokPribadiPage() {
   };
 
   // Load akun dengan status personal
-  const loadAccounts = async () => {
-    setLoading(true);
-    try {
-      const res = await fetch("/api/accounts/stock?status=personal");
-      const data = await res.json();
-      if (data.success) setAccounts(data.data || []);
-    } finally {
-      setLoading(false);
-    }
-  };
+ const loadAccounts = async () => {
+  setLoading(true);
+  try {
+    // ★ Cuma akun personal yang belum laku
+    const res = await fetch("/api/accounts/stock?status=personal&logged_out=false");
+    const data = await res.json();
+    if (data.success) setAccounts(data.data || []);
+  } finally {
+    setLoading(false);
+  }
+};
 
   useEffect(() => {
     loadKategori();

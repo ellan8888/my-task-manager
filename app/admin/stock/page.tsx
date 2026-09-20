@@ -12,10 +12,13 @@ type StockAccount = {
   roblox_cookie: string | null;
   kategori: string | null;
   added_by: string | null;
+  status: string;
   used: boolean;
   logged_out: boolean;
   logged_out_at: string | null;
   created_at: string;
+  used_at: string | null;    // ← ★ TAMBAH
+  listed_at: string | null;
 };
 
 type KategoriLink = {
@@ -40,7 +43,7 @@ export default function StockPage() {
   const [kategori, setKategori] = useState("");
   const [addedBy, setAddedBy] = useState("lan4337");
   const [saving, setSaving] = useState(false);
-  const [filter, setFilter] = useState<"all" | "ready" | "used" | "logged_out">("all");
+  const [filter, setFilter] = useState<"all" | "ready" | "used">("all");
 
   // Mode tambah kategori baru
   const [isNewKategori, setIsNewKategori] = useState(false);
@@ -67,20 +70,20 @@ export default function StockPage() {
   };
 
   const loadAccounts = async () => {
-    setLoading(true);
-    try {
-      let url = "/api/accounts/stock";
-      if (filter === "ready") url += "?used=false&logged_out=false";
-      else if (filter === "used") url += "?used=true";
-      else if (filter === "logged_out") url += "?logged_out=true";
+  setLoading(true);
+  try {
+    // ★ Default: cuma akun yang BELUM laku (logged_out = false)
+    let url = "/api/accounts/stock?logged_out=false";
+    if (filter === "ready") url = "/api/accounts/stock?used=false&logged_out=false";
+    else if (filter === "used") url = "/api/accounts/stock?used=true&logged_out=false";
 
-      const res = await fetch(url);
-      const data = await res.json();
-      if (data.success) setAccounts(data.data || []);
-    } finally {
-      setLoading(false);
-    }
-  };
+    const res = await fetch(url);
+    const data = await res.json();
+    if (data.success) setAccounts(data.data || []);
+  } finally {
+    setLoading(false);
+  }
+};
 
   useEffect(() => {
     loadKategori();
@@ -432,7 +435,6 @@ export default function StockPage() {
                       Semua: "all",
                       Ready: "ready",
                       Used: "used",
-                      "Logged Out": "logged_out",
                     };
                     setFilter(map[val] || "all");
                   }}
@@ -440,7 +442,6 @@ export default function StockPage() {
                     { id: 1, kategori: "Semua" },
                     { id: 2, kategori: "Ready" },
                     { id: 3, kategori: "Used" },
-                    { id: 4, kategori: "Logged Out" },
                   ]}
                 />
               </div>
@@ -474,14 +475,14 @@ export default function StockPage() {
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
                       {acc.used ? (
-                        <span className="px-2 py-1 bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-300 text-[10px] font-bold rounded-lg flex items-center gap-1">
-                          <i className="fa-solid fa-check text-[9px]"></i>
-                          USED
+                        <span className="px-2 py-1 bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 text-[10px] font-bold rounded-lg flex items-center gap-1">
+                          <i className="fa-solid fa-rocket text-[9px]"></i>
+                          READY
                         </span>
                       ) : (
-                        <span className="px-2 py-1 bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 text-[10px] font-bold rounded-lg flex items-center gap-1">
-                          <i className="fa-solid fa-circle text-[9px]"></i>
-                          READY
+                        <span className="px-2 py-1 bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-300 text-[10px] font-bold rounded-lg flex items-center gap-1">
+                          <i className="fa-solid fa-clock text-[9px]"></i>
+                          PROGRESS
                         </span>
                       )}
                       {acc.logged_out && (
