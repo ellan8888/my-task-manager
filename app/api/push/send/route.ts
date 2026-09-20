@@ -65,10 +65,16 @@ export async function POST(req: NextRequest) {
         sent++;
       } catch (error: any) {
         failed++;
+        console.error(`❌ Push failed for sub ${sub.id}:`, {
+            statusCode: error.statusCode,
+            body: error.body,
+            message: error.message,
+            endpoint: sub.endpoint.substring(0, 50) + "...",
+        });
         if (error.statusCode === 410 || error.statusCode === 404) {
-          toDelete.push(sub.id);
+            toDelete.push(sub.id);
         }
-      }
+        }
     }
 
     // Hapus subscription yang expired
