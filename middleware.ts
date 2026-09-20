@@ -8,6 +8,9 @@ const PUBLIC_PATHS = ["/queue"];
 // Path yang selalu di-bypass (aset Next.js, favicon, dll)
 // Tambah "/api/jokian" biar bot Python bisa akses tanpa cookie
 const BYPASS_PATHS = [
+  "/manifest.webmanifest",
+  "/sw.js",
+  "/icon-",
   "/_next",
   "/favicon.ico",
   "/login",

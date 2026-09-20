@@ -5,7 +5,7 @@ export default function manifest(): MetadataRoute.Manifest {
     name: "My Task Manager",
     short_name: "Admin",
     description: "Personal task manager and reminder",
-    start_url: "/admin",
+    start_url: "/",
     display: "standalone",
     background_color: "#ffffff",
     theme_color: "#111827",
