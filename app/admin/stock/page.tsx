@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import KategoriDropdown from "./KategoriDropdown";
 import { useToast } from "@/app/components/ToastProvider";
 import { useSidebar } from "../SidebarContext";
+import { SkeletonList } from "@/app/components/Skeleton";
 
 type StockAccount = {
   id: number;
@@ -448,10 +449,7 @@ export default function StockPage() {
             </div>
 
             {loading ? (
-              <p className="text-slate-400 text-sm flex items-center gap-2">
-                <i className="fa-solid fa-spinner fa-spin"></i>
-                Loading...
-              </p>
+              <SkeletonList count={5} />
             ) : accounts.length === 0 ? (
               <p className="text-slate-400 text-sm">Belum ada stock.</p>
             ) : (

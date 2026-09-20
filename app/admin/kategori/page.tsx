@@ -4,6 +4,7 @@
 import { useEffect, useState } from "react";
 import { useToast } from "@/app/components/ToastProvider";
 import { useSidebar } from "../SidebarContext";
+import { SkeletonList } from "@/app/components/Skeleton";
 
 type KategoriLink = {
   id: number;
@@ -260,10 +261,7 @@ export default function KategoriPage() {
             </h2>
 
             {loading ? (
-              <p className="text-slate-400 text-sm flex items-center gap-2">
-                <i className="fa-solid fa-spinner fa-spin"></i>
-                Loading...
-              </p>
+              <SkeletonList count={5} />
             ) : list.length === 0 ? (
               <div className="text-center py-8">
                 <i className="fa-solid fa-folder-open text-4xl text-slate-300 dark:text-slate-700 mb-3"></i>

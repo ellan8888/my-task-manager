@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import IncomeChart from "../components/IncomeChart";
 import TopCustomers from "../components/TopCustomers";
 import { useSidebar } from "./SidebarContext";
+import { SkeletonStatsCard } from "@/app/components/Skeleton";
+import { PushNotificationButton } from "../components/PushNotificationButton";
 
 type IncomeStats = {
   hariIni: number;
@@ -73,14 +75,24 @@ export default function AdminPage() {
             </p>
           </div>
         </div>
+        <PushNotificationButton />
       </header>
 
       {/* Content */}
       <div className="flex-1 overflow-y-auto scrollbar-hide p-4 md:p-8 space-y-6">
         {/* Summary Cards */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          {/* Hari Ini */}
-          <div className="bg-white dark:bg-slate-900/50 backdrop-blur-xl border border-slate-200 dark:border-slate-800 rounded-2xl p-4 md:p-5 relative overflow-hidden group hover:border-green-500/50 transition-all duration-300">
+          {loading ? (
+            <>
+              <SkeletonStatsCard />
+              <SkeletonStatsCard />
+              <SkeletonStatsCard />
+              <SkeletonStatsCard />
+            </>
+          ) : (
+            <>
+              {/* Hari Ini */}
+              <div className="bg-white dark:bg-slate-900/50 backdrop-blur-xl border border-slate-200 dark:border-slate-800 rounded-2xl p-4 md:p-5 relative overflow-hidden group hover:border-green-500/50 transition-all duration-300">
             <div className="absolute -right-4 -bottom-4 w-20 h-20 bg-green-500/10 dark:bg-green-600/10 rounded-full blur-xl"></div>
             <div className="flex justify-between items-start">
               <div className="min-w-0 flex-1">
@@ -170,6 +182,8 @@ export default function AdminPage() {
               <span>Bulan Ini</span>
             </div>
           </div>
+          </>
+          )}
         </div>
 
         {/* Grafik Pendapatan */}

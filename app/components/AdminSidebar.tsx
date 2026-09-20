@@ -13,8 +13,11 @@ export default function AdminSidebar({ sidebarOpen, setSidebarOpen }: Props) {
   const [isDark, setIsDark] = useState(true);
   const pathname = usePathname();
 
+  // ★ State untuk dropdown menu
+  const [openDropdown, setOpenDropdown] = useState<string | null>(null);
+
   // ══════════════════════════════════════════════════════
-  // THEME STATE — sync dengan localStorage
+  // THEME STATE
   // ══════════════════════════════════════════════════════
   useEffect(() => {
     const savedTheme = localStorage.getItem("theme");
@@ -29,6 +32,17 @@ export default function AdminSidebar({ sidebarOpen, setSidebarOpen }: Props) {
     }
   }, []);
 
+  // ★ Auto-open dropdown kalau salah satu sub-menu aktif
+  useEffect(() => {
+    if (
+      pathname.startsWith("/admin/stok-pribadi") ||
+      pathname.startsWith("/admin/stock") ||
+      pathname.startsWith("/admin/akun-laku")
+    ) {
+      setOpenDropdown("akun");
+    }
+  }, [pathname]);
+
   const toggleTheme = () => {
     const newMode = !isDark;
     setIsDark(newMode);
@@ -41,10 +55,39 @@ export default function AdminSidebar({ sidebarOpen, setSidebarOpen }: Props) {
     }
   };
 
-  
+  const toggleDropdown = (key: string) => {
+    setOpenDropdown(openDropdown === key ? null : key);
+  };
 
   // ══════════════════════════════════════════════════════
-  // MENU ITEMS — tambah menu baru di sini aja
+  // SUB-MENU UNTUK DROPDOWN "AKUN"
+  // ══════════════════════════════════════════════════════
+  const akunSubMenu = [
+    {
+      href: "/admin/stok-pribadi",
+      icon: "fa-vault",
+      label: "Stok Pribadi",
+      active: pathname === "/admin/stok-pribadi",
+    },
+    {
+      href: "/admin/stock",
+      icon: "fa-boxes-stacked",
+      label: "Stock Itemku",
+      active: pathname === "/admin/stock",
+    },
+    {
+      href: "/admin/akun-laku",
+      icon: "fa-circle-check",
+      label: "Akun Laku",
+      active: pathname === "/admin/akun-laku",
+    },
+  ];
+
+  // ★ Cek apakah salah satu sub-menu "Akun" sedang aktif
+  const isAkunActive = akunSubMenu.some((item) => item.active);
+
+  // ══════════════════════════════════════════════════════
+  // MENU ITEMS — menu utama (tanpa sub-menu)
   // ══════════════════════════════════════════════════════
   const menuItems = [
     {
@@ -59,21 +102,12 @@ export default function AdminSidebar({ sidebarOpen, setSidebarOpen }: Props) {
       label: "Dashboard Admin",
       active: pathname === "/admin",
     },
+  ];
 
-    { href: "/admin/stok-pribadi", icon: "fa-vault", label: "Stok Pribadi", active: pathname === "/admin/stok-pribadi" },
-    {
-      href: "/admin/stock",
-      icon: "fa-boxes-stacked",
-      label: "Stock Akun",
-      active: pathname === "/admin/stock",
-    },
-
-    {
-    href: "/admin/akun-laku",
-    icon: "fa-circle-check",
-    label: "Akun Laku",
-    active: pathname === "/admin/akun-laku",
-  },
+  // ══════════════════════════════════════════════════════
+  // MENU ITEMS — bawah (setelah dropdown "Akun")
+  // ══════════════════════════════════════════════════════
+  const menuItemsBelow = [
     {
       href: "/admin/kategori",
       icon: "fa-folder-tree",
@@ -91,9 +125,7 @@ export default function AdminSidebar({ sidebarOpen, setSidebarOpen }: Props) {
 
   return (
     <>
-      {/* ══════════════════════════════════════════════════════ */}
-      {/* MOBILE OVERLAY                                       */}
-      {/* ══════════════════════════════════════════════════════ */}
+      {/* MOBILE OVERLAY */}
       {sidebarOpen && (
         <div
           className="fixed inset-0 bg-slate-950/40 dark:bg-slate-950/70 backdrop-blur-sm z-40 md:hidden"
@@ -101,15 +133,13 @@ export default function AdminSidebar({ sidebarOpen, setSidebarOpen }: Props) {
         />
       )}
 
-      {/* ══════════════════════════════════════════════════════ */}
-      {/* SIDEBAR                                              */}
-      {/* ══════════════════════════════════════════════════════ */}
+      {/* SIDEBAR */}
       <aside
         className={`fixed inset-y-0 left-0 z-50 w-72 h-screen bg-white dark:bg-slate-900/95 backdrop-blur-xl border-r border-slate-200 dark:border-slate-800/80 flex flex-col justify-between p-5 transform-gpu will-change-transform transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${
           sidebarOpen ? "translate-x-0" : "-translate-x-full"
         }`}
       >
-        <div>
+        <div className="overflow-y-auto custom-scrollbar">
           {/* Logo */}
           <div className="flex items-center justify-between pb-6 border-b border-slate-200 dark:border-slate-800/80">
             <div className="flex items-center space-x-3.5">
@@ -130,7 +160,91 @@ export default function AdminSidebar({ sidebarOpen, setSidebarOpen }: Props) {
 
           {/* Menu */}
           <nav className="mt-6 space-y-2">
+            {/* ★ MENU ATAS — Task Manager, Dashboard Admin */}
             {menuItems.map((item) => (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={`flex items-center space-x-3.5 px-4 py-3 rounded-2xl text-sm font-semibold transition-all group ${
+                  item.active
+                    ? "bg-violet-100 dark:bg-violet-500/15 text-violet-700 dark:text-violet-200 border border-violet-200 dark:border-violet-500/40"
+                    : "text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800/60 hover:text-slate-900 dark:hover:text-slate-200"
+                }`}
+              >
+                <i
+                  className={`fa-solid ${item.icon} w-5 text-center ${
+                    item.active
+                      ? "text-violet-600 dark:text-violet-300"
+                      : "group-hover:text-violet-500 dark:group-hover:text-violet-400"
+                  } transition`}
+                ></i>
+                <span>{item.label}</span>
+                {item.active && (
+                  <span className="ml-auto w-2 h-2 rounded-full bg-violet-500"></span>
+                )}
+              </Link>
+            ))}
+
+            {/* ★ DROPDOWN "AKUN" */}
+            <div>
+              {/* Trigger */}
+              <button
+                onClick={() => toggleDropdown("akun")}
+                className={`w-full flex items-center space-x-3.5 px-4 py-3 rounded-2xl text-sm font-semibold transition-all group ${
+                  isAkunActive
+                    ? "bg-violet-100 dark:bg-violet-500/15 text-violet-700 dark:text-violet-200 border border-violet-200 dark:border-violet-500/40"
+                    : "text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800/60 hover:text-slate-900 dark:hover:text-slate-200"
+                }`}
+              >
+                <i
+                  className={`fa-solid fa-user-shield w-5 text-center ${
+                    isAkunActive
+                      ? "text-violet-600 dark:text-violet-300"
+                      : "group-hover:text-violet-500 dark:group-hover:text-violet-400"
+                  } transition`}
+                ></i>
+                <span>Akun</span>
+
+                {/* Chevron indicator */}
+                <i
+                  className={`fa-solid fa-chevron-down ml-auto text-xs transition-transform duration-200 ${
+                    openDropdown === "akun" ? "rotate-180" : ""
+                  }`}
+                ></i>
+              </button>
+
+              {/* Sub-menu */}
+              {openDropdown === "akun" && (
+                <div className="mt-1 ml-4 pl-4 border-l-2 border-slate-200 dark:border-slate-800 space-y-1">
+                  {akunSubMenu.map((item) => (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      className={`flex items-center space-x-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all group ${
+                        item.active
+                          ? "bg-violet-50 dark:bg-violet-500/10 text-violet-700 dark:text-violet-200"
+                          : "text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800/60 hover:text-slate-900 dark:hover:text-slate-200"
+                      }`}
+                    >
+                      <i
+                        className={`fa-solid ${item.icon} w-4 text-center text-xs ${
+                          item.active
+                            ? "text-violet-600 dark:text-violet-300"
+                            : "group-hover:text-violet-500 dark:group-hover:text-violet-400"
+                        } transition`}
+                      ></i>
+                      <span>{item.label}</span>
+                      {item.active && (
+                        <span className="ml-auto w-1.5 h-1.5 rounded-full bg-violet-500"></span>
+                      )}
+                    </Link>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* ★ MENU BAWAH — Kategori Link, Queue Jokian */}
+            {menuItemsBelow.map((item) => (
               <Link
                 key={item.href}
                 href={item.href}

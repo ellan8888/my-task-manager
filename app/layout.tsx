@@ -8,6 +8,7 @@ export const metadata: Metadata = {
   title: "My Task Manager",
   description: "Personal task manager and reminder",
   applicationName: "My Task Manager",
+  manifest: "/manifest.webmanifest",
 };
 
 export default function RootLayout({

@@ -2,6 +2,7 @@
 
 import AdminSidebar from "../components/AdminSidebar";
 import { SidebarProvider, useSidebar } from "./SidebarContext";
+import { PushNotificationButton } from "../components/PushNotificationButton";
 
 function LayoutInner({ children }: { children: React.ReactNode }) {
   const { sidebarOpen, setSidebarOpen } = useSidebar();
