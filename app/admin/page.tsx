@@ -20,6 +20,23 @@ export default function AdminPage() {
   const [loading, setLoading] = useState(true);
   const { sidebarOpen, toggleSidebar } = useSidebar();
 
+  // ★ State buat show/hide pendapatan
+  const [showIncome, setShowIncome] = useState(true);
+
+  // Load preferensi dari localStorage
+  useEffect(() => {
+    const saved = localStorage.getItem("showIncome");
+    if (saved !== null) setShowIncome(saved === "true");
+  }, []);
+
+  const toggleIncome = () => {
+    setShowIncome((prev) => {
+      const next = !prev;
+      localStorage.setItem("showIncome", String(next));
+      return next;
+    });
+  };
+
   // ══════════════════════════════════════════════════════
   // FETCH STATS
   // ══════════════════════════════════════════════════════
@@ -44,6 +61,12 @@ export default function AdminPage() {
   const formatRupiah = (num: number) => {
     return "Rp " + num.toLocaleString("id-ID");
   };
+
+  const masked = (num: number) =>
+    showIncome ? formatRupiah(num) : "Rp ••••••";
+
+  const maskedCount = (num: number) =>
+    showIncome ? String(num) : "•••";
 
   return (
     <>
@@ -75,7 +98,22 @@ export default function AdminPage() {
             </p>
           </div>
         </div>
-        <PushNotificationButton />
+
+        <div className="flex items-center gap-2">
+          <button
+            onClick={toggleIncome}
+            className="w-10 h-10 flex items-center justify-center rounded-xl bg-slate-100 dark:bg-slate-900 hover:bg-slate-200 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition"
+            title={showIncome ? "Sembunyikan Pendapatan" : "Tampilkan Pendapatan"}
+          >
+            <i
+              className={`fa-solid ${
+                showIncome ? "fa-eye" : "fa-eye-slash"
+              } text-base`}
+            ></i>
+          </button>
+
+          <PushNotificationButton />
+        </div>
       </header>
 
       {/* Content */}
@@ -93,96 +131,96 @@ export default function AdminPage() {
             <>
               {/* Hari Ini */}
               <div className="bg-white dark:bg-slate-900/50 backdrop-blur-xl border border-slate-200 dark:border-slate-800 rounded-2xl p-4 md:p-5 relative overflow-hidden group hover:border-green-500/50 transition-all duration-300">
-            <div className="absolute -right-4 -bottom-4 w-20 h-20 bg-green-500/10 dark:bg-green-600/10 rounded-full blur-xl"></div>
-            <div className="flex justify-between items-start">
-              <div className="min-w-0 flex-1">
-                <p className="text-xs font-bold text-green-600 dark:text-green-400 uppercase tracking-wider flex items-center gap-1.5">
-                  <i className="fa-solid fa-money-bill-wave text-xs"></i>
-                  <span>Hari Ini</span>
-                </p>
-                <h3 className="text-lg md:text-2xl font-black text-green-600 dark:text-green-400 mt-1 truncate">
-                  {stats ? formatRupiah(stats.hariIni) : "—"}
-                </h3>
+                <div className="absolute -right-4 -bottom-4 w-20 h-20 bg-green-500/10 dark:bg-green-600/10 rounded-full blur-xl"></div>
+                <div className="flex justify-between items-start">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs font-bold text-green-600 dark:text-green-400 uppercase tracking-wider flex items-center gap-1.5">
+                      <i className="fa-solid fa-money-bill-wave text-xs"></i>
+                      <span>Hari Ini</span>
+                    </p>
+                    <h3 className="text-lg md:text-2xl font-black text-green-600 dark:text-green-400 mt-1 truncate">
+                      {stats ? masked(stats.hariIni) : "—"}
+                    </h3>
+                  </div>
+                  <div className="w-10 h-10 rounded-xl bg-green-100 dark:bg-green-500/10 text-green-600 dark:text-green-400 flex items-center justify-center border border-green-200 dark:border-green-500/20 shrink-0">
+                    <i className="fa-solid fa-coins text-base"></i>
+                  </div>
+                </div>
+                <div className="mt-3 flex items-center text-[11px] font-semibold text-green-600 dark:text-green-400">
+                  <i className="fa-solid fa-arrow-trend-up mr-1.5"></i>
+                  <span>Pendapatan Hari Ini</span>
+                </div>
               </div>
-              <div className="w-10 h-10 rounded-xl bg-green-100 dark:bg-green-500/10 text-green-600 dark:text-green-400 flex items-center justify-center border border-green-200 dark:border-green-500/20 shrink-0">
-                <i className="fa-solid fa-coins text-base"></i>
-              </div>
-            </div>
-            <div className="mt-3 flex items-center text-[11px] font-semibold text-green-600 dark:text-green-400">
-              <i className="fa-solid fa-arrow-trend-up mr-1.5"></i>
-              <span>Pendapatan Hari Ini</span>
-            </div>
-          </div>
 
-          {/* Minggu Ini */}
-          <div className="bg-white dark:bg-slate-900/50 backdrop-blur-xl border border-slate-200 dark:border-slate-800 rounded-2xl p-4 md:p-5 relative overflow-hidden group hover:border-blue-500/50 transition-all duration-300">
-            <div className="absolute -right-4 -bottom-4 w-20 h-20 bg-blue-500/10 dark:bg-blue-600/10 rounded-full blur-xl"></div>
-            <div className="flex justify-between items-start">
-              <div className="min-w-0 flex-1">
-                <p className="text-xs font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wider flex items-center gap-1.5">
-                  <i className="fa-solid fa-calendar-week text-xs"></i>
-                  <span>7 Hari</span>
-                </p>
-                <h3 className="text-lg md:text-2xl font-black text-blue-600 dark:text-blue-400 mt-1 truncate">
-                  {stats ? formatRupiah(stats.mingguIni) : "—"}
-                </h3>
+              {/* Minggu Ini */}
+              <div className="bg-white dark:bg-slate-900/50 backdrop-blur-xl border border-slate-200 dark:border-slate-800 rounded-2xl p-4 md:p-5 relative overflow-hidden group hover:border-blue-500/50 transition-all duration-300">
+                <div className="absolute -right-4 -bottom-4 w-20 h-20 bg-blue-500/10 dark:bg-blue-600/10 rounded-full blur-xl"></div>
+                <div className="flex justify-between items-start">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wider flex items-center gap-1.5">
+                      <i className="fa-solid fa-calendar-week text-xs"></i>
+                      <span>7 Hari</span>
+                    </p>
+                    <h3 className="text-lg md:text-2xl font-black text-blue-600 dark:text-blue-400 mt-1 truncate">
+                      {stats ? masked(stats.mingguIni) : "—"}
+                    </h3>
+                  </div>
+                  <div className="w-10 h-10 rounded-xl bg-blue-100 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center border border-blue-200 dark:border-blue-500/20 shrink-0">
+                    <i className="fa-solid fa-chart-line text-base"></i>
+                  </div>
+                </div>
+                <div className="mt-3 flex items-center text-[11px] font-semibold text-blue-600 dark:text-blue-400">
+                  <i className="fa-solid fa-arrow-trend-up mr-1.5"></i>
+                  <span>Pendapatan Minggu Ini</span>
+                </div>
               </div>
-              <div className="w-10 h-10 rounded-xl bg-blue-100 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center border border-blue-200 dark:border-blue-500/20 shrink-0">
-                <i className="fa-solid fa-chart-line text-base"></i>
-              </div>
-            </div>
-            <div className="mt-3 flex items-center text-[11px] font-semibold text-blue-600 dark:text-blue-400">
-              <i className="fa-solid fa-arrow-trend-up mr-1.5"></i>
-              <span>Pendapatan Minggu Ini</span>
-            </div>
-          </div>
 
-          {/* Bulan Ini */}
-          <div className="bg-white dark:bg-slate-900/50 backdrop-blur-xl border border-slate-200 dark:border-slate-800 rounded-2xl p-4 md:p-5 relative overflow-hidden group hover:border-purple-500/50 transition-all duration-300">
-            <div className="absolute -right-4 -bottom-4 w-20 h-20 bg-purple-500/10 dark:bg-purple-600/10 rounded-full blur-xl"></div>
-            <div className="flex justify-between items-start">
-              <div className="min-w-0 flex-1">
-                <p className="text-xs font-bold text-purple-600 dark:text-purple-400 uppercase tracking-wider flex items-center gap-1.5">
-                  <i className="fa-solid fa-calendar text-xs"></i>
+              {/* Bulan Ini */}
+              <div className="bg-white dark:bg-slate-900/50 backdrop-blur-xl border border-slate-200 dark:border-slate-800 rounded-2xl p-4 md:p-5 relative overflow-hidden group hover:border-purple-500/50 transition-all duration-300">
+                <div className="absolute -right-4 -bottom-4 w-20 h-20 bg-purple-500/10 dark:bg-purple-600/10 rounded-full blur-xl"></div>
+                <div className="flex justify-between items-start">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs font-bold text-purple-600 dark:text-purple-400 uppercase tracking-wider flex items-center gap-1.5">
+                      <i className="fa-solid fa-calendar text-xs"></i>
+                      <span>Bulan Ini</span>
+                    </p>
+                    <h3 className="text-lg md:text-2xl font-black text-purple-600 dark:text-purple-400 mt-1 truncate">
+                      {stats ? masked(stats.bulanIni) : "—"}
+                    </h3>
+                  </div>
+                  <div className="w-10 h-10 rounded-xl bg-purple-100 dark:bg-purple-500/10 text-purple-600 dark:text-purple-400 flex items-center justify-center border border-purple-200 dark:border-purple-500/20 shrink-0">
+                    <i className="fa-solid fa-calendar-check text-base"></i>
+                  </div>
+                </div>
+                <div className="mt-3 flex items-center text-[11px] font-semibold text-purple-600 dark:text-purple-400">
+                  <i className="fa-solid fa-arrow-trend-up mr-1.5"></i>
+                  <span>Pendapatan Bulan Ini</span>
+                </div>
+              </div>
+
+              {/* Total Order */}
+              <div className="bg-white dark:bg-slate-900/50 backdrop-blur-xl border border-slate-200 dark:border-slate-800 rounded-2xl p-4 md:p-5 relative overflow-hidden group hover:border-amber-500/50 transition-all duration-300">
+                <div className="absolute -right-4 -bottom-4 w-20 h-20 bg-amber-500/10 dark:bg-amber-600/10 rounded-full blur-xl"></div>
+                <div className="flex justify-between items-start">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs font-bold text-amber-600 dark:text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
+                      <i className="fa-solid fa-boxes-stacked text-xs"></i>
+                      <span>Total Order</span>
+                    </p>
+                    <h3 className="text-lg md:text-2xl font-black text-amber-600 dark:text-amber-400 mt-1 truncate">
+                      {stats ? maskedCount(stats.totalOrders) : "—"}
+                    </h3>
+                  </div>
+                  <div className="w-10 h-10 rounded-xl bg-amber-100 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center border border-amber-200 dark:border-amber-500/20 shrink-0">
+                    <i className="fa-solid fa-receipt text-base"></i>
+                  </div>
+                </div>
+                <div className="mt-3 flex items-center text-[11px] font-semibold text-amber-600 dark:text-amber-400">
+                  <i className="fa-solid fa-hashtag mr-1.5"></i>
                   <span>Bulan Ini</span>
-                </p>
-                <h3 className="text-lg md:text-2xl font-black text-purple-600 dark:text-purple-400 mt-1 truncate">
-                  {stats ? formatRupiah(stats.bulanIni) : "—"}
-                </h3>
+                </div>
               </div>
-              <div className="w-10 h-10 rounded-xl bg-purple-100 dark:bg-purple-500/10 text-purple-600 dark:text-purple-400 flex items-center justify-center border border-purple-200 dark:border-purple-500/20 shrink-0">
-                <i className="fa-solid fa-calendar-check text-base"></i>
-              </div>
-            </div>
-            <div className="mt-3 flex items-center text-[11px] font-semibold text-purple-600 dark:text-purple-400">
-              <i className="fa-solid fa-arrow-trend-up mr-1.5"></i>
-              <span>Pendapatan Bulan Ini</span>
-            </div>
-          </div>
-
-          {/* Total Order */}
-          <div className="bg-white dark:bg-slate-900/50 backdrop-blur-xl border border-slate-200 dark:border-slate-800 rounded-2xl p-4 md:p-5 relative overflow-hidden group hover:border-amber-500/50 transition-all duration-300">
-            <div className="absolute -right-4 -bottom-4 w-20 h-20 bg-amber-500/10 dark:bg-amber-600/10 rounded-full blur-xl"></div>
-            <div className="flex justify-between items-start">
-              <div className="min-w-0 flex-1">
-                <p className="text-xs font-bold text-amber-600 dark:text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
-                  <i className="fa-solid fa-boxes-stacked text-xs"></i>
-                  <span>Total Order</span>
-                </p>
-                <h3 className="text-lg md:text-2xl font-black text-amber-600 dark:text-amber-400 mt-1 truncate">
-                  {stats ? stats.totalOrders : "—"}
-                </h3>
-              </div>
-              <div className="w-10 h-10 rounded-xl bg-amber-100 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center border border-amber-200 dark:border-amber-500/20 shrink-0">
-                <i className="fa-solid fa-receipt text-base"></i>
-              </div>
-            </div>
-            <div className="mt-3 flex items-center text-[11px] font-semibold text-amber-600 dark:text-amber-400">
-              <i className="fa-solid fa-hashtag mr-1.5"></i>
-              <span>Bulan Ini</span>
-            </div>
-          </div>
-          </>
+            </>
           )}
         </div>
 
@@ -215,7 +253,7 @@ export default function AdminPage() {
                           {joki}
                         </span>
                         <span className="text-sm font-bold text-violet-600 dark:text-violet-400">
-                          {formatRupiah(amount)}
+                          {showIncome ? formatRupiah(amount) : "Rp ••••••"}
                         </span>
                       </div>
                       <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-2 overflow-hidden">
