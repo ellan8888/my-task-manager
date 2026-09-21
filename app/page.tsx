@@ -93,6 +93,28 @@ const [loadingAccounts, setLoadingAccounts] = useState(false);
     onConfirm: () => {},
   });
 
+  // ★ State bot status
+const [botStatus, setBotStatus] = useState<{
+  isOnline: boolean;
+  lastHeartbeatHuman: string;
+} | null>(null);
+
+// ★ Fetch bot status
+const fetchBotStatus = async () => {
+  try {
+    const res = await fetch("/api/bot/status");
+    const data = await res.json();
+    if (data.success) {
+      setBotStatus({
+        isOnline: data.isOnline,
+        lastHeartbeatHuman: data.lastHeartbeatHuman,
+      });
+    }
+  } catch (err) {
+    console.error("Fetch bot status error:", err);
+  }
+};
+
   const showConfirm = (
     title: string,
     message: string,
@@ -171,6 +193,13 @@ useEffect(() => {
     loadTasks();
     loadJokiOrders();
   }, []);
+
+  // ★ Polling bot status tiap 30 detik
+useEffect(() => {
+  fetchBotStatus();
+  const interval = setInterval(fetchBotStatus, 30000);
+  return () => clearInterval(interval);
+}, []);
 
   useEffect(() => {
   loadTasks();
@@ -841,9 +870,28 @@ body::-webkit-scrollbar {
                   <h1 className="font-extrabold text-lg leading-tight tracking-tight text-slate-900 dark:text-white">
                     My Task Manager
                   </h1>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 font-medium flex items-center gap-1.5 mt-0.5">
-                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> Tokoku-Bot Sync
-                  </p>
+                  <p className="text-xs font-medium flex items-center gap-1.5 mt-0.5">
+  {botStatus === null ? (
+    <>
+      <span className="w-2 h-2 rounded-full bg-slate-400"></span>
+      <span className="text-slate-500 dark:text-slate-400">Cek bot...</span>
+    </>
+  ) : botStatus.isOnline ? (
+    <>
+      <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+      <span className="text-emerald-600 dark:text-emerald-400">
+        Bot Online • {botStatus.lastHeartbeatHuman}
+      </span>
+    </>
+  ) : (
+    <>
+      <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse"></span>
+      <span className="text-rose-600 dark:text-rose-400">
+        Bot Offline • {botStatus.lastHeartbeatHuman}
+      </span>
+    </>
+  )}
+</p>
                 </div>
               </div>
             </div>
@@ -874,7 +922,7 @@ body::-webkit-scrollbar {
                 className="w-full flex items-center space-x-3.5 px-4 py-3 rounded-2xl text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800/60 hover:text-slate-900 dark:hover:text-slate-200 text-sm font-medium transition-all group"
               >
                 <i className="fa-solid fa-robot w-5 text-center group-hover:text-violet-500 dark:group-hover:text-violet-400 transition"></i>
-                <span>Webhook Tokoku-bot</span>
+                <span>Notification</span>
                 <span className="ml-auto w-2 h-2 rounded-full bg-emerald-500"></span>
               </button>
             </nav>
