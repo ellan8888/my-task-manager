@@ -25,6 +25,7 @@ const BYPASS_PATHS = [
   "/api/income",
   "/api/accounts",
   "/api/kategori",
+  "/api/bot", 
 ];
 
 export function middleware(request: NextRequest) {

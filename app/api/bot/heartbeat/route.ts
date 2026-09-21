@@ -8,7 +8,8 @@ const supabaseAdmin = createClient(
 
 export async function POST(req: NextRequest) {
   try {
-    const { bot_name, status, message, metadata } = await req.json();
+    const body = await req.json();
+    const { bot_name, status, message, metadata } = body;
 
     if (!bot_name) {
       return NextResponse.json(
