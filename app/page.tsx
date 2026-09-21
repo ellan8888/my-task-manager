@@ -5,6 +5,7 @@ import { supabase } from "@/lib/supabase";
 import { registerPushSubscription } from "@/lib/push";
 import Link from "next/link";
 
+
 type Task = {
   id: number;
   title: string;
@@ -56,7 +57,31 @@ const [ramAccounts, setRamAccounts] = useState<{
 }[]>([]);
 
 const [loadingAccounts, setLoadingAccounts] = useState(false);
-  
+
+  const [restarting, setRestarting] = useState(false);
+  const handleRestartBot = async () => {
+  if (!confirm("Jalankan ulang bot?\n\nIni bakal menjalankan login.py di komputer kamu.")) {
+    return;
+  }
+
+  setRestarting(true);
+  try {
+    const res = await fetch("/api/bot/restart", { method: "POST" });
+    const data = await res.json();
+
+    if (data.success) {
+      alert("✅ Bot sedang di-restart...\n\nTunggu 30-60 detik.");
+      setTimeout(fetchBotStatus, 5000);
+      setTimeout(fetchBotStatus, 15000);
+    } else {
+      alert(`❌ Gagal: ${data.message}`);
+    }
+  } catch (err) {
+    alert("❌ Gagal menghubungi restart server");
+  } finally {
+    setRestarting(false);
+  }
+};
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [title, setTitle] = useState("");
@@ -870,7 +895,7 @@ body::-webkit-scrollbar {
                   <h1 className="font-extrabold text-lg leading-tight tracking-tight text-slate-900 dark:text-white">
                     My Task Manager
                   </h1>
-                  <p className="text-xs font-medium flex items-center gap-1.5 mt-0.5">
+                  <div className="text-xs font-medium flex items-center gap-1.5 mt-0.5 flex-wrap">
   {botStatus === null ? (
     <>
       <span className="w-2 h-2 rounded-full bg-slate-400"></span>
@@ -889,9 +914,24 @@ body::-webkit-scrollbar {
       <span className="text-rose-600 dark:text-rose-400">
         Bot Offline • {botStatus.lastHeartbeatHuman}
       </span>
+      <button
+        onClick={handleRestartBot}
+        disabled={restarting}
+        className="ml-1 px-2 py-0.5 rounded-md bg-rose-500 hover:bg-rose-600 text-white text-[10px] font-bold transition disabled:opacity-50 flex items-center gap-1"
+        title="Jalankan ulang bot"
+      >
+        {restarting ? (
+          <i className="fa-solid fa-spinner fa-spin"></i>
+        ) : (
+          <>
+            <i className="fa-solid fa-rotate-right"></i>
+            <span>Restart</span>
+          </>
+        )}
+      </button>
     </>
   )}
-</p>
+</div>
                 </div>
               </div>
             </div>
