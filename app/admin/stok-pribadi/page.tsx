@@ -29,6 +29,7 @@ export default function StokPribadiPage() {
   const [kategoriList, setKategoriList] = useState<any[]>([]);
   const [selling, setSelling] = useState<Set<number>>(new Set());
   const { sidebarOpen, toggleSidebar } = useSidebar();
+  const [searchQuery, setSearchQuery] = useState("");
 
   // Form tambah
   const [username, setUsername] = useState("");
@@ -47,7 +48,7 @@ export default function StokPribadiPage() {
   const [editAddedBy, setEditAddedBy] = useState("");
   const [editSaving, setEditSaving] = useState(false);
 
-    // ★ State confirm modal
+  // ★ State confirm modal
   const [confirmDialog, setConfirmDialog] = useState<{
     open: boolean;
     title: string;
@@ -56,19 +57,18 @@ export default function StokPribadiPage() {
     variant: "danger" | "primary" | "warning";
   } | null>(null);
 
-  
-// Helper: buka confirm
-const showConfirm = (
-  title: string,
-  message: string,
-  onConfirm: () => void,
-  variant: "danger" | "primary" | "warning" = "primary"
-) => {
-  setConfirmDialog({ open: true, title, message, onConfirm, variant });
-};
+  // Helper: buka confirm
+  const showConfirm = (
+    title: string,
+    message: string,
+    onConfirm: () => void,
+    variant: "danger" | "primary" | "warning" = "primary"
+  ) => {
+    setConfirmDialog({ open: true, title, message, onConfirm, variant });
+  };
 
-// Helper: tutup confirm
-const closeConfirm = () => setConfirmDialog(null);
+  // Helper: tutup confirm
+  const closeConfirm = () => setConfirmDialog(null);
 
   // Load kategori
   const loadKategori = async () => {
@@ -144,71 +144,72 @@ const closeConfirm = () => setConfirmDialog(null);
 
   // Jual akun
   const handleSell = (uname: string) => {
-  showConfirm(
-    "Jual Akun?",
-    `Jual akun "${uname}"?\n\nBot akan otomatis input ke itemku.`,
-    async () => {
-      closeConfirm();
+    showConfirm(
+      "Jual Akun?",
+      `Jual akun "${uname}"?\n\nBot akan otomatis input ke itemku.`,
+      async () => {
+        closeConfirm();
 
-      setSelling((prev) =>
-        new Set(prev).add(accounts.find((a) => a.username === uname)!.id)
-      );
+        const acc = accounts.find((a) => a.username === uname);
+        if (!acc) return;
 
-      try {
-        const res = await fetch("/api/accounts/stock/sell", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ username: uname }),
-        });
+        setSelling((prev) => new Set(prev).add(acc.id));
 
-        const data = await res.json();
+        try {
+          const res = await fetch("/api/accounts/stock/sell", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ username: uname }),
+          });
 
-        if (data.success) {
-          toast.success(data.message);
-          setAccounts((current) => current.filter((a) => a.username !== uname));
-        } else {
-          toast.error(data.message);
+          const data = await res.json();
+
+          if (data.success) {
+            toast.success(data.message);
+            setAccounts((current) => current.filter((a) => a.username !== uname));
+          } else {
+            toast.error(data.message);
+          }
+        } catch {
+          toast.error("Gagal jual akun");
+        } finally {
+          setSelling((prev) => {
+            const next = new Set(prev);
+            next.delete(acc.id);
+            return next;
+          });
         }
-      } catch {
-        toast.error("Gagal jual akun");
-      } finally {
-        setSelling((prev) => {
-          const next = new Set(prev);
-          next.delete(accounts.find((a) => a.username === uname)?.id || 0);
-          return next;
-        });
-      }
-    },
-    "primary"
-  );
-};
+      },
+      "primary"
+    );
+  };
 
   // Hapus akun
   const handleDelete = (uname: string) => {
-  showConfirm(
-    "Hapus Akun?",
-    `Akun "${uname}" akan dihapus permanen. Lanjutkan?`,
-    async () => {
-      closeConfirm();
-      try {
-        const res = await fetch(
-          `/api/accounts/stock?username=${encodeURIComponent(uname)}`,
-          { method: "DELETE" }
-        );
-        const data = await res.json();
-        if (data.success) {
-          toast.success(data.message);
-          loadAccounts();
-        } else {
-          toast.error(data.message);
+    showConfirm(
+      "Hapus Akun?",
+      `Akun "${uname}" akan dihapus permanen. Lanjutkan?`,
+      async () => {
+        closeConfirm();
+        try {
+          const res = await fetch(
+            `/api/accounts/stock?username=${encodeURIComponent(uname)}`,
+            { method: "DELETE" }
+          );
+          const data = await res.json();
+          if (data.success) {
+            toast.success(data.message);
+            loadAccounts();
+          } else {
+            toast.error(data.message);
+          }
+        } catch {
+          toast.error("Gagal hapus");
         }
-      } catch {
-        toast.error("Gagal hapus");
-      }
-    },
-    "danger"
-  );
-};
+      },
+      "danger"
+    );
+  };
 
   // ★ Buka modal edit
   const handleEditClick = (acc: StockAccount) => {
@@ -273,6 +274,32 @@ const closeConfirm = () => setConfirmDialog(null);
       setEditSaving(false);
     }
   };
+
+  // ══════════════════════════════════════════════════════
+  // GROUP ACCOUNTS BY KATEGORI + FILTER SEARCH
+  // ══════════════════════════════════════════════════════
+  const groupedAccounts = (() => {
+    const filtered = accounts.filter((acc) => {
+      if (acc.logged_out) return false;
+      return acc.username.toLowerCase().includes(searchQuery.toLowerCase());
+    });
+
+    const groups: Record<string, StockAccount[]> = {};
+    filtered.forEach((acc) => {
+      const kat = acc.kategori || "tanpa-kategori";
+      if (!groups[kat]) groups[kat] = [];
+      groups[kat].push(acc);
+    });
+
+return Object.entries(groups)
+  .map(([kategori, accounts]) => ({ kategori, accounts }))
+  .sort((a, b) => {
+    const numA = parseInt(a.kategori.match(/^\d+/)?.[0] || "999999", 10);
+    const numB = parseInt(b.kategori.match(/^\d+/)?.[0] || "999999", 10);
+    if (numA !== numB) return numA - numB;
+    return a.kategori.localeCompare(b.kategori);
+  });
+  })();
 
   return (
     <>
@@ -408,12 +435,27 @@ const closeConfirm = () => setConfirmDialog(null);
             </button>
           </form>
 
-          {/* List akun */}
+          {/* ══════════════════════════════════════════════════════
+              LIST AKUN — GROUPED PER KATEGORI (TABEL)
+             ══════════════════════════════════════════════════════ */}
           <div className="bg-white dark:bg-slate-900/60 rounded-2xl p-6 border border-slate-200 dark:border-slate-800 shadow-sm">
-            <h2 className="font-bold mb-4 flex items-center gap-2 text-slate-900 dark:text-white">
-              <i className="fa-solid fa-vault text-blue-600 dark:text-blue-400"></i>
-              <span>Akun Tersimpan ({accounts.length})</span>
-            </h2>
+            {/* Header + Search */}
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-6">
+              <h2 className="font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                <i className="fa-solid fa-table text-blue-600 dark:text-blue-400"></i>
+                <span>Akun Tersimpan ({accounts.length})</span>
+              </h2>
+              <div className="relative">
+                <i className="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Cari username..."
+                  className="w-full md:w-56 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl pl-9 pr-3 py-2 text-sm text-slate-900 dark:text-white focus:outline-none focus:border-blue-500"
+                />
+              </div>
+            </div>
 
             {loading ? (
               <SkeletonList count={3} />
@@ -426,137 +468,198 @@ const closeConfirm = () => setConfirmDialog(null);
                 </p>
               </div>
             ) : (
-              <div className="space-y-2">
-                {accounts.map((acc) => {
-                  const isSelling = selling.has(acc.id);
-                  return (
-                    <div
-                      key={acc.id}
-                      className={`bg-slate-50 dark:bg-slate-950 rounded-xl p-4 border border-slate-200 dark:border-slate-800 flex items-center justify-between gap-3 transition ${
-                        isSelling ? "opacity-50 pointer-events-none" : ""
-                      }`}
-                    >
-                      <div className="min-w-0 flex-1">
-                        <p className="font-mono font-bold text-sm truncate text-slate-900 dark:text-white">
-                          {acc.username}
-                        </p>
-                        <p className="text-xs text-slate-500 dark:text-slate-400 truncate flex items-center gap-1.5">
-                          <i className="fa-solid fa-tag text-[10px]"></i>
-                          <span>{acc.kategori}</span>
-                          <span className="opacity-50">•</span>
-                          <i className="fa-solid fa-user text-[10px]"></i>
-                          <span>{acc.added_by}</span>
-                        </p>
+              <div className="space-y-8">
+                {groupedAccounts.map((group) => (
+                  <div key={group.kategori}>
+                    {/* Group Header */}
+                    <div className="flex items-center justify-between mb-3 pb-2 border-b-2 border-slate-100 dark:border-slate-800">
+                      <div className="flex items-center gap-2">
+                        <div className="w-8 h-8 rounded-lg bg-linear-to-tr from-blue-600 to-cyan-500 flex items-center justify-center text-white shadow-md">
+                          <i className="fa-solid fa-tag text-xs"></i>
+                        </div>
+                        <div>
+                          <h3 className="font-bold text-slate-900 dark:text-white text-sm capitalize">
+                            {group.kategori}
+                          </h3>
+                          <p className="text-[10px] text-slate-500 dark:text-slate-400">
+                            {group.accounts.length} akun
+                          </p>
+                        </div>
                       </div>
-
-                      <div className="flex items-center gap-2 shrink-0">
-                        {/* Tombol Jual */}
-                        <button
-                          onClick={() => handleSell(acc.username)}
-                          disabled={isSelling}
-                          className="px-3 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-bold rounded-lg flex items-center gap-1.5 transition disabled:opacity-50"
-                          title="Jual akun ini — bot akan input ke itemku"
-                        >
-                          {isSelling ? (
-                            <i className="fa-solid fa-spinner fa-spin text-[10px]"></i>
-                          ) : (
-                            <i className="fa-solid fa-rocket text-[10px]"></i>
-                          )}
-                          <span>{isSelling ? "Proses..." : "Jual"}</span>
-                        </button>
-
-                        {/* ★ Tombol Edit */}
-                        <button
-                          onClick={() => handleEditClick(acc)}
-                          className="w-7 h-7 flex items-center justify-center bg-blue-100 dark:bg-blue-500/20 text-blue-600 dark:text-blue-300 rounded-lg hover:bg-blue-500/40 transition"
-                          title="Edit"
-                        >
-                          <i className="fa-solid fa-pen text-xs"></i>
-                        </button>
-
-                        {/* Tombol Hapus */}
-                        <button
-                          onClick={() => handleDelete(acc.username)}
-                          className="w-7 h-7 flex items-center justify-center bg-red-100 dark:bg-red-500/20 text-red-600 dark:text-red-300 rounded-lg hover:bg-red-500/40 transition"
-                        >
-                          <i className="fa-solid fa-trash-can text-xs"></i>
-                        </button>
-                      </div>
+                      <span className="px-2 py-1 bg-blue-100 dark:bg-blue-500/20 text-blue-700 dark:text-blue-300 text-[10px] font-bold rounded-lg">
+                        {group.accounts.length} Siap Dijual
+                      </span>
                     </div>
-                  );
+
+                    {/* Table */}
+                    {/* Table */}
+<div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800">
+  <table className="w-full text-sm table-fixed">
+    <thead className="bg-slate-50 dark:bg-slate-950/50">
+      <tr className="text-left text-[10px] uppercase text-slate-500 dark:text-slate-400 font-bold">
+        <th className="px-3 py-2.5 w-[5%] text-center">#</th>
+        <th className="px-3 py-2.5 w-[22%]">Username</th>
+        <th className="px-3 py-2.5 w-[13%] hidden md:table-cell">Password</th>
+        <th className="px-3 py-2.5 w-[13%]">Added By</th>
+        <th className="px-3 py-2.5 w-[17%] hidden lg:table-cell">Created</th>
+        <th className="px-3 py-2.5 w-[30%] text-right">Aksi</th>
+      </tr>
+    </thead>
+    <tbody>
+      {group.accounts.map((acc, idx) => {
+        const isSelling = selling.has(acc.id);
+        return (
+          <tr
+            key={acc.id}
+            className={`border-t border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-900/40 transition ${
+              isSelling ? "opacity-50 pointer-events-none" : ""
+            }`}
+          >
+            <td className="px-3 py-2.5 w-[5%] text-xs text-slate-400 font-mono text-center">
+              {idx + 1}
+            </td>
+            <td className="px-3 py-2.5 w-[22%]">
+              <span className="font-mono font-bold text-xs text-slate-900 dark:text-white truncate block">
+                {acc.username}
+              </span>
+            </td>
+            <td className="px-3 py-2.5 w-[13%] hidden md:table-cell">
+              <span className="font-mono text-[11px] text-slate-500 dark:text-slate-400">
+                {acc.password ? "••••••••" : "—"}
+              </span>
+            </td>
+            <td className="px-3 py-2.5 w-[13%]">
+              <span className="text-xs text-slate-600 dark:text-slate-300 truncate block">
+                {acc.added_by || "—"}
+              </span>
+            </td>
+            <td className="px-3 py-2.5 w-[17%] hidden lg:table-cell">
+              <span className="text-[10px] text-slate-400 whitespace-nowrap">
+                {new Date(acc.created_at).toLocaleDateString("id-ID", {
+                  day: "2-digit",
+                  month: "short",
+                  year: "numeric",
                 })}
+              </span>
+            </td>
+            <td className="px-3 py-2.5 w-[30%]">
+              <div className="flex items-center justify-end gap-1.5">
+                {/* Jual */}
+                <button
+                  onClick={() => handleSell(acc.username)}
+                  disabled={isSelling}
+                  className="px-2.5 py-1 bg-emerald-500 hover:bg-emerald-600 text-white text-[10px] font-bold rounded-md flex items-center gap-1 transition disabled:opacity-50 whitespace-nowrap"
+                  title="Jual akun ini"
+                >
+                  {isSelling ? (
+                    <i className="fa-solid fa-spinner fa-spin text-[9px]"></i>
+                  ) : (
+                    <i className="fa-solid fa-rocket text-[9px]"></i>
+                  )}
+                  <span>{isSelling ? "..." : "Jual"}</span>
+                </button>
+
+                {/* Edit */}
+                <button
+                  onClick={() => handleEditClick(acc)}
+                  className="w-7 h-7 inline-flex items-center justify-center bg-blue-100 dark:bg-blue-500/20 text-blue-600 dark:text-blue-300 rounded-lg hover:bg-blue-500/40 transition"
+                  title="Edit"
+                >
+                  <i className="fa-solid fa-pen text-xs"></i>
+                </button>
+
+                {/* Hapus */}
+                <button
+                  onClick={() => handleDelete(acc.username)}
+                  className="w-7 h-7 inline-flex items-center justify-center bg-red-100 dark:bg-red-500/20 text-red-600 dark:text-red-300 rounded-lg hover:bg-red-500/40 transition"
+                  title="Hapus"
+                >
+                  <i className="fa-solid fa-trash-can text-xs"></i>
+                </button>
+              </div>
+            </td>
+          </tr>
+        );
+      })}
+    </tbody>
+  </table>
+</div>
+                  </div>
+                ))}
               </div>
             )}
           </div>
         </div>
       </div>
 
-      {/* ★ MODAL CONFIRM */}
-{confirmDialog?.open && (
-  <div
-    className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-60 flex items-center justify-center p-4"
-    onClick={closeConfirm}
-  >
-    <div
-      className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl w-full max-w-md"
-      onClick={(e) => e.stopPropagation()}
-    >
-      {/* Icon + Title */}
-      <div className="p-6 text-center">
+      {/* ══════════════════════════════════════════════════════
+          MODAL CONFIRM
+         ══════════════════════════════════════════════════════ */}
+      {confirmDialog?.open && (
         <div
-          className={`w-16 h-16 mx-auto rounded-full flex items-center justify-center mb-4 ${
-            confirmDialog.variant === "danger"
-              ? "bg-red-100 dark:bg-red-500/20 text-red-600 dark:text-red-400"
-              : confirmDialog.variant === "warning"
-              ? "bg-amber-100 dark:bg-amber-500/20 text-amber-600 dark:text-amber-400"
-              : "bg-blue-100 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400"
-          }`}
-        >
-          <i
-            className={`fa-solid text-2xl ${
-              confirmDialog.variant === "danger"
-                ? "fa-triangle-exclamation"
-                : confirmDialog.variant === "warning"
-                ? "fa-circle-exclamation"
-                : "fa-circle-question"
-            }`}
-          ></i>
-        </div>
-
-        <h3 className="text-lg font-extrabold text-slate-900 dark:text-white mb-2">
-          {confirmDialog.title}
-        </h3>
-        <p className="text-sm text-slate-500 dark:text-slate-400 whitespace-pre-line">
-          {confirmDialog.message}
-        </p>
-      </div>
-
-      {/* Buttons */}
-      <div className="flex gap-2 p-4 border-t border-slate-200 dark:border-slate-800">
-        <button
+          className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-60 flex items-center justify-center p-4"
           onClick={closeConfirm}
-          className="flex-1 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold py-3 rounded-xl transition"
         >
-          Batal
-        </button>
-        <button
-          onClick={confirmDialog.onConfirm}
-          className={`flex-1 font-bold py-3 rounded-xl transition text-white ${
-            confirmDialog.variant === "danger"
-              ? "bg-linear-to-r from-red-600 to-red-500 hover:from-red-500 hover:to-red-400"
-              : confirmDialog.variant === "warning"
-              ? "bg-linear-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400"
-              : "bg-linear-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500"
-          }`}
-        >
-          {confirmDialog.variant === "danger" ? "Hapus" : "Ya, Lanjutkan"}
-        </button>
-      </div>
-    </div>
-  </div>
-)}
+          <div
+            className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl w-full max-w-md"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="p-6 text-center">
+              <div
+                className={`w-16 h-16 mx-auto rounded-full flex items-center justify-center mb-4 ${
+                  confirmDialog.variant === "danger"
+                    ? "bg-red-100 dark:bg-red-500/20 text-red-600 dark:text-red-400"
+                    : confirmDialog.variant === "warning"
+                    ? "bg-amber-100 dark:bg-amber-500/20 text-amber-600 dark:text-amber-400"
+                    : "bg-blue-100 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400"
+                }`}
+              >
+                <i
+                  className={`fa-solid text-2xl ${
+                    confirmDialog.variant === "danger"
+                      ? "fa-triangle-exclamation"
+                      : confirmDialog.variant === "warning"
+                      ? "fa-circle-exclamation"
+                      : "fa-circle-question"
+                  }`}
+                ></i>
+              </div>
 
-      {/* ★ MODAL EDIT */}
+              <h3 className="text-lg font-extrabold text-slate-900 dark:text-white mb-2">
+                {confirmDialog.title}
+              </h3>
+              <p className="text-sm text-slate-500 dark:text-slate-400 whitespace-pre-line">
+                {confirmDialog.message}
+              </p>
+            </div>
+
+            <div className="flex gap-2 p-4 border-t border-slate-200 dark:border-slate-800">
+              <button
+                onClick={closeConfirm}
+                className="flex-1 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold py-3 rounded-xl transition"
+              >
+                Batal
+              </button>
+              <button
+                onClick={confirmDialog.onConfirm}
+                className={`flex-1 font-bold py-3 rounded-xl transition text-white ${
+                  confirmDialog.variant === "danger"
+                    ? "bg-linear-to-r from-red-600 to-red-500 hover:from-red-500 hover:to-red-400"
+                    : confirmDialog.variant === "warning"
+                    ? "bg-linear-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400"
+                    : "bg-linear-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500"
+                }`}
+              >
+                {confirmDialog.variant === "danger" ? "Hapus" : "Ya, Lanjutkan"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ══════════════════════════════════════════════════════
+          MODAL EDIT
+         ══════════════════════════════════════════════════════ */}
       {editingAccount && (
         <div
           className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-50 flex items-center justify-center p-4"
@@ -566,7 +669,6 @@ const closeConfirm = () => setConfirmDialog(null);
             className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Header Modal */}
             <div className="flex items-center justify-between p-6 border-b border-slate-200 dark:border-slate-800">
               <h2 className="font-bold text-slate-900 dark:text-white flex items-center gap-2">
                 <i className="fa-solid fa-pen-to-square text-blue-600 dark:text-blue-400"></i>
@@ -580,9 +682,7 @@ const closeConfirm = () => setConfirmDialog(null);
               </button>
             </div>
 
-            {/* Form Edit */}
             <form onSubmit={handleSaveEdit} className="p-6 space-y-4">
-              {/* Username */}
               <div>
                 <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-2">
                   Username *
@@ -602,7 +702,6 @@ const closeConfirm = () => setConfirmDialog(null);
                 )}
               </div>
 
-              {/* Password */}
               <div>
                 <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-2">
                   Password
@@ -616,7 +715,6 @@ const closeConfirm = () => setConfirmDialog(null);
                 />
               </div>
 
-              {/* Cookie */}
               <div>
                 <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-2">
                   Cookie (.ROBLOSECURITY)
@@ -630,7 +728,6 @@ const closeConfirm = () => setConfirmDialog(null);
                 />
               </div>
 
-              {/* Kategori */}
               <div>
                 <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-2">
                   Kategori
@@ -646,7 +743,6 @@ const closeConfirm = () => setConfirmDialog(null);
                 />
               </div>
 
-              {/* Added By */}
               <div>
                 <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-2">
                   Added By
@@ -662,7 +758,6 @@ const closeConfirm = () => setConfirmDialog(null);
                 />
               </div>
 
-              {/* Buttons */}
               <div className="flex gap-2 pt-2">
                 <button
                   type="button"

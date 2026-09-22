@@ -26,6 +26,7 @@ export default function AkunLakuPage() {
   const [accounts, setAccounts] = useState<StockAccount[]>([]);
   const [loading, setLoading] = useState(true);
   const { sidebarOpen, toggleSidebar } = useSidebar();
+  const [searchQuery, setSearchQuery] = useState("");
 
   // ══════════════════════════════════════════════════════
   // LOAD DATA — cuma akun yang logged_out = true
@@ -55,10 +56,51 @@ export default function AkunLakuPage() {
       day: "2-digit",
       month: "short",
       year: "numeric",
+    });
+  };
+
+  const formatDateTime = (dateStr: string | null) => {
+    if (!dateStr) return "-";
+    const date = new Date(dateStr);
+    return date.toLocaleDateString("id-ID", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
       hour: "2-digit",
       minute: "2-digit",
     });
   };
+
+  // ══════════════════════════════════════════════════════
+  // GROUP ACCOUNTS BY KATEGORI + FILTER SEARCH
+  // ══════════════════════════════════════════════════════
+  const groupedAccounts = (() => {
+  const filtered = accounts.filter((acc) =>
+    acc.username.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  const groups: Record<string, StockAccount[]> = {};
+  filtered.forEach((acc) => {
+    const kat = acc.kategori || "tanpa-kategori";
+    if (!groups[kat]) groups[kat] = [];
+    groups[kat].push(acc);
+  });
+
+  // ★ Sort NUMERIK: ambil angka awal dari nama kategori
+  return Object.entries(groups)
+    .map(([kategori, accounts]) => ({ kategori, accounts }))
+    .sort((a, b) => {
+      // Ambil angka awal: "10b-15b/s" → 10, "1b-5b/s" → 1
+      const numA = parseInt(a.kategori.match(/^\d+/)?.[0] || "999999", 10);
+      const numB = parseInt(b.kategori.match(/^\d+/)?.[0] || "999999", 10);
+
+      // Kalau angka beda → sort by angka
+      if (numA !== numB) return numA - numB;
+
+      // Kalau angka sama → sort alfabetis (fallback)
+      return a.kategori.localeCompare(b.kategori);
+    });
+})();
 
   return (
     <>
@@ -120,13 +162,26 @@ export default function AkunLakuPage() {
 
           {/* List Akun Laku */}
           <div className="bg-white dark:bg-slate-900/60 rounded-2xl p-6 border border-slate-200 dark:border-slate-800 shadow-sm">
-            <h2 className="font-bold mb-4 text-slate-900 dark:text-white flex items-center gap-2">
-              <i className="fa-solid fa-list text-emerald-600 dark:text-emerald-400"></i>
-              <span>Daftar Akun Laku ({accounts.length})</span>
-            </h2>
+            {/* Header + Search */}
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-6">
+              <h2 className="font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                <i className="fa-solid fa-table text-emerald-600 dark:text-emerald-400"></i>
+                <span>Daftar Akun Laku ({accounts.length})</span>
+              </h2>
+              <div className="relative">
+                <i className="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Cari username..."
+                  className="w-full md:w-56 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl pl-9 pr-3 py-2 text-sm text-slate-900 dark:text-white focus:outline-none focus:border-emerald-500"
+                />
+              </div>
+            </div>
 
             {loading ? (
-            <SkeletonList count={5} />
+              <SkeletonList count={5} />
             ) : accounts.length === 0 ? (
               <div className="text-center py-8">
                 <i className="fa-solid fa-inbox text-4xl text-slate-300 dark:text-slate-700 mb-3"></i>
@@ -136,33 +191,87 @@ export default function AkunLakuPage() {
                 </p>
               </div>
             ) : (
-              <div className="space-y-2">
-                {accounts.map((acc) => (
-                  <div
-                    key={acc.id}
-                    className="bg-slate-50 dark:bg-slate-950 rounded-xl p-4 border border-slate-200 dark:border-slate-800 flex items-center justify-between gap-3"
-                  >
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2 mb-1">
-                        <p className="font-mono font-bold text-sm truncate text-slate-900 dark:text-white">
-                          {acc.username}
-                        </p>
-                        <span className="px-2 py-0.5 bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 text-[10px] font-bold rounded flex items-center gap-1">
-                          <i className="fa-solid fa-check text-[9px]"></i>
-                          SOLD
-                        </span>
+              <div className="space-y-8">
+                {groupedAccounts.map((group) => (
+                  <div key={group.kategori}>
+                    {/* Group Header */}
+                    <div className="flex items-center justify-between mb-3 pb-2 border-b-2 border-slate-100 dark:border-slate-800">
+                      <div className="flex items-center gap-2">
+                        <div className="w-8 h-8 rounded-lg bg-linear-to-tr from-emerald-600 to-teal-500 flex items-center justify-center text-white shadow-md">
+                          <i className="fa-solid fa-tag text-xs"></i>
+                        </div>
+                        <div>
+                          <h3 className="font-bold text-slate-900 dark:text-white text-sm capitalize">
+                            {group.kategori}
+                          </h3>
+                          <p className="text-[10px] text-slate-500 dark:text-slate-400">
+                            {group.accounts.length} akun terjual
+                          </p>
+                        </div>
                       </div>
-                      <p className="text-xs text-slate-500 dark:text-slate-400 truncate flex items-center gap-1.5 flex-wrap">
-                        <i className="fa-solid fa-tag text-[10px]"></i>
-                        <span>{acc.kategori}</span>
-                        <span className="opacity-50">•</span>
-                        <i className="fa-solid fa-user text-[10px]"></i>
-                        <span>{acc.added_by}</span>
-                      </p>
-                      <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-1 flex items-center gap-1.5 flex-wrap">
-                        <i className="fa-solid fa-calendar text-[10px]"></i>
-                        <span>Laku: {formatDate(acc.logged_out_at)}</span>
-                      </p>
+                      <span className="px-2 py-1 bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 text-[10px] font-bold rounded-lg">
+                        {group.accounts.length} SOLD
+                      </span>
+                    </div>
+
+                    {/* Table */}
+                    <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800">
+                      <table className="w-full text-sm table-fixed">
+                        <thead className="bg-slate-50 dark:bg-slate-950/50">
+                          <tr className="text-left text-[10px] uppercase text-slate-500 dark:text-slate-400 font-bold">
+                            <th className="px-3 py-2.5 w-[5%] text-center">#</th>
+                            <th className="px-3 py-2.5 w-[28%]">Username</th>
+                            <th className="px-3 py-2.5 w-[15%] hidden md:table-cell">Added By</th>
+                            <th className="px-3 py-2.5 w-[18%] hidden lg:table-cell">Created</th>
+                            <th className="px-3 py-2.5 w-[24%]">Tanggal Laku</th>
+                            <th className="px-3 py-2.5 w-[10%] text-right">Status</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {group.accounts.map((acc, idx) => (
+                            <tr
+                              key={acc.id}
+                              className="border-t border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-900/40 transition"
+                            >
+                              <td className="px-3 py-2.5 w-[5%] text-xs text-slate-400 font-mono text-center">
+                                {idx + 1}
+                              </td>
+                              <td className="px-3 py-2.5 w-[28%]">
+                                <span
+                                  className="font-mono font-bold text-xs text-slate-900 dark:text-white truncate block"
+                                  title={acc.username}
+                                >
+                                  {acc.username}
+                                </span>
+                              </td>
+                              <td className="px-3 py-2.5 w-[15%] hidden md:table-cell">
+                                <span className="text-xs text-slate-600 dark:text-slate-300 truncate block">
+                                  {acc.added_by || "—"}
+                                </span>
+                              </td>
+                              <td className="px-3 py-2.5 w-[18%] hidden lg:table-cell">
+                                <span className="text-[10px] text-slate-400 whitespace-nowrap">
+                                  {formatDate(acc.created_at)}
+                                </span>
+                              </td>
+                              <td className="px-3 py-2.5 w-[24%]">
+                                <div className="flex items-center gap-1.5">
+                                  <i className="fa-solid fa-calendar-check text-emerald-500 text-[10px]"></i>
+                                  <span className="text-[11px] text-slate-600 dark:text-slate-300 whitespace-nowrap">
+                                    {formatDateTime(acc.logged_out_at)}
+                                  </span>
+                                </div>
+                              </td>
+                              <td className="px-3 py-2.5 w-[10%] text-right">
+                                <span className="px-2 py-0.5 bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 text-[10px] font-bold rounded-md inline-flex items-center gap-1 whitespace-nowrap">
+                                  <i className="fa-solid fa-check text-[9px]"></i>
+                                  SOLD
+                                </span>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
                     </div>
                   </div>
                 ))}

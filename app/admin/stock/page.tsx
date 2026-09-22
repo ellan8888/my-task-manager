@@ -36,6 +36,7 @@ export default function StockPage() {
   const [kategoriList, setKategoriList] = useState<KategoriLink[]>([]);
   const [loadingKategori, setLoadingKategori] = useState(true);
   const { sidebarOpen, toggleSidebar } = useSidebar();
+  const [searchQuery, setSearchQuery] = useState("");
 
   // Form state
   const [username, setUsername] = useState("");
@@ -44,7 +45,7 @@ export default function StockPage() {
   const [kategori, setKategori] = useState("");
   const [addedBy, setAddedBy] = useState("lan4337");
   const [saving, setSaving] = useState(false);
-  const [filter, setFilter] = useState<"all" | "ready" | "used">("all");
+  const [filter, setFilter] = useState<"all" | "ready" | "progress" | "logged_out">("all");
 
   // Mode tambah kategori baru
   const [isNewKategori, setIsNewKategori] = useState(false);
@@ -70,13 +71,22 @@ export default function StockPage() {
     }
   };
 
-  const loadAccounts = async () => {
+const loadAccounts = async () => {
   setLoading(true);
   try {
-    // ★ Default: cuma akun yang BELUM laku (logged_out = false)
+    // ★ Default: SEMUA filter skip yang logged_out
     let url = "/api/accounts/stock?logged_out=false";
-    if (filter === "ready") url = "/api/accounts/stock?used=false&logged_out=false";
-    else if (filter === "used") url = "/api/accounts/stock?used=true&logged_out=false";
+
+    if (filter === "ready") {
+      // ★ Ready = udah diinput (used = true), belum logged_out
+      url = "/api/accounts/stock?used=true&logged_out=false";
+    } else if (filter === "progress") {
+      // ★ Progress = belum diinput (used = false), belum logged_out
+      url = "/api/accounts/stock?used=false&logged_out=false";
+    } else if (filter === "all") {
+      // ★ Semua = semua yang AKTIF (belum logged_out)
+      url = "/api/accounts/stock?logged_out=false";
+    }
 
     const res = await fetch(url);
     const data = await res.json();
@@ -198,6 +208,37 @@ export default function StockPage() {
   };
 
   const currentKategori = isNewKategori ? newKategoriName : kategori;
+  // ══════════════════════════════════════════════════════
+// GROUP ACCOUNTS BY KATEGORI + FILTER SEARCH
+// ══════════════════════════════════════════════════════
+const groupedAccounts = (() => {
+  // ★ Filter: skip yang logged_out + search
+  const filtered = accounts.filter((acc) => {
+    // Skip kalau udah logged out
+    if (acc.logged_out) return false;
+
+    // Filter by search
+    return acc.username.toLowerCase().includes(searchQuery.toLowerCase());
+  });
+
+  // Group by kategori
+  const groups: Record<string, StockAccount[]> = {};
+  filtered.forEach((acc) => {
+    const kat = acc.kategori || "tanpa-kategori";
+    if (!groups[kat]) groups[kat] = [];
+    groups[kat].push(acc);
+  });
+
+  // Convert ke array & sort by kategori name
+return Object.entries(groups)
+  .map(([kategori, accounts]) => ({ kategori, accounts }))
+  .sort((a, b) => {
+    const numA = parseInt(a.kategori.match(/^\d+/)?.[0] || "999999", 10);
+    const numB = parseInt(b.kategori.match(/^\d+/)?.[0] || "999999", 10);
+    if (numA !== numB) return numA - numB;
+    return a.kategori.localeCompare(b.kategori);
+  });
+})();
   const butuhPassword = ["1b-5b/s", "akun"].includes(currentKategori.toLowerCase());
 
   return (
@@ -414,94 +455,172 @@ export default function StockPage() {
           </form>
 
           {/* LIST STOCK */}
-          <div className="bg-white dark:bg-slate-900/60 rounded-2xl p-6 border border-slate-200 dark:border-slate-800 shadow-sm">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                <i className="fa-solid fa-list text-violet-600 dark:text-violet-400"></i>
-                <span>Daftar Stock ({accounts.length})</span>
-              </h2>
-              <div className="w-48">
-                <KategoriDropdown
-                  value={
-                    filter === "all"
-                      ? "Semua"
-                      : filter === "ready"
-                      ? "Ready"
-                      : filter === "used"
-                      ? "Used"
-                      : "Logged Out"
-                  }
-                  onChange={(val) => {
-                    const map: Record<string, any> = {
-                      Semua: "all",
-                      Ready: "ready",
-                      Used: "used",
-                    };
-                    setFilter(map[val] || "all");
-                  }}
-                  options={[
-                    { id: 1, kategori: "Semua" },
-                    { id: 2, kategori: "Ready" },
-                    { id: 3, kategori: "Used" },
-                  ]}
-                />
+          {/* LIST STOCK — GROUPED PER KATEGORI */}
+<div className="bg-white dark:bg-slate-900/60 rounded-2xl p-6 border border-slate-200 dark:border-slate-800 shadow-sm">
+  {/* Header + Search */}
+  <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-6">
+    <h2 className="font-bold text-slate-900 dark:text-white flex items-center gap-2">
+      <i className="fa-solid fa-table text-violet-600 dark:text-violet-400"></i>
+      <span>Daftar Stock ({accounts.length})</span>
+    </h2>
+    <div className="flex items-center gap-2">
+      {/* Search */}
+      <div className="relative">
+        <i className="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+        <input
+          type="text"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          placeholder="Cari username..."
+          className="w-full md:w-56 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl pl-9 pr-3 py-2 text-sm text-slate-900 dark:text-white focus:outline-none focus:border-violet-500"
+        />
+      </div>
+      {/* Filter */}
+<div className="w-44">
+  <KategoriDropdown
+    value={
+      filter === "all"
+        ? "Semua"
+        : filter === "ready"
+        ? "Ready"
+        : "Progress"
+    }
+    onChange={(val) => {
+      const map: Record<string, any> = {
+        Semua: "all",
+        Ready: "ready",
+        Progress: "progress",
+      };
+      setFilter(map[val] || "all");
+    }}
+    options={[
+      { id: 1, kategori: "Semua" },
+      { id: 2, kategori: "Ready" },
+      { id: 3, kategori: "Progress" },
+    ]}
+  />
+</div>
+    </div>
+  </div>
+
+  {loading ? (
+    <SkeletonList count={5} />
+  ) : accounts.length === 0 ? (
+    <div className="text-center py-12">
+      <i className="fa-solid fa-inbox text-4xl text-slate-300 dark:text-slate-700 mb-3"></i>
+      <p className="text-slate-400 text-sm">Belum ada stock.</p>
+    </div>
+  ) : (
+    <div className="space-y-8">
+      {groupedAccounts.map((group) => (
+        <div key={group.kategori}>
+          {/* Group Header */}
+          <div className="flex items-center justify-between mb-3 pb-2 border-b-2 border-slate-100 dark:border-slate-800">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-lg bg-linear-to-tr from-violet-600 to-indigo-600 flex items-center justify-center text-white shadow-md">
+                <i className="fa-solid fa-tag text-xs"></i>
+              </div>
+              <div>
+                <h3 className="font-bold text-slate-900 dark:text-white text-sm capitalize">
+                  {group.kategori}
+                </h3>
+                <p className="text-[10px] text-slate-500 dark:text-slate-400">
+                  {group.accounts.length} akun
+                </p>
               </div>
             </div>
-
-            {loading ? (
-              <SkeletonList count={5} />
-            ) : accounts.length === 0 ? (
-              <p className="text-slate-400 text-sm">Belum ada stock.</p>
-            ) : (
-              <div className="space-y-2">
-                {accounts.map((acc) => (
-                  <div
-                    key={acc.id}
-                    className="bg-slate-50 dark:bg-slate-950 rounded-xl p-4 border border-slate-200 dark:border-slate-800 flex items-center justify-between gap-3"
-                  >
-                    <div className="min-w-0 flex-1">
-                      <p className="font-mono font-bold text-sm truncate text-slate-900 dark:text-white">
-                        {acc.username}
-                      </p>
-                      <p className="text-xs text-slate-500 dark:text-slate-400 truncate flex items-center gap-1.5">
-                        <i className="fa-solid fa-tag text-[10px]"></i>
-                        <span>{acc.kategori}</span>
-                        <span className="opacity-50">•</span>
-                        <i className="fa-solid fa-user text-[10px]"></i>
-                        <span>{acc.added_by}</span>
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      {acc.used ? (
-                        <span className="px-2 py-1 bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 text-[10px] font-bold rounded-lg flex items-center gap-1">
-                          <i className="fa-solid fa-rocket text-[9px]"></i>
-                          READY
-                        </span>
-                      ) : (
-                        <span className="px-2 py-1 bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-300 text-[10px] font-bold rounded-lg flex items-center gap-1">
-                          <i className="fa-solid fa-clock text-[9px]"></i>
-                          PROGRESS
-                        </span>
-                      )}
-                      {acc.logged_out && (
-                        <span className="px-2 py-1 bg-blue-100 dark:bg-blue-500/20 text-blue-700 dark:text-blue-300 text-[10px] font-bold rounded-lg flex items-center gap-1">
-                          <i className="fa-solid fa-right-from-bracket text-[9px]"></i>
-                          LOGGED OUT
-                        </span>
-                      )}
-                      <button
-                        onClick={() => handleDelete(acc.username)}
-                        className="w-7 h-7 flex items-center justify-center bg-red-100 dark:bg-red-500/20 text-red-600 dark:text-red-300 text-[10px] font-bold rounded-lg hover:bg-red-500/40 transition"
-                        title="Hapus"
-                      >
-                        <i className="fa-solid fa-trash-can text-xs"></i>
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
+            <div className="flex items-center gap-1.5">
+              {/* Stat per kategori */}
+              <span className="px-2 py-1 bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 text-[10px] font-bold rounded-lg">
+                {group.accounts.filter((a) => a.used).length} Ready
+              </span>
+              <span className="px-2 py-1 bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-300 text-[10px] font-bold rounded-lg">
+                {group.accounts.filter((a) => !a.used).length} Progress
+              </span>
+            </div>
           </div>
+
+          {/* Table */}
+          <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800">
+            <table className="w-full text-sm table-fixed">
+              <thead className="bg-slate-50 dark:bg-slate-950/50">
+  <tr className="text-left text-[10px] uppercase text-slate-500 dark:text-slate-400 font-bold">
+    <th className="px-3 py-2.5 w-[5%] text-center">#</th>
+    <th className="px-3 py-2.5 w-[20%]">Username</th>
+    <th className="px-3 py-2.5 w-[13%] hidden md:table-cell">Password</th>
+    <th className="px-3 py-2.5 w-[13%]">Added By</th>
+    <th className="px-3 py-2.5 w-[17%]">Status</th>
+    <th className="px-3 py-2.5 w-[17%] hidden lg:table-cell">Created</th>
+    <th className="px-3 py-2.5 w-[10%] text-right">Aksi</th>
+  </tr>
+</thead>
+              <tbody>
+  {group.accounts.map((acc, idx) => (
+    <tr
+      key={acc.id}
+      className="border-t border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-900/40 transition"
+    >
+      <td className="px-3 py-2.5 w-[5%] text-xs text-slate-400 font-mono text-center">
+        {idx + 1}
+      </td>
+      <td className="px-3 py-2.5 w-[20%]">
+        <span className="font-mono font-bold text-xs text-slate-900 dark:text-white truncate block">
+          {acc.username}
+        </span>
+      </td>
+      <td className="px-3 py-2.5 w-[13%] hidden md:table-cell">
+        <span className="font-mono text-[11px] text-slate-500 dark:text-slate-400">
+          {acc.password ? "••••••••" : "—"}
+        </span>
+      </td>
+      <td className="px-3 py-2.5 w-[13%]">
+        <span className="text-xs text-slate-600 dark:text-slate-300 truncate block">
+          {acc.added_by || "—"}
+        </span>
+      </td>
+      <td className="px-3 py-2.5 w-[17%]">
+        <div className="flex items-center gap-1.5">
+          {acc.used ? (
+            <span className="px-2 py-0.5 bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 text-[10px] font-bold rounded-md inline-flex items-center gap-1 whitespace-nowrap">
+              <i className="fa-solid fa-rocket text-[9px]"></i>
+              READY
+            </span>
+          ) : (
+            <span className="px-2 py-0.5 bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-300 text-[10px] font-bold rounded-md inline-flex items-center gap-1 whitespace-nowrap">
+              <i className="fa-solid fa-clock text-[9px]"></i>
+              PROGRESS
+            </span>
+          )}
+        </div>
+      </td>
+      <td className="px-3 py-2.5 w-[17%] hidden lg:table-cell">
+        <span className="text-[10px] text-slate-400 whitespace-nowrap">
+          {new Date(acc.created_at).toLocaleDateString("id-ID", {
+            day: "2-digit",
+            month: "short",
+            year: "numeric",
+          })}
+        </span>
+      </td>
+      <td className="px-3 py-2.5 w-[10%] text-right">
+        <button
+          onClick={() => handleDelete(acc.username)}
+          className="w-7 h-7 inline-flex items-center justify-center bg-red-100 dark:bg-red-500/20 text-red-600 dark:text-red-300 rounded-lg hover:bg-red-500/40 transition"
+          title="Hapus"
+        >
+          <i className="fa-solid fa-trash-can text-xs"></i>
+        </button>
+      </td>
+    </tr>
+  ))}
+</tbody>
+            </table>
+          </div>
+        </div>
+      ))}
+    </div>
+  )}
+</div>
         </div>
       </div>
     </>
