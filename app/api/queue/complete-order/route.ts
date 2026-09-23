@@ -1,11 +1,33 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { createClient } from "@supabase/supabase-js";
+import crypto from "crypto";
+
+export const runtime = "nodejs";
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
+
+// ⭐ Helper verify signed cookie
+function verifySession(
+  signedValue: string,
+  secret: string
+): Record<string, any> | null {
+  const parts = signedValue.split(".");
+  if (parts.length < 2) return null;
+  const signature = parts[parts.length - 1];
+  const value = parts.slice(0, -1).join(".");
+  const hmac = crypto.createHmac("sha256", secret);
+  hmac.update(value);
+  if (signature !== hmac.digest("hex")) return null;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return null;
+  }
+}
 
 export async function POST(request: Request) {
   try {
@@ -19,10 +41,19 @@ export async function POST(request: Request) {
       );
     }
 
-    // === AUTH: Admin ATAU Buyer dengan token ===
+    // === AUTH: Admin (session valid) ATAU Buyer dengan token ===
     const cookieStore = await cookies();
     const session = cookieStore.get("auth_session")?.value;
-    const isAdmin = session === process.env.AUTH_SECRET;
+    
+    // ⭐ FIX: verify signed cookie
+    const parsedSession = session
+      ? verifySession(session, process.env.AUTH_SECRET!)
+      : null;
+    const isAdmin = !!parsedSession;
+
+    console.log(
+      `[CompleteOrder] order=${order_id} | isAdmin=${isAdmin} | session=${parsedSession?.username || "none"}`
+    );
 
     // Ambil order
     const { data: order, error: fetchError } = await supabaseAdmin
@@ -95,7 +126,9 @@ export async function POST(request: Request) {
       });
     }
 
-    console.log(`[CompleteOrder] ✅ ${order_id} dihapus oleh ${isAdmin ? "Admin" : "Buyer (auto)"}`);
+    console.log(
+      `[CompleteOrder] ✅ ${order_id} dihapus oleh ${isAdmin ? "Admin" : "Buyer (auto)"}`
+    );
 
     // === 3. NOTIF DISCORD (opsional) ===
     const webhookUrl = process.env.DISCORD_WEBHOOK_ORDER || "";
@@ -104,7 +137,9 @@ export async function POST(request: Request) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          content: `✅ **Order Selesai & Card Dihapus**\nOrder: \`${order_id}\`\nBy: **${isAdmin ? "Admin" : "Buyer (auto)"}**`,
+          content: `✅ **Order Selesai & Card Dihapus**\nOrder: \`${order_id}\`\nBy: **${
+            isAdmin ? "Admin" : "Buyer (auto)"
+          }**`,
         }),
       }).catch(() => {});
     }
