@@ -1,7 +1,6 @@
 // middleware.ts
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import crypto from "crypto";
 
 // Path yang tetap publik (buyer bisa akses tanpa login)
 const PUBLIC_PATHS = ["/queue"];
@@ -30,31 +29,50 @@ const BYPASS_PATHS = [
   "/api/progress-keywords",
 ];
 
-// Fungsi verify signed cookie (HMAC SHA256)
-function verifySession(
+// ⭐ Pakai Web Crypto API (bisa jalan di Edge Runtime)
+async function verifySession(
   signedValue: string,
   secret: string
-): Record<string, any> | null {
+): Promise<Record<string, any> | null> {
   const parts = signedValue.split(".");
   if (parts.length < 2) return null;
 
   const signature = parts[parts.length - 1];
   const value = parts.slice(0, -1).join(".");
 
-  const hmac = crypto.createHmac("sha256", secret);
-  hmac.update(value);
-  const expectedSig = hmac.digest("hex");
-
-  if (signature !== expectedSig) return null;
-
   try {
+    // Import secret jadi CryptoKey
+    const encoder = new TextEncoder();
+    const key = await crypto.subtle.importKey(
+      "raw",
+      encoder.encode(secret),
+      { name: "HMAC", hash: "SHA-256" },
+      false,
+      ["sign"]
+    );
+
+    // Sign value
+    const signatureBuffer = await crypto.subtle.sign(
+      "HMAC",
+      key,
+      encoder.encode(value)
+    );
+
+    // Convert ke hex
+    const expectedSig = Array.from(new Uint8Array(signatureBuffer))
+      .map((b) => b.toString(16).padStart(2, "0"))
+      .join("");
+
+    if (signature !== expectedSig) return null;
+
     return JSON.parse(value);
-  } catch {
+  } catch (err) {
+    console.error("[middleware] verifySession error:", err);
     return null;
   }
 }
 
-export function middleware(request: NextRequest) {
+export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // 1. Bypass aset & API endpoints
@@ -69,14 +87,13 @@ export function middleware(request: NextRequest) {
 
   // 3. Cek cookie session
   const signedValue = request.cookies.get("auth_session")?.value;
-
   if (!signedValue) {
     const loginUrl = new URL("/login", request.url);
     loginUrl.searchParams.set("from", pathname);
     return NextResponse.redirect(loginUrl);
   }
 
-  const session = verifySession(signedValue, process.env.AUTH_SECRET!);
+  const session = await verifySession(signedValue, process.env.AUTH_SECRET!);
   if (!session) {
     const loginUrl = new URL("/login", request.url);
     loginUrl.searchParams.set("from", pathname);
