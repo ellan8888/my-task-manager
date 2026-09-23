@@ -6,6 +6,34 @@ import { useParams } from "next/navigation";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 
+type EternalEggLog = {
+  egg_name: string;
+  area: string | null;
+  size: string | null;
+  weight: string | null;
+  counted: boolean;
+  created_at: string;
+};
+
+type EternalProgressData = {
+  order: {
+    order_id: string;
+    product: string | null;
+    roblox_username: string | null;
+    joki_name: string | null;
+    queue_status: string;
+    progress_keyword: string;
+    progress_count: number;
+    target_count: number;
+    is_complete: boolean;
+  };
+  eggs: {
+    total: number;
+    counted: number;
+    by_rarity: Record<string, EternalEggLog[]>;
+  };
+};
+
 type QueueOrder = {
   id: number;
   order_id: string;
@@ -21,6 +49,9 @@ type QueueOrder = {
   completed_by_bot: boolean;
   buyer_confirmed: boolean;
   confirm_token: string | null;
+  progress_count: number | null;        // ← TAMBAH
+  progress_keyword: string | null;      // ← TAMBAH
+  target_count: number | null;          // ← TAMBAH
 };
 
 export default function QueueDetailPage() {
@@ -29,6 +60,7 @@ export default function QueueDetailPage() {
   const orderId = params?.order_id as string | undefined;
   const searchParams = useSearchParams();
   const token = searchParams.get("token");
+  const [eternalData, setEternalData] = useState<EternalProgressData | null>(null);
 
   const [order, setOrder] = useState<QueueOrder | null>(null);
   const [notFound, setNotFound] = useState(false);
@@ -45,6 +77,8 @@ export default function QueueDetailPage() {
   const [addValue, setAddValue] = useState("");
   const [addUnit, setAddUnit] = useState<"minutes" | "hours">("minutes");
   const [saving, setSaving] = useState(false);
+
+  
 
   // === SYNC buyer_confirmed DARI ORDER ===
   useEffect(() => {
@@ -79,6 +113,29 @@ export default function QueueDetailPage() {
       setConfirming(false);
     }
   };
+
+  // Fetch eternal progress (kalau order-nya progress type)
+useEffect(() => {
+  if (!orderId) return;
+  
+  const fetchEternalData = async () => {
+    try {
+      const res = await fetch(`/api/eternal/order/${orderId}`);
+      if (res.ok) {
+        const d = await res.json();
+        if (d.success) setEternalData(d.data);
+      }
+    } catch (err) {
+      console.error("Gagal fetch eternal data:", err);
+    }
+  };
+  
+  fetchEternalData();
+  
+  // Re-fetch tiap 10 detik (atau pakai supabase realtime)
+  const interval = setInterval(fetchEternalData, 10000);
+  return () => clearInterval(interval);
+}, [orderId, order?.progress_count]);
 
   // Update time tiap detik
   useEffect(() => {
@@ -470,6 +527,110 @@ export default function QueueDetailPage() {
             </div>
           )}
         </div>
+
+        {/* ═══════════════════════════════════════════════ */}
+{/* ETERNAL PROGRESS SECTION — cuma kalau order progress */}
+{/* ═══════════════════════════════════════════════ */}
+{eternalData && eternalData.order.target_count > 0 && (
+  <div className="bg-slate-900/70 backdrop-blur-xl rounded-2xl p-5 md:p-6 border border-violet-500/30 mb-6">
+    <div className="flex items-center gap-2 mb-5">
+      <div className="w-9 h-9 rounded-xl bg-violet-500/20 border border-violet-500/30 flex items-center justify-center">
+        <i className="fa-solid fa-egg text-violet-400 text-sm"></i>
+      </div>
+      <h3 className="font-extrabold text-white">
+        Progress {eternalData.order.progress_keyword.toUpperCase()} Egg
+      </h3>
+    </div>
+
+    {/* PROGRESS BAR */}
+    <div className="mb-6">
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+          Target Counted Egg
+        </span>
+        <span className="text-sm font-black text-violet-300 font-mono">
+          {eternalData.order.progress_count} / {eternalData.order.target_count}
+        </span>
+      </div>
+      <div className="w-full h-3 bg-slate-950 rounded-full overflow-hidden border border-slate-800">
+        <div
+          className="h-full bg-linear-to-r from-violet-500 to-indigo-500 transition-all duration-500"
+          style={{
+            width: `${
+              (eternalData.order.progress_count / eternalData.order.target_count) * 100
+            }%`,
+          }}
+        />
+      </div>
+      <p className="text-[11px] text-slate-500 mt-2">
+        {eternalData.eggs.total} egg terkumpul · {eternalData.eggs.counted} masuk hitungan target
+      </p>
+    </div>
+
+    {/* EGG BREAKDOWN PER RARITY */}
+    <div className="space-y-4">
+      <p className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2">
+        <i className="fa-solid fa-list text-[10px]"></i>
+        Egg yang Didapat
+      </p>
+
+      {Object.keys(eternalData.eggs.by_rarity).length === 0 ? (
+        <p className="text-xs text-slate-500 italic text-center py-4">
+          Belum ada egg yang didapat
+        </p>
+      ) : (
+        Object.entries(eternalData.eggs.by_rarity)
+          .sort(([a], [b]) => {
+            // Tampilkan rarity target duluan
+            if (a === eternalData.order.progress_keyword) return -1;
+            if (b === eternalData.order.progress_keyword) return 1;
+            return 0;
+          })
+          .map(([rarity, eggs]) => {
+            const isTargetRarity = rarity === eternalData.order.progress_keyword;
+            const rarityColor = isTargetRarity
+              ? "text-violet-300 border-violet-500/40 bg-violet-500/10"
+              : "text-slate-300 border-slate-700 bg-slate-800/40";
+            const rarityIcon = isTargetRarity ? "⭐" : "💎";
+
+            return (
+              <div
+                key={rarity}
+                className={`rounded-xl border ${rarityColor} p-4`}
+              >
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-sm font-extrabold capitalize flex items-center gap-2">
+                    {rarityIcon} {rarity}
+                  </span>
+                  <span className="text-xs font-mono text-slate-400">
+                    {eggs.length} egg
+                  </span>
+                </div>
+                <ul className="space-y-1.5">
+                  {eggs.map((egg, idx) => (
+                    <li
+                      key={idx}
+                      className="text-xs text-slate-300 flex items-start gap-2"
+                    >
+                      <span className="text-slate-500 font-mono shrink-0">
+                        {idx + 1}.
+                      </span>
+                      <span className="flex-1">
+                        <span className="font-semibold">{egg.egg_name}</span>
+                        {egg.area && (
+                          <span className="text-slate-500"> · {egg.area}</span>
+                        )}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            );
+          })
+      )}
+    </div>
+  </div>
+)}
 
         {/* DETAIL ORDER */}
         <div className="bg-slate-900/70 backdrop-blur-xl rounded-2xl p-5 md:p-6 border border-slate-800/80">
