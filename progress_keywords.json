@@ -1,0 +1,20 @@
+{
+  "eternal": {
+    "enabled": true,
+    "label": "Eternal Egg",
+    "description": "Progress joki eternal — bukan countdown",
+    "webhook_url": null
+  },
+  "immortal": {
+    "enabled": true,
+    "label": "Immortal",
+    "description": "Progress joki immortal",
+    "webhook_url": null
+  },
+  "legendary": {
+    "enabled": false,
+    "label": "Legendary",
+    "description": "Progress joki legendary (belum aktif)",
+    "webhook_url": null
+  }
+}
