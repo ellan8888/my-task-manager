@@ -111,6 +111,14 @@ export default function Home() {
     lastHeartbeatHuman: string;
   } | null>(null);
 
+  const [currentUser, setCurrentUser] = useState<{
+  username: string;
+  display_name: string;
+  role: string;
+} | null>(null);
+
+const [authLoading, setAuthLoading] = useState(true);
+
   // ══════════════════════════════════════════════════════════════
   // HANDLERS
   // ══════════════════════════════════════════════════════════════
@@ -245,20 +253,30 @@ export default function Home() {
     setTasks(data || []);
   };
 
-  const loadJokiOrders = async () => {
-    const { data, error } = await supabase
-      .from("joki_orders")
-      .select("*")
-      .eq("completed", false)
-      .order("schedule_date", { ascending: true })
-      .order("schedule_time", { ascending: true });
+  const loadJokiOrders = async (username?: string) => {
+  const targetUser = username || currentUser?.username;
+  
+  if (!targetUser) {
+    console.log("[loadJokiOrders] Skip — belum ada user");
+    return;
+  }
 
-    if (error) {
-      console.error("Gagal mengambil data Jokian:", error);
-      return;
-    }
-    setJokiOrders(data || []);
-  };
+  const { data, error } = await supabase
+    .from("joki_orders")
+    .select("*")
+    .eq("completed", false)
+    .eq("joki_name", targetUser)     // ⭐ FILTER: cuma joki_name = user
+    .order("schedule_date", { ascending: true })
+    .order("schedule_time", { ascending: true });
+
+  if (error) {
+    console.error("Gagal mengambil data Jokian:", error);
+    return;
+  }
+  
+  console.log(`[loadJokiOrders] User ${targetUser}: ${data?.length || 0} orders`);
+  setJokiOrders(data || []);
+};
 
   const [now, setNow] = useState(Date.now());
 
@@ -284,10 +302,30 @@ export default function Home() {
     }
   }, []);
 
-  useEffect(() => {
-    loadTasks();
-    loadJokiOrders();
-  }, []);
+// ⭐ Fetch current user DULU
+useEffect(() => {
+  const init = async () => {
+    try {
+      const res = await fetch("/api/auth/me");
+      const data = await res.json();
+      
+      if (data.success && data.user) {
+        setCurrentUser(data.user);
+        // Setelah user ke-fetch, baru load joki orders
+        await loadJokiOrders(data.user.username);
+      } else {
+        console.warn("[init] Gagal fetch user, redirect ke login");
+        window.location.href = "/login";
+      }
+    } catch (err) {
+      console.error("Fetch current user error:", err);
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+  
+  init();
+}, []);
 
   useEffect(() => {
     fetchBotStatus();
@@ -296,25 +334,27 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    loadTasks();
-    loadJokiOrders();
+  loadTasks();
 
-    const channel = supabase
-      .channel("joki_orders_realtime")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "joki_orders" },
-        (payload) => {
-          console.log("[Home] Joki order changed:", payload);
-          loadJokiOrders();
-        }
-      )
-      .subscribe();
+  if (!currentUser) return;  // ⭐ tunggu user ready
 
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, []);
+  // Realtime subscription
+  const channel = supabase
+    .channel("joki_orders_realtime")
+    .on(
+      "postgres_changes",
+      { event: "*", schema: "public", table: "joki_orders" },
+      (payload) => {
+        console.log("[Home] Joki order changed:", payload);
+        loadJokiOrders();  // function udah filter otomatis
+      }
+    )
+    .subscribe();
+
+  return () => {
+    supabase.removeChannel(channel);
+  };
+}, [currentUser]);  // ⭐ Depend on currentUser
 
   useEffect(() => {
     const savedTheme = localStorage.getItem("theme");
@@ -1042,11 +1082,11 @@ export default function Home() {
                 </div>
                 <div>
                   <p className="text-sm font-bold text-slate-800 dark:text-slate-200 group-hover:text-violet-700 dark:group-hover:text-violet-300 transition">
-                    Ellan Worker
+                    {currentUser?.display_name || "Loading..."}
                   </p>
                   <p className="text-[11px] text-slate-500 dark:text-slate-400 group-hover:text-violet-600 dark:group-hover:text-violet-400 transition flex items-center gap-1">
                     <i className="fa-solid fa-shield-halved text-[9px]"></i>
-                    Administrator
+                    {currentUser?.role === "superadmin" ? "Superadmin" : "User"}
                   </p>
                 </div>
               </div>
