@@ -26,6 +26,11 @@ const BYPASS_PATHS = [
   "/api/accounts",
   "/api/kategori",
   "/api/bot", 
+  "/api/jokian",       // ← TAMBAH INI
+"/api/queue",        // ← TAMBAH INI
+"/api/push",         // ← TAMBAH INI
+"/api/reminder",     // ← TAMBAH INI
+"/api/get-accounts",
 ];
 
 export function middleware(request: NextRequest) {
