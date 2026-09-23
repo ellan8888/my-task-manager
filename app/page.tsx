@@ -37,12 +37,72 @@ type JokiOrder = {
   queue_status: string | null;
   buyer_confirmed: boolean;          // ← TAMBAH
   confirm_token: string | null;      // ← TAMBAH
+  order_type: string | null;      // ← TAMBAH
+  progress_keyword: string | null; // ← TAMBAH
+  progress_count: number | null;   // ← TAMBAH
+  target_count: number | null;
 };
 
 export default function Home() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [processingOrders, setProcessingOrders] = useState<Set<number>>(new Set());
   const [jokiOrders, setJokiOrders] = useState<JokiOrder[]>([]);
+  const [startingOrders, setStartingOrders] = useState<Set<number>>(new Set());
+  const handleStartProgressOrder = async (order: JokiOrder) => {
+  showConfirm(
+    "Mulai Orderan?",
+    `Mulai proses order "${order.roblox_username || "Pembeli"}"? Bot akan kirim chat ke buyer kalau order sudah mulai diproses.`,
+    "info",
+    "Ya, Mulai",
+    async () => {
+      closeConfirm();
+      setStartingOrders((prev) => new Set(prev).add(order.id));
+
+      try {
+        const res = await fetch("/api/queue/start-progress", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ order_id: order.order_id }),
+        });
+        const data = await res.json();
+
+        if (!data.success) {
+          alert(data.message || "Gagal memulai order");
+          setStartingOrders((prev) => {
+            const next = new Set(prev);
+            next.delete(order.id);
+            return next;
+          });
+          return;
+        }
+
+        // Update UI — queue_status jadi processing
+        setJokiOrders((current) =>
+          current.map((item) =>
+            item.id === order.id ? { ...item, queue_status: "processing" } : item
+          )
+        );
+
+        setTimeout(() => {
+          setStartingOrders((prev) => {
+            const next = new Set(prev);
+            next.delete(order.id);
+            return next;
+          });
+        }, 1000);
+      } catch (err) {
+        console.error(err);
+        alert("Terjadi kesalahan");
+        setStartingOrders((prev) => {
+          const next = new Set(prev);
+          next.delete(order.id);
+          return next;
+        });
+      }
+    }
+  );
+};
+
   // ↓ TAMBAH 3 STATE INI DI SINI ↓
 const [editingUsername, setEditingUsername] = useState<{
   orderId: number;
@@ -1933,57 +1993,82 @@ body::-webkit-scrollbar {
   )}
 </div>
       </div>
-      {/* COUNTDOWN + JAM SELESAI */}
-{order.estimated_end_at && (
-  <div className="pt-3 mt-3 border-t border-slate-200 dark:border-slate-800/60 space-y-2">
-    {/* Row 1: Sisa Waktu (countdown) */}
-    <div className="flex items-center justify-between">
-      <span className="text-[10px] text-slate-500 dark:text-slate-400 uppercase tracking-wider font-bold flex items-center gap-1.5">
-        <i className="fa-regular fa-clock text-amber-500 dark:text-amber-400"></i>
-        Sisa Waktu
-      </span>
-      <span
-        className={`text-sm font-black font-mono tracking-tight ${
-          new Date(order.estimated_end_at).getTime() - now <= 0
-            ? "text-rose-500 dark:text-rose-400"
-            : "text-amber-600 dark:text-amber-400"
-        }`}
-      >
-        {(() => {
-          const remaining = Math.max(
-            0,
-            new Date(order.estimated_end_at!).getTime() - now
-          );
-          const h = Math.floor(remaining / 3600000);
-          const m = Math.floor((remaining % 3600000) / 60000);
-          const s = Math.floor((remaining % 60000) / 1000);
-          if (remaining === 0) return "SEGERA SELESAI";
-          return `${h > 0 ? h + ":" : ""}${m
-            .toString()
-            .padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
-        })()}
-      </span>
-    </div>
+            {/* COUNTDOWN + JAM SELESAI */}
+            {order.estimated_end_at && (
+              <div className="pt-3 mt-3 border-t border-slate-200 dark:border-slate-800/60 space-y-2">
+                {/* Row 1: Sisa Waktu (countdown) */}
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] text-slate-500 dark:text-slate-400 uppercase tracking-wider font-bold flex items-center gap-1.5">
+                    <i className="fa-regular fa-clock text-amber-500 dark:text-amber-400"></i>
+                    Sisa Waktu
+                  </span>
+                  <span
+                    className={`text-sm font-black font-mono tracking-tight ${
+                      new Date(order.estimated_end_at).getTime() - now <= 0
+                        ? "text-rose-500 dark:text-rose-400"
+                        : "text-amber-600 dark:text-amber-400"
+                    }`}
+                  >
+                    {(() => {
+                      const remaining = Math.max(
+                        0,
+                        new Date(order.estimated_end_at!).getTime() - now
+                      );
+                      const h = Math.floor(remaining / 3600000);
+                      const m = Math.floor((remaining % 3600000) / 60000);
+                      const s = Math.floor((remaining % 60000) / 1000);
+                      if (remaining === 0) return "SEGERA SELESAI";
+                      return `${h > 0 ? h + ":" : ""}${m
+                        .toString()
+                        .padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
+                    })()}
+                  </span>
+                </div>
 
-    {/* Row 2: Jam Selesai */}
-    <div className="flex items-center justify-between">
-      <span className="text-[10px] text-slate-500 dark:text-slate-400 uppercase tracking-wider font-bold flex items-center gap-1.5">
-        <i className="fa-solid fa-flag-checkered text-emerald-500 dark:text-emerald-400"></i>
-        Selesai Jam
-      </span>
-      <span className="text-sm font-black font-mono tracking-tight text-emerald-600 dark:text-emerald-400">
-        {new Date(order.estimated_end_at).toLocaleTimeString("id-ID", {
-          hour: "2-digit",
-          minute: "2-digit",
-        })}{" "}
-        WIB
-      </span>
-    </div>
-  </div>
-)}
-    </div>
-  );
-})
+                {/* Row 2: Jam Selesai */}
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] text-slate-500 dark:text-slate-400 uppercase tracking-wider font-bold flex items-center gap-1.5">
+                    <i className="fa-solid fa-flag-checkered text-emerald-500 dark:text-emerald-400"></i>
+                    Selesai Jam
+                  </span>
+                  <span className="text-sm font-black font-mono tracking-tight text-emerald-600 dark:text-emerald-400">
+                    {new Date(order.estimated_end_at).toLocaleTimeString("id-ID", {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}{" "}
+                    WIB
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {/* ══════════════════════════════════════════════════════════ */}
+            {/* ⭐ TOMBOL MULAI ORDERAN — cuma buat order progress           */}
+            {/* ══════════════════════════════════════════════════════════ */}
+            {order.queue_status === "waiting_confirm" && 
+            (order as any).order_type === "progress" && (
+              <button
+                onClick={() => handleStartProgressOrder(order)}
+                disabled={startingOrders.has(order.id)}
+                className="w-full mt-3 bg-linear-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 disabled:opacity-50 text-white font-bold py-2.5 rounded-xl transition shadow-lg shadow-violet-600/30 flex items-center justify-center gap-2 text-sm"
+              >
+                {startingOrders.has(order.id) ? (
+                  <>
+                    <i className="fa-solid fa-spinner fa-spin"></i>
+                    Memulai...
+                  </>
+                ) : (
+                  <>
+                    <i className="fa-solid fa-play"></i>
+                    Mulai Orderan
+                  </>
+                )}
+              </button>
+            )}
+
+                </div>            
+              );
+            })
                   )}
                 </div>
                 </section>
