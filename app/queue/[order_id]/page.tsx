@@ -609,9 +609,11 @@ useEffect(() => {
           .map(([rarity, eggs]) => {
             const isTargetRarity = rarity === eternalData.order.progress_keyword;
             const rarityColor = isTargetRarity
-              ? "text-violet-300 border-violet-500/40 bg-violet-500/10"
-              : "text-slate-300 border-slate-700 bg-slate-800/40";
-            const rarityIcon = isTargetRarity ? "⭐" : "💎";
+  ? "text-violet-300 border-violet-500/40 bg-violet-500/10"
+  : "text-slate-300 border-slate-700 bg-slate-800/40";
+
+// ⭐ Icon class untuk rarity — target rarity pakai "star", lainnya pakai "gem"
+const rarityIconClass = isTargetRarity ? "fa-solid fa-star" : "fa-solid fa-gem";
 
             return (
               <div
@@ -620,8 +622,9 @@ useEffect(() => {
               >
                 <div className="flex items-center justify-between mb-3">
                   <span className="text-sm font-extrabold capitalize flex items-center gap-2">
-                    {rarityIcon} {rarity}
-                  </span>
+  <i className={`${rarityIconClass} text-xs ${isTargetRarity ? "text-violet-400" : "text-sky-400"}`}></i>
+  {rarity}
+</span>
                   <span className="text-xs font-mono text-slate-400">
                     {eggs.length} egg
                   </span>
