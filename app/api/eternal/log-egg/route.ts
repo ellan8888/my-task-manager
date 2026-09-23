@@ -101,6 +101,7 @@ export async function POST(req: NextRequest) {
     }
 
     // 5. Kalau counted → increment progress_count
+        // 5. Kalau counted → increment progress_count
     let newProgress = order.progress_count || 0;
     let isComplete = false;
 
@@ -123,6 +124,41 @@ export async function POST(req: NextRequest) {
       }
 
       isComplete = newProgress >= (order.target_count || 0);
+
+      // ⭐ KALAU COMPLETE → kirim webhook ke Discord #progress-complete
+      if (isComplete) {
+        const webhookUrl = process.env.PROGRESS_COMPLETE_WEBHOOK;
+        if (webhookUrl) {
+          try {
+            await fetch(webhookUrl, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                content: `✅ **[PROGRESS COMPLETE]**`,
+                embeds: [
+                  {
+                    title: "🎉 Order Progress SELESAI!",
+                    color: 0x2ecc71,
+                    fields: [
+                      { name: "🆔 Order ID", value: order.order_id, inline: false },
+                      { name: "👤 Roblox Username", value: order.roblox_username || "-", inline: true },
+                      { name: "📦 Produk", value: order.product || "-", inline: false },
+                      { name: "🎯 Target", value: `${newProgress}/${order.target_count} ${(order.progress_keyword || "egg").toUpperCase()}`, inline: false },
+                    ],
+                    footer: { text: "Eternal Order System" },
+                    timestamp: new Date().toISOString(),
+                  },
+                ],
+              }),
+            });
+            console.log(`[log-egg] Notif COMPLETE terkirim untuk ${order.order_id}`);
+          } catch (err) {
+            console.error("[log-egg] Gagal kirim webhook COMPLETE:", err);
+          }
+        } else {
+          console.warn("[log-egg] PROGRESS_COMPLETE_WEBHOOK belum di-set");
+        }
+      }
     }
 
     // 6. Hitung summary per rarity (buat info)
