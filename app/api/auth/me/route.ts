@@ -1,4 +1,4 @@
-// app/api/auth/check/route.ts
+// app/api/auth/me/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "crypto";
 
@@ -28,40 +28,34 @@ function verifySession(
 export async function GET(req: NextRequest) {
   try {
     const signedValue = req.cookies.get("auth_session")?.value;
-
     if (!signedValue) {
-      return NextResponse.json({
-        isAdmin: false,
-        isLoggedIn: false,
-        user: null,
-      });
+      return NextResponse.json(
+        { success: false, message: "Belum login" },
+        { status: 401 }
+      );
     }
 
     const session = verifySession(signedValue, process.env.AUTH_SECRET!);
     if (!session) {
-      return NextResponse.json({
-        isAdmin: false,
-        isLoggedIn: false,
-        user: null,
-      });
+      return NextResponse.json(
+        { success: false, message: "Session invalid" },
+        { status: 401 }
+      );
     }
 
-    const isAdmin = session.role === "superadmin";
-
     return NextResponse.json({
-      isAdmin,
-      isLoggedIn: true,
+      success: true,
       user: {
+        id: session.id,
         username: session.username,
         display_name: session.display_name,
         role: session.role,
       },
     });
-  } catch {
-    return NextResponse.json({
-      isAdmin: false,
-      isLoggedIn: false,
-      user: null,
-    });
+  } catch (err: any) {
+    return NextResponse.json(
+      { success: false, message: err.message },
+      { status: 500 }
+    );
   }
 }
