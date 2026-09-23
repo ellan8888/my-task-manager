@@ -20,6 +20,7 @@ type Task = {
   category: string;
   completed: boolean;
   notes: string | null;
+  username: string | null;   // ⭐ TAMBAH
 };
 
 type JokiOrder = {
@@ -240,18 +241,28 @@ const [authLoading, setAuthLoading] = useState(true);
   // LOAD TASKS & ORDERS
   // ══════════════════════════════════════════════════════════════
 
-  const loadTasks = async () => {
-    const { data, error } = await supabase
-      .from("tasks")
-      .select("*")
-      .order("created_at", { ascending: false });
+  const loadTasks = async (username?: string) => {
+  const targetUser = username || currentUser?.username;
+  
+  if (!targetUser) {
+    console.log("[loadTasks] Skip — belum ada user");
+    return;
+  }
 
-    if (error) {
-      console.error(error);
-      return;
-    }
-    setTasks(data || []);
-  };
+  const { data, error } = await supabase
+    .from("tasks")
+    .select("*")
+    .eq("username", targetUser)   // ⭐ FILTER
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    console.error(error);
+    return;
+  }
+  
+  console.log(`[loadTasks] User ${targetUser}: ${data?.length || 0} tasks`);
+  setTasks(data || []);
+};
 
   const loadJokiOrders = async (username?: string) => {
   const targetUser = username || currentUser?.username;
@@ -302,7 +313,6 @@ const [authLoading, setAuthLoading] = useState(true);
     }
   }, []);
 
-// ⭐ Fetch current user DULU
 useEffect(() => {
   const init = async () => {
     try {
@@ -311,8 +321,8 @@ useEffect(() => {
       
       if (data.success && data.user) {
         setCurrentUser(data.user);
-        // Setelah user ke-fetch, baru load joki orders
         await loadJokiOrders(data.user.username);
+        await loadTasks(data.user.username);   // ⭐ TAMBAH INI
       } else {
         console.warn("[init] Gagal fetch user, redirect ke login");
         window.location.href = "/login";
@@ -423,21 +433,21 @@ useEffect(() => {
       return;
     }
 
-    const newTask: Task = {
-      id: Date.now(),
-      title,
-      deadline,
-      reminder: reminder || null,
-      reminder_sent: false,
-      reminder_last_sent: null,
-      priority,
-      category,
-      completed: false,
-      notes,
-    };
+const newTask = {
+  id: Date.now(),
+  title,
+  deadline,
+  reminder: reminder || null,
+  reminder_sent: false,
+  reminder_last_sent: null,
+  priority,
+  category,
+  completed: false,
+  notes,
+  username: currentUser?.username || "ellan",   // ⭐ TAMBAH
+};
 
-    const { error } = await supabase.from("tasks").insert([newTask]);
-
+const { error } = await supabase.from("tasks").insert([newTask]);
     if (error) {
       console.error(error);
       alert("Gagal menyimpan task!");

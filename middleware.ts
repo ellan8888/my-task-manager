@@ -101,12 +101,17 @@ export async function middleware(request: NextRequest) {
   }
 
   // 4. Cek akses /admin/* — cuma superadmin
-  if (pathname.startsWith("/admin") && session.role !== "superadmin") {
-    console.warn(
-      `[middleware] 🚫 Blocked ${pathname} for ${session.username} (${session.role})`
-    );
-    return NextResponse.redirect(new URL("/", request.url));
-  }
+// 4. Cek akses /admin/users/* — cuma superadmin
+//    Halaman lain di /admin/* boleh semua user (filter data di frontend)
+if (
+  pathname.startsWith("/admin/users") &&
+  session.role !== "superadmin"
+) {
+  console.warn(
+    `[middleware] 🚫 Blocked ${pathname} for ${session.username} (${session.role})`
+  );
+  return NextResponse.redirect(new URL("/admin", request.url));
+}
 
   // 5. Inject session ke request headers
   const response = NextResponse.next();

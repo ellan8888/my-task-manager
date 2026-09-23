@@ -31,13 +31,23 @@ export default function StokPribadiPage() {
   const { sidebarOpen, toggleSidebar } = useSidebar();
   const [searchQuery, setSearchQuery] = useState("");
 
-  // Form tambah
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
-  const [cookie, setCookie] = useState("");
-  const [kategori, setKategori] = useState("");
-  const [addedBy, setAddedBy] = useState("lan4337");
-  const [saving, setSaving] = useState(false);
+// Form tambah
+const [username, setUsername] = useState("");
+const [password, setPassword] = useState("");
+const [cookie, setCookie] = useState("");
+const [kategori, setKategori] = useState("");
+const [addedBy, setAddedBy] = useState("lan4337");
+const [saving, setSaving] = useState(false);
+
+// ⭐ State current user
+const [currentUser, setCurrentUser] = useState<{
+  username: string;
+  display_name: string;
+  role: string;
+} | null>(null);
+const [currentUserLoading, setCurrentUserLoading] = useState(true);
+
+
 
   // ★ State edit
   const [editingAccount, setEditingAccount] = useState<StockAccount | null>(null);
@@ -94,11 +104,30 @@ export default function StokPribadiPage() {
     }
   };
 
-  useEffect(() => {
-    loadKategori();
-    loadAccounts();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+// ⭐ Fetch current user DULU
+useEffect(() => {
+  const fetchMe = async () => {
+    try {
+      const res = await fetch("/api/auth/me");
+      const data = await res.json();
+      if (data.success) {
+        setCurrentUser(data.user);
+        setAddedBy(data.user.username);  // ⭐ auto-set added_by
+      }
+    } catch (err) {
+      console.error("Gagal fetch user:", err);
+    } finally {
+      setCurrentUserLoading(false);
+    }
+  };
+  fetchMe();
+}, []);
+
+useEffect(() => {
+  loadKategori();
+  loadAccounts();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, []);
 
   // Submit — tambah akun
   const handleSubmit = async (e: React.FormEvent) => {
@@ -394,9 +423,7 @@ return Object.entries(groups)
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
               <div>
-                <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-2">
-                  Kategori *
-                </label>
+                
                 <KategoriDropdown
                   value={kategori}
                   onChange={setKategori}
@@ -408,19 +435,21 @@ return Object.entries(groups)
                 />
               </div>
               <div>
-                <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-2">
-                  Added By
-                </label>
-                <KategoriDropdown
-                  value={addedBy}
-                  onChange={setAddedBy}
-                  options={[
-                    { id: 1, kategori: "lan4337" },
-                    { id: 2, kategori: "ushouldrunn" },
-                    { id: 3, kategori: "rizki" },
-                  ]}
-                />
-              </div>
+  <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-2">
+    <i className="fa-solid fa-user text-[10px] mr-1"></i>
+    Added By
+  </label>
+  <div className="w-full bg-slate-100 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm text-slate-700 dark:text-slate-300 flex items-center gap-2">
+    <i className="fa-solid fa-lock text-slate-400 text-xs"></i>
+    <span className="font-mono font-bold">
+      {currentUserLoading ? "Loading..." : currentUser?.username || "-"}
+    </span>
+  </div>
+  <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1 flex items-center gap-1">
+    <i className="fa-solid fa-circle-info text-[9px]"></i>
+    Otomatis dari akun yang login
+  </p>
+</div>
             </div>
 
             <button
@@ -744,19 +773,21 @@ return Object.entries(groups)
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-2">
-                  Added By
-                </label>
-                <KategoriDropdown
-                  value={editAddedBy}
-                  onChange={setEditAddedBy}
-                  options={[
-                    { id: 1, kategori: "lan4337" },
-                    { id: 2, kategori: "ushouldrunn" },
-                    { id: 3, kategori: "rizki" },
-                  ]}
-                />
-              </div>
+  <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-2">
+    <i className="fa-solid fa-user text-[10px] mr-1"></i>
+    Added By
+  </label>
+  <div className="w-full bg-slate-100 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm text-slate-700 dark:text-slate-300 flex items-center gap-2">
+    <i className="fa-solid fa-lock text-slate-400 text-xs"></i>
+    <span className="font-mono font-bold">
+      {editAddedBy || currentUser?.username || "-"}
+    </span>
+  </div>
+  <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1 flex items-center gap-1">
+    <i className="fa-solid fa-circle-info text-[9px]"></i>
+    Owner akun (nggak bisa diubah)
+  </p>
+</div>
 
               <div className="flex gap-2 pt-2">
                 <button

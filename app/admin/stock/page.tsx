@@ -18,7 +18,7 @@ type StockAccount = {
   logged_out: boolean;
   logged_out_at: string | null;
   created_at: string;
-  used_at: string | null;    // ← ★ TAMBAH
+  used_at: string | null;
   listed_at: string | null;
 };
 
@@ -52,6 +52,14 @@ export default function StockPage() {
   const [newKategoriName, setNewKategoriName] = useState("");
   const [newKategoriLink, setNewKategoriLink] = useState("");
 
+  const [currentUser, setCurrentUser] = useState<{
+    username: string;
+    display_name: string;
+    role: string;
+  } | null>(null);
+
+  const [currentUserLoading, setCurrentUserLoading] = useState(true);
+
   // ══════════════════════════════════════════════════════
   // LOAD DATA
   // ══════════════════════════════════════════════════════
@@ -71,30 +79,45 @@ export default function StockPage() {
     }
   };
 
-const loadAccounts = async () => {
-  setLoading(true);
-  try {
-    // ★ Default: SEMUA filter skip yang logged_out
-    let url = "/api/accounts/stock?logged_out=false";
+  const loadAccounts = async () => {
+    setLoading(true);
+    try {
+      let url = "/api/accounts/stock?logged_out=false";
 
-    if (filter === "ready") {
-      // ★ Ready = udah diinput (used = true), belum logged_out
-      url = "/api/accounts/stock?used=true&logged_out=false";
-    } else if (filter === "progress") {
-      // ★ Progress = belum diinput (used = false), belum logged_out
-      url = "/api/accounts/stock?used=false&logged_out=false";
-    } else if (filter === "all") {
-      // ★ Semua = semua yang AKTIF (belum logged_out)
-      url = "/api/accounts/stock?logged_out=false";
+      if (filter === "ready") {
+        url = "/api/accounts/stock?used=true&logged_out=false";
+      } else if (filter === "progress") {
+        url = "/api/accounts/stock?used=false&logged_out=false";
+      } else if (filter === "all") {
+        url = "/api/accounts/stock?logged_out=false";
+      }
+
+      const res = await fetch(url);
+      const data = await res.json();
+      if (data.success) setAccounts(data.data || []);
+    } finally {
+      setLoading(false);
     }
+  };
 
-    const res = await fetch(url);
-    const data = await res.json();
-    if (data.success) setAccounts(data.data || []);
-  } finally {
-    setLoading(false);
-  }
-};
+  // ⭐ Fetch current user DULU
+  useEffect(() => {
+    const fetchMe = async () => {
+      try {
+        const res = await fetch("/api/auth/me");
+        const data = await res.json();
+        if (data.success) {
+          setCurrentUser(data.user);
+          setAddedBy(data.user.username);
+        }
+      } catch (err) {
+        console.error("Gagal fetch user:", err);
+      } finally {
+        setCurrentUserLoading(false);
+      }
+    };
+    fetchMe();
+  }, []);
 
   useEffect(() => {
     loadKategori();
@@ -208,38 +231,33 @@ const loadAccounts = async () => {
   };
 
   const currentKategori = isNewKategori ? newKategoriName : kategori;
-  // ══════════════════════════════════════════════════════
-// GROUP ACCOUNTS BY KATEGORI + FILTER SEARCH
-// ══════════════════════════════════════════════════════
-const groupedAccounts = (() => {
-  // ★ Filter: skip yang logged_out + search
-  const filtered = accounts.filter((acc) => {
-    // Skip kalau udah logged out
-    if (acc.logged_out) return false;
-
-    // Filter by search
-    return acc.username.toLowerCase().includes(searchQuery.toLowerCase());
-  });
-
-  // Group by kategori
-  const groups: Record<string, StockAccount[]> = {};
-  filtered.forEach((acc) => {
-    const kat = acc.kategori || "tanpa-kategori";
-    if (!groups[kat]) groups[kat] = [];
-    groups[kat].push(acc);
-  });
-
-  // Convert ke array & sort by kategori name
-return Object.entries(groups)
-  .map(([kategori, accounts]) => ({ kategori, accounts }))
-  .sort((a, b) => {
-    const numA = parseInt(a.kategori.match(/^\d+/)?.[0] || "999999", 10);
-    const numB = parseInt(b.kategori.match(/^\d+/)?.[0] || "999999", 10);
-    if (numA !== numB) return numA - numB;
-    return a.kategori.localeCompare(b.kategori);
-  });
-})();
   const butuhPassword = ["1b-5b/s", "akun"].includes(currentKategori.toLowerCase());
+
+  // ══════════════════════════════════════════════════════
+  // GROUP ACCOUNTS BY KATEGORI + FILTER SEARCH
+  // ══════════════════════════════════════════════════════
+  const groupedAccounts = (() => {
+    const filtered = accounts.filter((acc) => {
+      if (acc.logged_out) return false;
+      return acc.username.toLowerCase().includes(searchQuery.toLowerCase());
+    });
+
+    const groups: Record<string, StockAccount[]> = {};
+    filtered.forEach((acc) => {
+      const kat = acc.kategori || "tanpa-kategori";
+      if (!groups[kat]) groups[kat] = [];
+      groups[kat].push(acc);
+    });
+
+    return Object.entries(groups)
+      .map(([kategori, accounts]) => ({ kategori, accounts }))
+      .sort((a, b) => {
+        const numA = parseInt(a.kategori.match(/^\d+/)?.[0] || "999999", 10);
+        const numB = parseInt(b.kategori.match(/^\d+/)?.[0] || "999999", 10);
+        if (numA !== numB) return numA - numB;
+        return a.kategori.localeCompare(b.kategori);
+      });
+  })();
 
   return (
     <>
@@ -341,84 +359,110 @@ return Object.entries(groups)
               />
             </div>
 
-            {/* SECTION KATEGORI + ADDED BY */}
+            {/* ══════════════════════════════════════════════════
+                SECTION KATEGORI + ADDED BY
+                ★ Pakai CSS Grid dengan fixed height biar sejajar
+               ══════════════════════════════════════════════════ */}
             <div className="mb-4 p-4 bg-slate-50 dark:bg-slate-950/50 rounded-xl border border-slate-200 dark:border-slate-800">
-              <div className="flex items-center justify-between mb-3">
-                <label className="flex items-center gap-1.5 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase">
-                  <i className="fa-solid fa-tag text-[10px]"></i>
-                  <span>Kategori *</span>
-                </label>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsNewKategori(!isNewKategori);
-                    setNewKategoriName("");
-                    setNewKategoriLink("");
-                  }}
-                  className={`text-xs font-bold px-3 py-1 rounded-lg transition flex items-center gap-1.5 ${
-                    isNewKategori
-                      ? "bg-red-500/20 text-red-600 dark:text-red-300 hover:bg-red-500/40"
-                      : "bg-violet-500/20 text-violet-600 dark:text-violet-300 hover:bg-violet-500/40"
-                  }`}
-                >
-                  <i
-                    className={`fa-solid ${
-                      isNewKategori ? "fa-xmark" : "fa-plus"
-                    } text-[10px]`}
-                  ></i>
-                  <span>
-                    {isNewKategori ? "Batal" : "Tambah Kategori Baru"}
-                  </span>
-                </button>
-              </div>
+{/* Header: Tombol Tambah Kategori Baru */}
+<div className="flex items-center justify-end mb-3">
+  <button
+    type="button"
+    onClick={() => {
+      setIsNewKategori(!isNewKategori);
+      setNewKategoriName("");
+      setNewKategoriLink("");
+    }}
+    className={`text-xs font-bold px-3 py-1 rounded-lg transition flex items-center gap-1.5 ${
+      isNewKategori
+        ? "bg-red-500/20 text-red-600 dark:text-red-300 hover:bg-red-500/40"
+        : "bg-violet-500/20 text-violet-600 dark:text-violet-300 hover:bg-violet-500/40"
+    }`}
+  >
+    <i
+      className={`fa-solid ${
+        isNewKategori ? "fa-xmark" : "fa-plus"
+      } text-[10px]`}
+    ></i>
+    <span>{isNewKategori ? "Batal" : "Tambah Kategori Baru"}</span>
+  </button>
+</div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
+              {/* Grid 2 kolom — pakai items-stretch biar tinggi sama */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-stretch">
+                {/* ══════════ KATEGORI ══════════ */}
+                <div className="flex flex-col">
+                  {/* Wrapper label tinggi fixed 20px */}
+                  <div className="h-5 flex items-center mb-2">
+                    <label className="flex items-center gap-1.5 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase">
+                      <i className="fa-solid fa-tag text-[10px]"></i>
+                      <span>Pilih Kategori *</span>
+                    </label>
+                  </div>
+
+                  {/* Konten: dropdown atau input baru */}
                   {!isNewKategori ? (
-                    <KategoriDropdown
-                      value={kategori}
-                      onChange={setKategori}
-                      options={kategoriList.map((k) => ({
-                        id: k.id,
-                        kategori: k.kategori,
-                      }))}
-                      loading={loadingKategori}
-                      placeholder="Pilih kategori..."
-                    />
-                  ) : (
-                    <div className="space-y-2">
-                      <input
-                        type="text"
-                        value={newKategoriName}
-                        onChange={(e) => setNewKategoriName(e.target.value)}
-                        placeholder="3000 diamond"
-                        className="w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm text-slate-900 dark:text-white focus:outline-none focus:border-violet-500"
+                    <div className="kategori-dropdown-wrapper">
+                      <KategoriDropdown
+                        value={kategori}
+                        onChange={setKategori}
+                        options={kategoriList.map((k) => ({
+                          id: k.id,
+                          kategori: k.kategori,
+                        }))}
+                        loading={loadingKategori}
+                        placeholder="Pilih kategori..."
+                        hideLabel={true}
                       />
-                      <p className="text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-1">
-                        <i className="fa-solid fa-circle-info text-[10px]"></i>
-                        Gunakan huruf kecil (contoh: <code className="text-violet-500">3000 diamond</code>)
-                      </p>
                     </div>
+                  ) : (
+                    <input
+                      type="text"
+                      value={newKategoriName}
+                      onChange={(e) => setNewKategoriName(e.target.value)}
+                      placeholder="3000 diamond"
+                      className="w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm text-slate-900 dark:text-white focus:outline-none focus:border-violet-500"
+                      style={{ height: "46px" }}
+                    />
                   )}
+
+                  {/* Spacer biar tinggi sama kayak Added By */}
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 flex items-center gap-1 invisible">
+                    <i className="fa-solid fa-circle-info text-[10px]"></i>
+                    &nbsp;
+                  </p>
                 </div>
 
-                <div>
-                  <KategoriDropdown
-                    value={addedBy}
-                    onChange={setAddedBy}
-                    options={[
-                      { id: 1, kategori: "lan4337" },
-                      { id: 2, kategori: "ushouldrunn" },
-                      { id: 3, kategori: "rizki" },
-                    ]}
-                    placeholder="Pilih admin..."
-                  />
-                  {isNewKategori && (
-                    <p className="text-[11px] text-transparent mt-1">.</p>
-                  )}
+                {/* ══════════ ADDED BY ══════════ */}
+                <div className="flex flex-col">
+                  {/* Wrapper label tinggi fixed 20px — SAMA kayak Kategori */}
+                  <div className="h-5 flex items-center mb-2">
+                    <label className="flex items-center gap-1.5 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase">
+                      <i className="fa-solid fa-user text-[10px]"></i>
+                      <span>Added By</span>
+                    </label>
+                  </div>
+
+                  {/* Display box tinggi fixed 46px */}
+                  <div
+                    className="w-full bg-slate-100 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-4 flex items-center justify-between"
+                    style={{ height: "46px" }}
+                  >
+                    <span className="font-mono font-bold text-sm text-slate-700 dark:text-slate-300">
+                      {currentUserLoading ? "Loading..." : currentUser?.username || "-"}
+                    </span>
+                    <i className="fa-solid fa-lock text-slate-400 text-xs"></i>
+                  </div>
+
+                  {/* Help text */}
+                  <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1 flex items-center gap-1">
+                    <i className="fa-solid fa-circle-info text-[9px]"></i>
+                    Otomatis dari akun yang login
+                  </p>
                 </div>
               </div>
 
+              {/* Link Itemku (muncul kalau mode tambah kategori baru) */}
               {isNewKategori && (
                 <div className="mt-3">
                   <label className="flex items-center gap-1.5 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-2">
@@ -454,173 +498,174 @@ return Object.entries(groups)
             </button>
           </form>
 
-          {/* LIST STOCK */}
-          {/* LIST STOCK — GROUPED PER KATEGORI */}
-<div className="bg-white dark:bg-slate-900/60 rounded-2xl p-6 border border-slate-200 dark:border-slate-800 shadow-sm">
-  {/* Header + Search */}
-  <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-6">
-    <h2 className="font-bold text-slate-900 dark:text-white flex items-center gap-2">
-      <i className="fa-solid fa-table text-violet-600 dark:text-violet-400"></i>
-      <span>Daftar Stock ({accounts.length})</span>
-    </h2>
-    <div className="flex items-center gap-2">
-      {/* Search */}
-      <div className="relative">
-        <i className="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
-        <input
-          type="text"
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          placeholder="Cari username..."
-          className="w-full md:w-56 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl pl-9 pr-3 py-2 text-sm text-slate-900 dark:text-white focus:outline-none focus:border-violet-500"
-        />
-      </div>
-      {/* Filter */}
-<div className="w-44">
-  <KategoriDropdown
-    value={
-      filter === "all"
-        ? "Semua"
-        : filter === "ready"
-        ? "Ready"
-        : "Progress"
-    }
-    onChange={(val) => {
-      const map: Record<string, any> = {
-        Semua: "all",
-        Ready: "ready",
-        Progress: "progress",
-      };
-      setFilter(map[val] || "all");
-    }}
-    options={[
-      { id: 1, kategori: "Semua" },
-      { id: 2, kategori: "Ready" },
-      { id: 3, kategori: "Progress" },
-    ]}
-  />
-</div>
-    </div>
-  </div>
-
-  {loading ? (
-    <SkeletonList count={5} />
-  ) : accounts.length === 0 ? (
-    <div className="text-center py-12">
-      <i className="fa-solid fa-inbox text-4xl text-slate-300 dark:text-slate-700 mb-3"></i>
-      <p className="text-slate-400 text-sm">Belum ada stock.</p>
-    </div>
-  ) : (
-    <div className="space-y-8">
-      {groupedAccounts.map((group) => (
-        <div key={group.kategori}>
-          {/* Group Header */}
-          <div className="flex items-center justify-between mb-3 pb-2 border-b-2 border-slate-100 dark:border-slate-800">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg bg-linear-to-tr from-violet-600 to-indigo-600 flex items-center justify-center text-white shadow-md">
-                <i className="fa-solid fa-tag text-xs"></i>
-              </div>
-              <div>
-                <h3 className="font-bold text-slate-900 dark:text-white text-sm capitalize">
-                  {group.kategori}
-                </h3>
-                <p className="text-[10px] text-slate-500 dark:text-slate-400">
-                  {group.accounts.length} akun
-                </p>
+          {/* ══════════════════════════════════════════════════
+              LIST STOCK — GROUPED PER KATEGORI
+             ══════════════════════════════════════════════════ */}
+          <div className="bg-white dark:bg-slate-900/60 rounded-2xl p-6 border border-slate-200 dark:border-slate-800 shadow-sm">
+            {/* Header + Search */}
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-6">
+              <h2 className="font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                <i className="fa-solid fa-table text-violet-600 dark:text-violet-400"></i>
+                <span>Daftar Stock ({accounts.length})</span>
+              </h2>
+              <div className="flex items-center gap-2">
+                {/* Search */}
+                <div className="relative">
+                  <i className="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Cari username..."
+                    className="w-full md:w-56 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl pl-9 pr-3 py-2 text-sm text-slate-900 dark:text-white focus:outline-none focus:border-violet-500"
+                  />
+                </div>
+                {/* Filter */}
+                <div className="w-44">
+                  <KategoriDropdown
+                    value={
+                      filter === "all"
+                        ? "Semua"
+                        : filter === "ready"
+                        ? "Ready"
+                        : "Progress"
+                    }
+                    onChange={(val) => {
+                      const map: Record<string, any> = {
+                        Semua: "all",
+                        Ready: "ready",
+                        Progress: "progress",
+                      };
+                      setFilter(map[val] || "all");
+                    }}
+                    options={[
+                      { id: 1, kategori: "Semua" },
+                      { id: 2, kategori: "Ready" },
+                      { id: 3, kategori: "Progress" },
+                    ]}
+                    hideLabel={true}
+                  />
+                </div>
               </div>
             </div>
-            <div className="flex items-center gap-1.5">
-              {/* Stat per kategori */}
-              <span className="px-2 py-1 bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 text-[10px] font-bold rounded-lg">
-                {group.accounts.filter((a) => a.used).length} Ready
-              </span>
-              <span className="px-2 py-1 bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-300 text-[10px] font-bold rounded-lg">
-                {group.accounts.filter((a) => !a.used).length} Progress
-              </span>
-            </div>
-          </div>
 
-          {/* Table */}
-          <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800">
-            <table className="w-full text-sm table-fixed">
-              <thead className="bg-slate-50 dark:bg-slate-950/50">
-  <tr className="text-left text-[10px] uppercase text-slate-500 dark:text-slate-400 font-bold">
-    <th className="px-3 py-2.5 w-[5%] text-center">#</th>
-    <th className="px-3 py-2.5 w-[20%]">Username</th>
-    <th className="px-3 py-2.5 w-[13%] hidden md:table-cell">Password</th>
-    <th className="px-3 py-2.5 w-[13%]">Added By</th>
-    <th className="px-3 py-2.5 w-[17%]">Status</th>
-    <th className="px-3 py-2.5 w-[17%] hidden lg:table-cell">Created</th>
-    <th className="px-3 py-2.5 w-[10%] text-right">Aksi</th>
-  </tr>
-</thead>
-              <tbody>
-  {group.accounts.map((acc, idx) => (
-    <tr
-      key={acc.id}
-      className="border-t border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-900/40 transition"
-    >
-      <td className="px-3 py-2.5 w-[5%] text-xs text-slate-400 font-mono text-center">
-        {idx + 1}
-      </td>
-      <td className="px-3 py-2.5 w-[20%]">
-        <span className="font-mono font-bold text-xs text-slate-900 dark:text-white truncate block">
-          {acc.username}
-        </span>
-      </td>
-      <td className="px-3 py-2.5 w-[13%] hidden md:table-cell">
-        <span className="font-mono text-[11px] text-slate-500 dark:text-slate-400">
-          {acc.password ? "••••••••" : "—"}
-        </span>
-      </td>
-      <td className="px-3 py-2.5 w-[13%]">
-        <span className="text-xs text-slate-600 dark:text-slate-300 truncate block">
-          {acc.added_by || "—"}
-        </span>
-      </td>
-      <td className="px-3 py-2.5 w-[17%]">
-        <div className="flex items-center gap-1.5">
-          {acc.used ? (
-            <span className="px-2 py-0.5 bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 text-[10px] font-bold rounded-md inline-flex items-center gap-1 whitespace-nowrap">
-              <i className="fa-solid fa-rocket text-[9px]"></i>
-              READY
-            </span>
-          ) : (
-            <span className="px-2 py-0.5 bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-300 text-[10px] font-bold rounded-md inline-flex items-center gap-1 whitespace-nowrap">
-              <i className="fa-solid fa-clock text-[9px]"></i>
-              PROGRESS
-            </span>
-          )}
-        </div>
-      </td>
-      <td className="px-3 py-2.5 w-[17%] hidden lg:table-cell">
-        <span className="text-[10px] text-slate-400 whitespace-nowrap">
-          {new Date(acc.created_at).toLocaleDateString("id-ID", {
-            day: "2-digit",
-            month: "short",
-            year: "numeric",
-          })}
-        </span>
-      </td>
-      <td className="px-3 py-2.5 w-[10%] text-right">
-        <button
-          onClick={() => handleDelete(acc.username)}
-          className="w-7 h-7 inline-flex items-center justify-center bg-red-100 dark:bg-red-500/20 text-red-600 dark:text-red-300 rounded-lg hover:bg-red-500/40 transition"
-          title="Hapus"
-        >
-          <i className="fa-solid fa-trash-can text-xs"></i>
-        </button>
-      </td>
-    </tr>
-  ))}
-</tbody>
-            </table>
+            {loading ? (
+              <SkeletonList count={5} />
+            ) : accounts.length === 0 ? (
+              <div className="text-center py-12">
+                <i className="fa-solid fa-inbox text-4xl text-slate-300 dark:text-slate-700 mb-3"></i>
+                <p className="text-slate-400 text-sm">Belum ada stock.</p>
+              </div>
+            ) : (
+              <div className="space-y-8">
+                {groupedAccounts.map((group) => (
+                  <div key={group.kategori}>
+                    {/* Group Header */}
+                    <div className="flex items-center justify-between mb-3 pb-2 border-b-2 border-slate-100 dark:border-slate-800">
+                      <div className="flex items-center gap-2">
+                        <div className="w-8 h-8 rounded-lg bg-linear-to-tr from-violet-600 to-indigo-600 flex items-center justify-center text-white shadow-md">
+                          <i className="fa-solid fa-tag text-xs"></i>
+                        </div>
+                        <div>
+                          <h3 className="font-bold text-slate-900 dark:text-white text-sm capitalize">
+                            {group.kategori}
+                          </h3>
+                          <p className="text-[10px] text-slate-500 dark:text-slate-400">
+                            {group.accounts.length} akun
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="px-2 py-1 bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 text-[10px] font-bold rounded-lg">
+                          {group.accounts.filter((a) => a.used).length} Ready
+                        </span>
+                        <span className="px-2 py-1 bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-300 text-[10px] font-bold rounded-lg">
+                          {group.accounts.filter((a) => !a.used).length} Progress
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Table */}
+                    <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800">
+                      <table className="w-full text-sm table-fixed">
+                        <thead className="bg-slate-50 dark:bg-slate-950/50">
+                          <tr className="text-left text-[10px] uppercase text-slate-500 dark:text-slate-400 font-bold">
+                            <th className="px-3 py-2.5 w-[5%] text-center">#</th>
+                            <th className="px-3 py-2.5 w-[20%]">Username</th>
+                            <th className="px-3 py-2.5 w-[13%] hidden md:table-cell">Password</th>
+                            <th className="px-3 py-2.5 w-[13%]">Added By</th>
+                            <th className="px-3 py-2.5 w-[17%]">Status</th>
+                            <th className="px-3 py-2.5 w-[17%] hidden lg:table-cell">Created</th>
+                            <th className="px-3 py-2.5 w-[10%] text-right">Aksi</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {group.accounts.map((acc, idx) => (
+                            <tr
+                              key={acc.id}
+                              className="border-t border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-900/40 transition"
+                            >
+                              <td className="px-3 py-2.5 w-[5%] text-xs text-slate-400 font-mono text-center">
+                                {idx + 1}
+                              </td>
+                              <td className="px-3 py-2.5 w-[20%]">
+                                <span className="font-mono font-bold text-xs text-slate-900 dark:text-white truncate block">
+                                  {acc.username}
+                                </span>
+                              </td>
+                              <td className="px-3 py-2.5 w-[13%] hidden md:table-cell">
+                                <span className="font-mono text-[11px] text-slate-500 dark:text-slate-400">
+                                  {acc.password ? "••••••••" : "—"}
+                                </span>
+                              </td>
+                              <td className="px-3 py-2.5 w-[13%]">
+                                <span className="text-xs text-slate-600 dark:text-slate-300 truncate block">
+                                  {acc.added_by || "—"}
+                                </span>
+                              </td>
+                              <td className="px-3 py-2.5 w-[17%]">
+                                <div className="flex items-center gap-1.5">
+                                  {acc.used ? (
+                                    <span className="px-2 py-0.5 bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 text-[10px] font-bold rounded-md inline-flex items-center gap-1 whitespace-nowrap">
+                                      <i className="fa-solid fa-rocket text-[9px]"></i>
+                                      READY
+                                    </span>
+                                  ) : (
+                                    <span className="px-2 py-0.5 bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-300 text-[10px] font-bold rounded-md inline-flex items-center gap-1 whitespace-nowrap">
+                                      <i className="fa-solid fa-clock text-[9px]"></i>
+                                      PROGRESS
+                                    </span>
+                                  )}
+                                </div>
+                              </td>
+                              <td className="px-3 py-2.5 w-[17%] hidden lg:table-cell">
+                                <span className="text-[10px] text-slate-400 whitespace-nowrap">
+                                  {new Date(acc.created_at).toLocaleDateString("id-ID", {
+                                    day: "2-digit",
+                                    month: "short",
+                                    year: "numeric",
+                                  })}
+                                </span>
+                              </td>
+                              <td className="px-3 py-2.5 w-[10%] text-right">
+                                <button
+                                  onClick={() => handleDelete(acc.username)}
+                                  className="w-7 h-7 inline-flex items-center justify-center bg-red-100 dark:bg-red-500/20 text-red-600 dark:text-red-300 rounded-lg hover:bg-red-500/40 transition"
+                                  title="Hapus"
+                                >
+                                  <i className="fa-solid fa-trash-can text-xs"></i>
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
-        </div>
-      ))}
-    </div>
-  )}
-</div>
         </div>
       </div>
     </>

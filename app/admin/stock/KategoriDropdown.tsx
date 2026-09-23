@@ -13,6 +13,7 @@ type Props = {
   options: Kategori[];
   loading?: boolean;
   placeholder?: string;
+  hideLabel?: boolean;  // ⭐ TAMBAH INI
 };
 
 export default function KategoriDropdown({
@@ -21,6 +22,7 @@ export default function KategoriDropdown({
   options,
   loading = false,
   placeholder = "Pilih kategori...",
+  hideLabel = false,  // ⭐ TAMBAH INI
 }: Props) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -63,12 +65,21 @@ export default function KategoriDropdown({
 
   return (
     <div ref={dropdownRef} className="relative">
-      {/* Trigger Button */}
+      {/* ⭐ Label — cuma muncul kalau hideLabel = false */}
+      {!hideLabel && (
+        <label className="flex items-center gap-1.5 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-2 h-5">
+          <i className="fa-solid fa-tag text-[10px]"></i>
+          <span>Kategori *</span>
+        </label>
+      )}
+
+      {/* Trigger Button — TINGGI FIXED 46px biar sejajar sama Added By */}
       <button
         type="button"
         onClick={() => !loading && setOpen(!open)}
         disabled={loading}
-        className={`w-full flex items-center justify-between gap-2 bg-white dark:bg-slate-950 border rounded-xl px-4 py-3 text-sm transition-all ${
+        style={{ height: "46px" }}
+        className={`w-full flex items-center justify-between gap-2 bg-white dark:bg-slate-950 border rounded-xl px-4 text-sm transition-all ${
           open
             ? "border-violet-500 ring-2 ring-violet-500/20"
             : "border-slate-200 dark:border-slate-800 hover:border-violet-400 dark:hover:border-violet-500/50"
@@ -103,7 +114,7 @@ export default function KategoriDropdown({
           }}
         >
           {options.length > 5 && (
-  <div className="p-2 border-b border-slate-100 dark:border-slate-800 scrollbar-hide">
+            <div className="p-2 border-b border-slate-100 dark:border-slate-800 scrollbar-hide">
               <div className="relative">
                 <i className="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
                 <input
