@@ -5,6 +5,9 @@ import { supabase } from "@/lib/supabase";
 import { registerPushSubscription } from "@/lib/push";
 import Link from "next/link";
 
+// ══════════════════════════════════════════════════════════════
+// TYPES
+// ══════════════════════════════════════════════════════════════
 
 type Task = {
   id: number;
@@ -35,113 +38,39 @@ type JokiOrder = {
   created_at: string;
   estimated_end_at: string | null;
   queue_status: string | null;
-  buyer_confirmed: boolean;          // ← TAMBAH
-  confirm_token: string | null;      // ← TAMBAH
-  order_type: string | null;      // ← TAMBAH
-  progress_keyword: string | null; // ← TAMBAH
-  progress_count: number | null;   // ← TAMBAH
+  buyer_confirmed: boolean;
+  confirm_token: string | null;
+  order_type: string | null;
+  progress_keyword: string | null;
+  progress_count: number | null;
   target_count: number | null;
 };
+
+// ══════════════════════════════════════════════════════════════
+// MAIN COMPONENT
+// ══════════════════════════════════════════════════════════════
 
 export default function Home() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [processingOrders, setProcessingOrders] = useState<Set<number>>(new Set());
   const [jokiOrders, setJokiOrders] = useState<JokiOrder[]>([]);
   const [startingOrders, setStartingOrders] = useState<Set<number>>(new Set());
-  const handleStartProgressOrder = async (order: JokiOrder) => {
-  showConfirm(
-    "Mulai Orderan?",
-    `Mulai proses order "${order.roblox_username || "Pembeli"}"? Bot akan kirim chat ke buyer kalau order sudah mulai diproses.`,
-    "info",
-    "Ya, Mulai",
-    async () => {
-      closeConfirm();
-      setStartingOrders((prev) => new Set(prev).add(order.id));
 
-      try {
-        const res = await fetch("/api/queue/start-progress", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ order_id: order.order_id }),
-        });
-        const data = await res.json();
+  const [editingUsername, setEditingUsername] = useState<{
+    orderId: number;
+    value: string;
+  } | null>(null);
 
-        if (!data.success) {
-          alert(data.message || "Gagal memulai order");
-          setStartingOrders((prev) => {
-            const next = new Set(prev);
-            next.delete(order.id);
-            return next;
-          });
-          return;
-        }
+  const [ramAccounts, setRamAccounts] = useState<{
+    Username: string;
+    UserID: number;
+    Alias: string;
+    Group: string;
+  }[]>([]);
 
-        // Update UI — queue_status jadi processing
-        setJokiOrders((current) =>
-          current.map((item) =>
-            item.id === order.id ? { ...item, queue_status: "processing" } : item
-          )
-        );
-
-        setTimeout(() => {
-          setStartingOrders((prev) => {
-            const next = new Set(prev);
-            next.delete(order.id);
-            return next;
-          });
-        }, 1000);
-      } catch (err) {
-        console.error(err);
-        alert("Terjadi kesalahan");
-        setStartingOrders((prev) => {
-          const next = new Set(prev);
-          next.delete(order.id);
-          return next;
-        });
-      }
-    }
-  );
-};
-
-  // ↓ TAMBAH 3 STATE INI DI SINI ↓
-const [editingUsername, setEditingUsername] = useState<{
-  orderId: number;
-  value: string;
-} | null>(null);
-
-const [ramAccounts, setRamAccounts] = useState<{
-  Username: string;
-  UserID: number;
-  Alias: string;
-  Group: string;
-}[]>([]);
-
-const [loadingAccounts, setLoadingAccounts] = useState(false);
-
+  const [loadingAccounts, setLoadingAccounts] = useState(false);
   const [restarting, setRestarting] = useState(false);
-  const handleRestartBot = async () => {
-  if (!confirm("Jalankan ulang bot?\n\nIni bakal menjalankan login.py di komputer kamu.")) {
-    return;
-  }
 
-  setRestarting(true);
-  try {
-    const res = await fetch("/api/bot/restart", { method: "POST" });
-    const data = await res.json();
-
-    if (data.success) {
-      alert("✅ Bot sedang di-restart...\n\nTunggu 30-60 detik.");
-      setTimeout(fetchBotStatus, 5000);
-      setTimeout(fetchBotStatus, 15000);
-    } else {
-      alert(`❌ Gagal: ${data.message}`);
-    }
-  } catch (err) {
-    alert("❌ Gagal menghubungi restart server");
-  } finally {
-    setRestarting(false);
-  }
-};
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [title, setTitle] = useState("");
@@ -161,7 +90,6 @@ const [loadingAccounts, setLoadingAccounts] = useState(false);
   const [currentView, setCurrentView] = useState<"list" | "kanban">("list");
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
-
   const [confirmDialog, setConfirmDialog] = useState<{
     open: boolean;
     title: string;
@@ -178,27 +106,107 @@ const [loadingAccounts, setLoadingAccounts] = useState(false);
     onConfirm: () => {},
   });
 
-  // ★ State bot status
-const [botStatus, setBotStatus] = useState<{
-  isOnline: boolean;
-  lastHeartbeatHuman: string;
-} | null>(null);
+  const [botStatus, setBotStatus] = useState<{
+    isOnline: boolean;
+    lastHeartbeatHuman: string;
+  } | null>(null);
 
-// ★ Fetch bot status
-const fetchBotStatus = async () => {
-  try {
-    const res = await fetch("/api/bot/status");
-    const data = await res.json();
-    if (data.success) {
-      setBotStatus({
-        isOnline: data.isOnline,
-        lastHeartbeatHuman: data.lastHeartbeatHuman,
-      });
+  // ══════════════════════════════════════════════════════════════
+  // HANDLERS
+  // ══════════════════════════════════════════════════════════════
+
+  const handleStartProgressOrder = async (order: JokiOrder) => {
+    showConfirm(
+      "Mulai Orderan?",
+      `Mulai proses order "${order.roblox_username || "Pembeli"}"? Bot akan kirim chat ke buyer kalau order sudah mulai diproses.`,
+      "info",
+      "Ya, Mulai",
+      async () => {
+        closeConfirm();
+        setStartingOrders((prev) => new Set(prev).add(order.id));
+
+        try {
+          const res = await fetch("/api/queue/start-progress", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ order_id: order.order_id }),
+          });
+          const data = await res.json();
+
+          if (!data.success) {
+            alert(data.message || "Gagal memulai order");
+            setStartingOrders((prev) => {
+              const next = new Set(prev);
+              next.delete(order.id);
+              return next;
+            });
+            return;
+          }
+
+          setJokiOrders((current) =>
+            current.map((item) =>
+              item.id === order.id ? { ...item, queue_status: "processing" } : item
+            )
+          );
+
+          setTimeout(() => {
+            setStartingOrders((prev) => {
+              const next = new Set(prev);
+              next.delete(order.id);
+              return next;
+            });
+          }, 1000);
+        } catch (err) {
+          console.error(err);
+          alert("Terjadi kesalahan");
+          setStartingOrders((prev) => {
+            const next = new Set(prev);
+            next.delete(order.id);
+            return next;
+          });
+        }
+      }
+    );
+  };
+
+  const handleRestartBot = async () => {
+    if (!confirm("Jalankan ulang bot?\n\nIni bakal menjalankan login.py di komputer kamu.")) {
+      return;
     }
-  } catch (err) {
-    console.error("Fetch bot status error:", err);
-  }
-};
+
+    setRestarting(true);
+    try {
+      const res = await fetch("/api/bot/restart", { method: "POST" });
+      const data = await res.json();
+
+      if (data.success) {
+        alert("✅ Bot sedang di-restart...\n\nTunggu 30-60 detik.");
+        setTimeout(fetchBotStatus, 5000);
+        setTimeout(fetchBotStatus, 15000);
+      } else {
+        alert(`❌ Gagal: ${data.message}`);
+      }
+    } catch (err) {
+      alert("❌ Gagal menghubungi restart server");
+    } finally {
+      setRestarting(false);
+    }
+  };
+
+  const fetchBotStatus = async () => {
+    try {
+      const res = await fetch("/api/bot/status");
+      const data = await res.json();
+      if (data.success) {
+        setBotStatus({
+          isOnline: data.isOnline,
+          lastHeartbeatHuman: data.lastHeartbeatHuman,
+        });
+      }
+    } catch (err) {
+      console.error("Fetch bot status error:", err);
+    }
+  };
 
   const showConfirm = (
     title: string,
@@ -220,9 +228,9 @@ const fetchBotStatus = async () => {
     setReminder(value);
   };
 
-  // =========================
-  // LOAD TASKS
-  // =========================
+  // ══════════════════════════════════════════════════════════════
+  // LOAD TASKS & ORDERS
+  // ══════════════════════════════════════════════════════════════
 
   const loadTasks = async () => {
     const { data, error } = await supabase
@@ -234,7 +242,6 @@ const fetchBotStatus = async () => {
       console.error(error);
       return;
     }
-
     setTasks(data || []);
   };
 
@@ -250,16 +257,19 @@ const fetchBotStatus = async () => {
       console.error("Gagal mengambil data Jokian:", error);
       return;
     }
-
     setJokiOrders(data || []);
   };
 
   const [now, setNow] = useState(Date.now());
 
-useEffect(() => {
-  const interval = setInterval(() => setNow(Date.now()), 1000);
-  return () => clearInterval(interval);
-}, []);
+  // ══════════════════════════════════════════════════════════════
+  // EFFECTS
+  // ══════════════════════════════════════════════════════════════
+
+  useEffect(() => {
+    const interval = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(interval);
+  }, []);
 
   useEffect(() => {
     const link = document.createElement("link");
@@ -279,60 +289,57 @@ useEffect(() => {
     loadJokiOrders();
   }, []);
 
-  // ★ Polling bot status tiap 30 detik
-useEffect(() => {
-  fetchBotStatus();
-  const interval = setInterval(fetchBotStatus, 30000);
-  return () => clearInterval(interval);
-}, []);
+  useEffect(() => {
+    fetchBotStatus();
+    const interval = setInterval(fetchBotStatus, 30000);
+    return () => clearInterval(interval);
+  }, []);
 
   useEffect(() => {
-  loadTasks();
-  loadJokiOrders();
+    loadTasks();
+    loadJokiOrders();
 
-  // === REALTIME SUBSCRIPTION untuk joki_orders ===
-  const channel = supabase
-    .channel("joki_orders_realtime")
-    .on(
-      "postgres_changes",
-      { event: "*", schema: "public", table: "joki_orders" },
-      (payload) => {
-        console.log("[Home] Joki order changed:", payload);
-        // Reload full biar aman — handle UPDATE, INSERT, DELETE
-        loadJokiOrders();
-      }
-    )
-    .subscribe();
+    const channel = supabase
+      .channel("joki_orders_realtime")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "joki_orders" },
+        (payload) => {
+          console.log("[Home] Joki order changed:", payload);
+          loadJokiOrders();
+        }
+      )
+      .subscribe();
 
-  return () => {
-    supabase.removeChannel(channel);
-  };
-}, []);
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
 
   useEffect(() => {
-  const savedTheme = localStorage.getItem("theme");
-  const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-  const darkMode = savedTheme ? savedTheme === "dark" : prefersDark;
-  setIsDark(darkMode);
-  
-  if (darkMode) {
-    document.documentElement.classList.add("dark");
-  } else {
-    document.documentElement.classList.remove("dark");
-  }
-}, []);
+    const savedTheme = localStorage.getItem("theme");
+    const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+    const darkMode = savedTheme ? savedTheme === "dark" : prefersDark;
+    setIsDark(darkMode);
+
+    if (darkMode) {
+      document.documentElement.classList.add("dark");
+    } else {
+      document.documentElement.classList.remove("dark");
+    }
+  }, []);
 
   const toggleTheme = () => {
-  const newMode = !isDark;
-  setIsDark(newMode);
-  localStorage.setItem("theme", newMode ? "dark" : "light");
-  
-  if (newMode) {
-    document.documentElement.classList.add("dark");
-  } else {
-    document.documentElement.classList.remove("dark");
-  }
-};
+    const newMode = !isDark;
+    setIsDark(newMode);
+    localStorage.setItem("theme", newMode ? "dark" : "light");
+
+    if (newMode) {
+      document.documentElement.classList.add("dark");
+    } else {
+      document.documentElement.classList.remove("dark");
+    }
+  };
 
   useEffect(() => {
     if ("serviceWorker" in navigator) {
@@ -366,9 +373,9 @@ useEffect(() => {
     localStorage.setItem("sidebarOpen", String(sidebarOpen));
   }, [sidebarOpen]);
 
-  // =========================
-  // ADD TASK
-  // =========================
+  // ══════════════════════════════════════════════════════════════
+  // TASK HANDLERS
+  // ══════════════════════════════════════════════════════════════
 
   const addTask = async () => {
     if (!title || !deadline) {
@@ -400,95 +407,6 @@ useEffect(() => {
     setTasks([newTask, ...tasks]);
     resetForm();
   };
-
-  const isUsernameUsedInOtherCards = (username: string, currentOrderId: number) => {
-  return jokiOrders.some(
-    (o) => o.id !== currentOrderId && 
-           o.roblox_username?.toLowerCase() === username.toLowerCase()
-  );
-};
-
-// =========================
-// FETCH RAM ACCOUNTS
-// =========================
-const fetchRamAccounts = async () => {
-  setLoadingAccounts(true);
-  try {
-    const res = await fetch("/api/get-accounts");
-    const data = await res.json();
-
-    if (data.success && Array.isArray(data.accounts)) {
-      setRamAccounts(data.accounts);
-      console.log("RAM accounts loaded:", data.accounts);
-    } else {
-      console.error("Gagal load RAM accounts:", data.message);
-    }
-  } catch (err) {
-    console.error("Error fetch RAM accounts:", err);
-  } finally {
-    setLoadingAccounts(false);
-  }
-};
-
-  // =========================
-  // TEST PUSH
-  // =========================
-
-  const testPushNotification = async () => {
-    try {
-      const response = await fetch("/api/push", { method: "POST" });
-      const result = await response.json();
-      console.log("Push API result:", result);
-
-      if (result.success) {
-        alert(`Push berhasil dikirim!\n\nTerkirim: ${result.sent}\nGagal: ${result.failed}`);
-      } else {
-        alert(`Push gagal:\n${result.message || result.error}`);
-      }
-    } catch (error) {
-      console.error("Test push error:", error);
-      alert("Gagal menghubungi Push API.");
-    }
-  };
-
-  const enableNotifications = async () => {
-    if (!("Notification" in window)) {
-      alert("Browser kamu tidak mendukung notifikasi.");
-      return;
-    }
-
-    try {
-      const permission = await Notification.requestPermission();
-      setNotificationPermission(permission);
-
-      if (permission !== "granted") {
-        alert("Permission notifikasi ditolak.");
-        return;
-      }
-
-      const subscription = await registerPushSubscription();
-      console.log("Subscription:", JSON.stringify(subscription));
-      alert("Push notification berhasil diaktifkan!");
-    } catch (error) {
-      console.error("Gagal mengaktifkan push notification:", error);
-      alert("Gagal mengaktifkan push notification. Cek Console.");
-    }
-  };
-
-  const editTask = (task: Task) => {
-    setEditingId(task.id);
-    setTitle(task.title);
-    setDeadline(task.deadline);
-    setReminder(task.reminder || "");
-    setPriority(task.priority);
-    setCategory(task.category);
-    setShowForm(true);
-    setNotes(task.notes || "");
-  };
-
-  // =========================
-  // UPDATE TASK
-  // =========================
 
   const updateTask = async () => {
     if (!title || !deadline || editingId === null) {
@@ -536,10 +454,6 @@ const fetchRamAccounts = async () => {
     resetForm();
   };
 
-  // =========================
-  // DELETE TASK
-  // =========================
-
   const deleteTask = async (id: number) => {
     showConfirm(
       "Hapus Task?",
@@ -559,114 +473,16 @@ const fetchRamAccounts = async () => {
     );
   };
 
-  // =========================
-// COMPLETE JOKI ORDER (dengan animasi)
-// =========================
-
-const handleCompleteOrder = async (order: JokiOrder) => {
-  // 1. Show confirm dialog DULU
-  showConfirm(
-    order.completed_by_bot ? "Konfirmasi Jokian Selesai?" : "Selesaikan Jokian?",
-    order.completed_by_bot
-      ? `Order "${order.roblox_username || "Pembeli"}" sudah selesai. Hapus dari daftar?`
-      : `Tandai jokian "${order.roblox_username || "Pembeli"}" sebagai selesai?`,
-    "success",
-    order.completed_by_bot ? "Ya, Konfirmasi" : "Ya, Selesai",
-    async () => {
-      // 2. Tutup dialog langsung
-      closeConfirm();
-
-      // 3. Set processing (trigger animasi)
-      setProcessingOrders((prev) => new Set(prev).add(order.id));
-      await new Promise((resolve) => setTimeout(resolve, 50));
-
-      try {
-        // ✅ 4. Panggil API baru — close roblox + hapus card
-        // (logika sama persis kayak yang lama, tapi di-extract ke API)
-        const res = await fetch("/api/queue/complete-order", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ order_id: order.order_id }),
-        });
-        const data = await res.json();
-
-        if (!data.success) {
-          console.error(data);
-          alert(data.message || "Gagal menyelesaikan Jokian!");
-          setProcessingOrders((prev) => {
-            const next = new Set(prev);
-            next.delete(order.id);
-            return next;
-          });
-          return;
-        }
-
-        // ✅ 5. Tunggu animasi CSS selesai
-        await new Promise((resolve) => setTimeout(resolve, 700));
-
-        // ✅ 6. Hapus card dari UI
-        setJokiOrders((current) =>
-          current.filter((item) => item.id !== order.id)
-        );
-
-        // 7. Cleanup
-        setProcessingOrders((prev) => {
-          const next = new Set(prev);
-          next.delete(order.id);
-          return next;
-        });
-      } catch (err) {
-        console.error(err);
-        alert("Terjadi kesalahan");
-        setProcessingOrders((prev) => {
-          const next = new Set(prev);
-          next.delete(order.id);
-          return next;
-        });
-      }
-    }
-  );
-};
-
-// =========================
-// UPDATE ORDER USERNAME
-// =========================
-const updateOrderUsername = async (orderId: number, newUsername: string) => {
-  if (!newUsername.trim()) {
-    alert("Username tidak boleh kosong!");
-    return;
-  }
-
-  try {
-    const { error } = await supabase
-      .from("joki_orders")
-      .update({ roblox_username: newUsername.trim() })
-      .eq("id", orderId);
-
-    if (error) {
-      console.error(error);
-      alert("Gagal mengupdate username!");
-      return;
-    }
-
-    // Update UI
-    setJokiOrders((current) =>
-      current.map((item) =>
-        item.id === orderId ? { ...item, roblox_username: newUsername.trim() } : item
-      )
-    );
-
-    // Tutup dialog edit
-    setEditingUsername(null);
-  } catch (err) {
-    console.error(err);
-    alert("Gagal mengupdate username!");
-  }
-};
-
-  // =========================
-  // TOGGLE COMPLETE
-  // =========================
+  const editTask = (task: Task) => {
+    setEditingId(task.id);
+    setTitle(task.title);
+    setDeadline(task.deadline);
+    setReminder(task.reminder || "");
+    setPriority(task.priority);
+    setCategory(task.category);
+    setShowForm(true);
+    setNotes(task.notes || "");
+  };
 
   const toggleTask = async (id: number) => {
     const task = tasks.find((task) => task.id === id);
@@ -703,10 +519,6 @@ const updateOrderUsername = async (orderId: number, newUsername: string) => {
     );
   };
 
-  // =========================
-  // RESET FORM
-  // =========================
-
   const resetForm = () => {
     setTitle("");
     setDeadline("");
@@ -718,9 +530,172 @@ const updateOrderUsername = async (orderId: number, newUsername: string) => {
     setNotes("");
   };
 
-  // =========================
-  // DEADLINE STATUS
-  // =========================
+  // ══════════════════════════════════════════════════════════════
+  // JOKI ORDER HANDLERS
+  // ══════════════════════════════════════════════════════════════
+
+  const handleCompleteOrder = async (order: JokiOrder) => {
+    showConfirm(
+      order.completed_by_bot ? "Konfirmasi Jokian Selesai?" : "Selesaikan Jokian?",
+      order.completed_by_bot
+        ? `Order "${order.roblox_username || "Pembeli"}" sudah selesai. Hapus dari daftar?`
+        : `Tandai jokian "${order.roblox_username || "Pembeli"}" sebagai selesai?`,
+      "success",
+      order.completed_by_bot ? "Ya, Konfirmasi" : "Ya, Selesai",
+      async () => {
+        closeConfirm();
+
+        setProcessingOrders((prev) => new Set(prev).add(order.id));
+        await new Promise((resolve) => setTimeout(resolve, 50));
+
+        try {
+          const res = await fetch("/api/queue/complete-order", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ order_id: order.order_id }),
+          });
+          const data = await res.json();
+
+          if (!data.success) {
+            console.error(data);
+            alert(data.message || "Gagal menyelesaikan Jokian!");
+            setProcessingOrders((prev) => {
+              const next = new Set(prev);
+              next.delete(order.id);
+              return next;
+            });
+            return;
+          }
+
+          await new Promise((resolve) => setTimeout(resolve, 700));
+
+          setJokiOrders((current) =>
+            current.filter((item) => item.id !== order.id)
+          );
+
+          setProcessingOrders((prev) => {
+            const next = new Set(prev);
+            next.delete(order.id);
+            return next;
+          });
+        } catch (err) {
+          console.error(err);
+          alert("Terjadi kesalahan");
+          setProcessingOrders((prev) => {
+            const next = new Set(prev);
+            next.delete(order.id);
+            return next;
+          });
+        }
+      }
+    );
+  };
+
+  const isUsernameUsedInOtherCards = (username: string, currentOrderId: number) => {
+    return jokiOrders.some(
+      (o) => o.id !== currentOrderId &&
+             o.roblox_username?.toLowerCase() === username.toLowerCase()
+    );
+  };
+
+  const fetchRamAccounts = async () => {
+    setLoadingAccounts(true);
+    try {
+      const res = await fetch("/api/get-accounts");
+      const data = await res.json();
+
+      if (data.success && Array.isArray(data.accounts)) {
+        setRamAccounts(data.accounts);
+        console.log("RAM accounts loaded:", data.accounts);
+      } else {
+        console.error("Gagal load RAM accounts:", data.message);
+      }
+    } catch (err) {
+      console.error("Error fetch RAM accounts:", err);
+    } finally {
+      setLoadingAccounts(false);
+    }
+  };
+
+  const updateOrderUsername = async (orderId: number, newUsername: string) => {
+    if (!newUsername.trim()) {
+      alert("Username tidak boleh kosong!");
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from("joki_orders")
+        .update({ roblox_username: newUsername.trim() })
+        .eq("id", orderId);
+
+      if (error) {
+        console.error(error);
+        alert("Gagal mengupdate username!");
+        return;
+      }
+
+      setJokiOrders((current) =>
+        current.map((item) =>
+          item.id === orderId ? { ...item, roblox_username: newUsername.trim() } : item
+        )
+      );
+
+      setEditingUsername(null);
+    } catch (err) {
+      console.error(err);
+      alert("Gagal mengupdate username!");
+    }
+  };
+
+  // ══════════════════════════════════════════════════════════════
+  // PUSH NOTIFICATION
+  // ══════════════════════════════════════════════════════════════
+
+  const testPushNotification = async () => {
+    try {
+      const response = await fetch("/api/push", { method: "POST" });
+      const result = await response.json();
+      console.log("Push API result:", result);
+
+      if (result.success) {
+        alert(`Push berhasil dikirim!\n\nTerkirim: ${result.sent}\nGagal: ${result.failed}`);
+      } else {
+        alert(`Push gagal:\n${result.message || result.error}`);
+      }
+    } catch (error) {
+      console.error("Test push error:", error);
+      alert("Gagal menghubungi Push API.");
+    }
+  };
+
+  const enableNotifications = async () => {
+    if (!("Notification" in window)) {
+      alert("Browser kamu tidak mendukung notifikasi.");
+      return;
+    }
+
+    try {
+      const permission = await Notification.requestPermission();
+      setNotificationPermission(permission);
+
+      if (permission !== "granted") {
+        alert("Permission notifikasi ditolak.");
+        return;
+      }
+
+      const subscription = await registerPushSubscription();
+      console.log("Subscription:", JSON.stringify(subscription));
+      alert("Push notification berhasil diaktifkan!");
+    } catch (error) {
+      console.error("Gagal mengaktifkan push notification:", error);
+      alert("Gagal mengaktifkan push notification. Cek Console.");
+    }
+  };
+
+  // ══════════════════════════════════════════════════════════════
+  // HELPERS
+  // ══════════════════════════════════════════════════════════════
 
   const getDeadlineStatus = (deadline: string) => {
     const today = new Date();
@@ -763,10 +738,6 @@ const updateOrderUsername = async (orderId: number, newUsername: string) => {
     };
   };
 
-  // =========================
-  // FORMAT DATE
-  // =========================
-
   const formatDate = (date: string) => {
     return new Date(date + "T00:00:00").toLocaleDateString("en-US", {
       day: "numeric",
@@ -775,9 +746,12 @@ const updateOrderUsername = async (orderId: number, newUsername: string) => {
     });
   };
 
-    const filteredTasks = tasks
+  // ══════════════════════════════════════════════════════════════
+  // FILTERED DATA
+  // ══════════════════════════════════════════════════════════════
+
+  const filteredTasks = tasks
     .filter((task) => {
-      // ★ Filter "Belum Dijadwalkan" cuma buat jokian — task nggak pernah masuk sini
       if (filter === "NotScheduled") return false;
 
       const matchesSearch =
@@ -801,15 +775,11 @@ const updateOrderUsername = async (orderId: number, newUsername: string) => {
       return new Date(a.deadline + "T00:00:00").getTime() - new Date(b.deadline + "T00:00:00").getTime();
     });
 
-      // =========================================================
-  // FILTER JOKIAN — berdasarkan filter yang dipilih
-  // =========================================================
   const filteredJokiOrders = jokiOrders.filter((o) => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     if (filter === "All") return true;
 
-    // Filter berdasarkan estimated_end_at (jadwal selesai)
     if (filter === "Today") {
       if (o.completed_by_bot || o.queue_status === "completed") return false;
       if (!o.estimated_end_at) return false;
@@ -839,40 +809,57 @@ const updateOrderUsername = async (orderId: number, newUsername: string) => {
     return true;
   });
 
-    // =========================
+  // ⭐ Split jadi 2 — sudah dijadwalkan vs belum dijadwalkan
+  const scheduledJokiOrders = filteredJokiOrders.filter((o) => {
+    const isProgressOrder =
+      o.order_type === "progress" ||
+      (o.progress_keyword != null && (o.target_count ?? 0) > 0);
+    if (isProgressOrder) return true;
+    if (o.estimated_end_at) return true;
+    if (o.completed_by_bot || o.queue_status === "completed") return true;
+    return false;
+  });
+
+  const unscheduledJokiOrders = filteredJokiOrders.filter((o) => {
+    const isProgressOrder =
+      o.order_type === "progress" ||
+      (o.progress_keyword != null && (o.target_count ?? 0) > 0);
+    if (isProgressOrder) return false;
+    if (o.estimated_end_at) return false;
+    if (o.completed_by_bot || o.queue_status === "completed") return false;
+    return true;
+  });
+
+  // ══════════════════════════════════════════════════════════════
   // STATISTICS
-  // =========================
+  // ══════════════════════════════════════════════════════════════
 
   const completedTasks = tasks.filter((task) => task.completed).length;
-  const pendingTasks = tasks.filter((task) => !task.completed).length;
 
-  // =========================================================
-  // HITUNG STATISTIK JOKIAN BERDASARKAN estimated_end_at
-  // =========================================================
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
-  // Hari Ini: estimated_end_at == hari ini (dan belum completed_by_bot)
   const jokiToday = jokiOrders.filter((o) => {
     if (o.completed_by_bot || o.queue_status === "completed") return false;
     if (!o.estimated_end_at) return false;
+    if (o.order_type === "progress") return false;
 
     const endDate = new Date(o.estimated_end_at);
     endDate.setHours(0, 0, 0, 0);
     return endDate.getTime() === today.getTime();
   }).length;
 
-  // Belum Dijadwalkan: order yang belum punya estimated_end_at
-  const jokiNotScheduled = jokiOrders.filter((o) => 
+  const jokiNotScheduled = jokiOrders.filter((o) =>
     !o.estimated_end_at &&
     o.completed_by_bot !== true &&
-    o.queue_status !== "completed"
+    o.queue_status !== "completed" &&
+    o.order_type !== "progress" &&
+    (o.progress_keyword == null || (o.target_count ?? 0) === 0)
   ).length;
 
-  // Selesai: yang udah completed_by_bot atau queue_status === "completed"
-  const jokiCompleted = jokiOrders.filter((o) => 
-    o.completed_by_bot === true || o.queue_status === "completed"
-  ).length;
+  // ══════════════════════════════════════════════════════════════
+  // JSX
+  // ══════════════════════════════════════════════════════════════
 
   return (
     <>
@@ -908,26 +895,22 @@ const updateOrderUsername = async (orderId: number, newUsername: string) => {
         body, aside, main, header {
           transition: background-color 0.25s ease, color 0.25s ease, border-color 0.25s ease;
         }
-          /* ============================================== */
-/* HIDE SCROLLBAR — tapi tetap bisa scroll        */
-/* ============================================== */
-.custom-scrollbar {
-  scrollbar-width: none;        /* Firefox */
-  -ms-overflow-style: none;     /* IE 10+ */
-}
-.custom-scrollbar::-webkit-scrollbar {
-  display: none;                /* Chrome, Safari, Edge */
-}
+        .custom-scrollbar {
+          scrollbar-width: none;
+          -ms-overflow-style: none;
+        }
+        .custom-scrollbar::-webkit-scrollbar {
+          display: none;
+        }
 
-/* Hide scrollbar di html/body juga (kalau ada) */
-html, body {
-  scrollbar-width: none;
-  -ms-overflow-style: none;
-}
-html::-webkit-scrollbar,
-body::-webkit-scrollbar {
-  display: none;
-}
+        html, body {
+          scrollbar-width: none;
+          -ms-overflow-style: none;
+        }
+        html::-webkit-scrollbar,
+        body::-webkit-scrollbar {
+          display: none;
+        }
       `}</style>
 
       <div className="h-screen overflow-hidden bg-slate-100 dark:bg-slate-950 text-slate-900 dark:text-slate-100 font-sans antialiased selection:bg-violet-500 selection:text-white flex flex-col relative">
@@ -956,47 +939,47 @@ body::-webkit-scrollbar {
                     My Task Manager
                   </h1>
                   <div className="text-xs font-medium flex items-center gap-1.5 mt-0.5 flex-wrap">
-  {botStatus === null ? (
-    <>
-      <span className="w-2 h-2 rounded-full bg-slate-400"></span>
-      <span className="text-slate-500 dark:text-slate-400">Cek bot...</span>
-    </>
-  ) : botStatus.isOnline ? (
-    <>
-      <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-      <span className="text-emerald-600 dark:text-emerald-400">
-        Bot Online • {botStatus.lastHeartbeatHuman}
-      </span>
-    </>
-  ) : (
-    <>
-      <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse"></span>
-      <span className="text-rose-600 dark:text-rose-400">
-        Bot Offline • {botStatus.lastHeartbeatHuman}
-      </span>
-      <button
-        onClick={handleRestartBot}
-        disabled={restarting}
-        className="ml-1 px-2 py-0.5 rounded-md bg-rose-500 hover:bg-rose-600 text-white text-[10px] font-bold transition disabled:opacity-50 flex items-center gap-1"
-        title="Jalankan ulang bot"
-      >
-        {restarting ? (
-          <i className="fa-solid fa-spinner fa-spin"></i>
-        ) : (
-          <>
-            <i className="fa-solid fa-rotate-right"></i>
-            <span>Restart</span>
-          </>
-        )}
-      </button>
-    </>
-  )}
-</div>
+                    {botStatus === null ? (
+                      <>
+                        <span className="w-2 h-2 rounded-full bg-slate-400"></span>
+                        <span className="text-slate-500 dark:text-slate-400">Cek bot...</span>
+                      </>
+                    ) : botStatus.isOnline ? (
+                      <>
+                        <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                        <span className="text-emerald-600 dark:text-emerald-400">
+                          Bot Online • {botStatus.lastHeartbeatHuman}
+                        </span>
+                      </>
+                    ) : (
+                      <>
+                        <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse"></span>
+                        <span className="text-rose-600 dark:text-rose-400">
+                          Bot Offline • {botStatus.lastHeartbeatHuman}
+                        </span>
+                        <button
+                          onClick={handleRestartBot}
+                          disabled={restarting}
+                          className="ml-1 px-2 py-0.5 rounded-md bg-rose-500 hover:bg-rose-600 text-white text-[10px] font-bold transition disabled:opacity-50 flex items-center gap-1"
+                          title="Jalankan ulang bot"
+                        >
+                          {restarting ? (
+                            <i className="fa-solid fa-spinner fa-spin"></i>
+                          ) : (
+                            <>
+                              <i className="fa-solid fa-rotate-right"></i>
+                              <span>Restart</span>
+                            </>
+                          )}
+                        </button>
+                      </>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
 
-                        <nav className="mt-6 space-y-2">
+            <nav className="mt-6 space-y-2">
               <a href="#" className="flex items-center space-x-3.5 px-4 py-3 rounded-2xl bg-violet-100 dark:bg-violet-500/15 text-violet-700 dark:text-violet-200 font-semibold text-sm border border-violet-200 dark:border-violet-500/40 transition-all">
                 <i className="fa-solid fa-list-check w-5 text-center text-violet-600 dark:text-violet-300"></i>
                 <span>Daftar Order Jokian</span>
@@ -1005,7 +988,6 @@ body::-webkit-scrollbar {
                 </span>
               </a>
 
-              {/* MENU QUEUE — BARU */}
               <a
                 href="/queue"
                 className="flex items-center space-x-3.5 px-4 py-3 rounded-2xl text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800/60 hover:text-slate-900 dark:hover:text-slate-200 text-sm font-medium transition-all group"
@@ -1046,8 +1028,7 @@ body::-webkit-scrollbar {
             </div>
           </div>
 
-                    <div className="space-y-4 pt-4 border-t border-slate-200 dark:border-slate-800/80">
-            {/* ★ Admin Panel Link */}
+          <div className="space-y-4 pt-4 border-t border-slate-200 dark:border-slate-800/80">
             <Link
               href="/admin"
               className="flex items-center justify-between p-3 rounded-2xl bg-slate-100 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800/80 hover:border-violet-500/50 hover:bg-violet-50 dark:hover:bg-violet-500/10 transition-all group cursor-pointer"
@@ -1072,7 +1053,6 @@ body::-webkit-scrollbar {
               <i className="fa-solid fa-chevron-right text-slate-400 group-hover:text-violet-600 dark:group-hover:text-violet-400 group-hover:translate-x-0.5 transition-all text-xs"></i>
             </Link>
 
-            {/* Toggle Theme — pindah ke baris sendiri */}
             <button
               onClick={toggleTheme}
               className="w-full flex items-center justify-center space-x-2 p-3 rounded-2xl bg-slate-100 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800/80 hover:bg-slate-200 dark:hover:bg-slate-800 transition"
@@ -1086,15 +1066,12 @@ body::-webkit-scrollbar {
           </div>
         </aside>
 
-        {/* MAIN CONTENT AREA */}
+        {/* MAIN CONTENT */}
         <main
           className={`flex-1 flex flex-col h-screen overflow-hidden bg-slate-100 dark:bg-slate-950 transition-[margin] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${
             sidebarOpen ? "md:ml-72" : "md:ml-0"
           }`}
         >
-          {/* ============================================================ */}
-          {/* HEADER — STICKY (NGGAK IKUT SCROLL)                          */}
-          {/* ============================================================ */}
           <header className="h-16 border-b border-slate-200 dark:border-slate-800/80 bg-white/80 dark:bg-slate-950/60 backdrop-blur-md px-4 md:px-8 flex items-center justify-between z-20 shrink-0">
             <div className="flex items-center space-x-3">
               <button
@@ -1137,1117 +1114,787 @@ body::-webkit-scrollbar {
             </div>
           </header>
 
-                    {/* ============================================================ */}
-          {/* SCROLLABLE SECTION: METRICS + TOOLBAR + LIST + KANBAN        */}
-          {/* ============================================================ */}
           <div className="flex-1 overflow-y-auto custom-scrollbar">
-                      <div className="px-4 md:px-8 py-4 space-y-4">
+            <div className="px-4 md:px-8 py-4 space-y-4">
 
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-              <div className="bg-white dark:bg-slate-900/50 backdrop-blur-xl border border-slate-200 dark:border-slate-800 rounded-2xl p-4 md:p-5 relative overflow-hidden group hover:border-violet-500/50 transition-all duration-300">
-                <div className="absolute -right-4 -bottom-4 w-20 h-20 bg-violet-500/10 dark:bg-violet-600/10 rounded-full blur-xl transition"></div>
-                <div className="flex justify-between items-start">
-                  <div>
-                    <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                      Total Task
-                    </p>
-                    <h3 className="text-2xl md:text-3xl font-black text-slate-900 dark:text-white mt-1">
-                      {tasks.length + jokiOrders.length}
-                    </h3>
-                  </div>
-                  <div className="w-10 h-10 rounded-xl bg-violet-100 dark:bg-violet-500/10 text-violet-600 dark:text-violet-400 flex items-center justify-center border border-violet-200 dark:border-violet-500/20">
-                    <i className="fa-solid fa-boxes-stacked text-base"></i>
-                  </div>
-                </div>
-                <div className="mt-3 flex items-center text-[11px] font-semibold text-violet-600 dark:text-violet-400">
-                  <i className="fa-solid fa-robot mr-1.5"></i>
-                  <span>Sync Tokoku-bot</span>
-                </div>
-              </div>
-
-              <div className="bg-white dark:bg-slate-900/50 backdrop-blur-xl border border-slate-200 dark:border-slate-800 rounded-2xl p-4 md:p-5 relative overflow-hidden group hover:border-amber-500/50 transition-all duration-300">
-                <div className="absolute -right-4 -bottom-4 w-20 h-20 bg-amber-500/10 dark:bg-amber-600/10 rounded-full blur-xl transition"></div>
-                <div className="flex justify-between items-start">
-                  <div>
-                    <p className="text-xs font-bold text-amber-600 dark:text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
-                      <i className="fa-solid fa-fire text-xs"></i>
-                      <span>Hari Ini</span>
-                    </p>
-                    <h3 className="text-2xl md:text-3xl font-black text-amber-600 dark:text-amber-300 mt-1">
-                      {jokiToday}
-                    </h3>
-                  </div>
-                  <div className="w-10 h-10 rounded-xl bg-amber-100 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center border border-amber-200 dark:border-amber-500/20">
-                    <i className="fa-solid fa-fire text-base"></i>
-                  </div>
-                </div>
-                <div className="mt-3 flex items-center text-[11px] font-semibold text-amber-600 dark:text-amber-400">
-                  <i className="fa-solid fa-clock mr-1.5"></i>
-                  <span>Prioritas Pengerjaan</span>
-                </div>
-              </div>
-
-              <div className="bg-white dark:bg-slate-900/50 backdrop-blur-xl border border-slate-200 dark:border-slate-800 rounded-2xl p-4 md:p-5 relative overflow-hidden group hover:border-indigo-500/50 transition-all duration-300">
-                <div className="absolute -right-4 -bottom-4 w-20 h-20 bg-indigo-500/10 dark:bg-indigo-600/10 rounded-full blur-xl transition"></div>
-                <div className="flex justify-between items-start">
-                  <div>
-                    <p className="text-xs font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-wider flex items-center gap-1.5">
-                      <i className="fa-solid fa-clock text-xs"></i>
-                      <span>Belum Dijadwalkan</span>
-                    </p>
-                    <h3 className="text-2xl md:text-3xl font-black text-indigo-600 dark:text-indigo-300 mt-1">
-                      {jokiNotScheduled}
-                    </h3>
-                  </div>
-                  <div className="w-10 h-10 rounded-xl bg-indigo-100 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 flex items-center justify-center border border-indigo-200 dark:border-indigo-500/20">
-                    <i className="fa-solid fa-clock text-base"></i>
-                  </div>
-                </div>
-                <div className="mt-3 flex items-center text-[11px] font-semibold text-indigo-600 dark:text-indigo-400">
-                  <i className="fa-solid fa-hourglass-half mr-1.5"></i>
-                  <span>Nunggu Jadwal</span>
-                </div>
-              </div>
-
-              <div className="bg-white dark:bg-slate-900/50 backdrop-blur-xl border border-slate-200 dark:border-slate-800 rounded-2xl p-4 md:p-5 relative overflow-hidden group hover:border-emerald-500/50 transition-all duration-300">
-                <div className="absolute -right-4 -bottom-4 w-20 h-20 bg-emerald-500/10 dark:bg-emerald-600/10 rounded-full blur-xl transition"></div>
-                <div className="flex justify-between items-start">
-                  <div>
-                    <p className="text-xs font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider flex items-center gap-1.5">
-                      <i className="fa-solid fa-circle-check text-xs"></i>
-                      <span>Selesai</span>
-                    </p>
-                    <h3 className="text-2xl md:text-3xl font-black text-emerald-600 dark:text-emerald-400 mt-1">
-                      {completedTasks}
-                    </h3>
-                  </div>
-                  <div className="w-10 h-10 rounded-xl bg-emerald-100 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center border border-emerald-200 dark:border-emerald-500/20">
-                    <i className="fa-solid fa-circle-check text-base"></i>
-                  </div>
-                </div>
-                <div className="mt-3 flex items-center text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">
-                  <i className="fa-solid fa-square-check mr-1.5"></i>
-                  <span>Sudah Tuntas</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Controls Toolbar */}
-            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-white dark:bg-slate-900/60 p-4 rounded-2xl border border-slate-200 dark:border-slate-800/80 shadow-sm">
-              <div className="flex items-center space-x-1.5 overflow-x-auto pb-2 lg:pb-0 custom-scrollbar">
-  <button
-    onClick={() => setFilter("All")}
-    className={`px-4 py-2 rounded-xl text-xs font-bold transition ${
-      filter === "All"
-        ? "bg-violet-600 text-white shadow-md shadow-violet-600/30"
-        : "bg-slate-100 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700"
-    }`}
-  >
-    Semua ({tasks.length + jokiOrders.length})
-  </button>
-  <button
-    onClick={() => setFilter("Today")}
-    className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 ${
-      filter === "Today"
-        ? "bg-violet-600 text-white shadow-md shadow-violet-600/30"
-        : "bg-slate-100 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700"
-    }`}
-  >
-    <span className="w-2 h-2 rounded-full bg-amber-400"></span> Hari Ini
-  </button>
-  <button
-    onClick={() => setFilter("NotScheduled")}
-    className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 ${
-      filter === "NotScheduled"
-        ? "bg-violet-600 text-white shadow-md shadow-violet-600/30"
-        : "bg-slate-100 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700"
-    }`}
-  >
-    <span className="w-2 h-2 rounded-full bg-indigo-400"></span> Belum Dijadwalkan
-  </button>
-  <button
-    onClick={() => setFilter("Overdue")}
-    className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 ${
-      filter === "Overdue"
-        ? "bg-violet-600 text-white shadow-md shadow-violet-600/30"
-        : "bg-slate-100 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700"
-    }`}
-  >
-    <span className="w-2 h-2 rounded-full bg-rose-400"></span> Overdue
-  </button>
-</div>
-
-              <div className="flex items-center space-x-3">
-                <div className="relative flex-1 md:w-64">
-                  <i className="fa-solid fa-magnifying-glass absolute left-3.5 top-1/2 transform -translate-y-1/2 text-slate-400 text-xs"></i>
-                  <input
-                    type="text"
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    placeholder="Cari Task / Category..."
-                    className="w-full bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-200 text-xs rounded-xl pl-9 pr-4 py-2.5 border border-slate-200 dark:border-slate-800 focus:outline-none focus:border-violet-500 transition"
-                  />
-                </div>
-
-                <button className="px-3 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-violet-600 dark:text-violet-400 text-xs font-semibold border border-slate-200 dark:border-slate-700/60 transition flex items-center gap-1.5">
-                  <i className="fa-regular fa-copy"></i>
-                  <span className="hidden md:inline">Salin Rekap</span>
-                </button>
-
-                <div className="flex items-center bg-slate-100 dark:bg-slate-950 p-1 rounded-xl border border-slate-200 dark:border-slate-800">
-                  <button
-                    onClick={() => setCurrentView("list")}
-                    className={`p-2 rounded-lg text-xs transition ${
-                      currentView === "list"
-                        ? "bg-violet-600 text-white shadow-sm"
-                        : "text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
-                    }`}
-                  >
-                    <i className="fa-solid fa-list-ul"></i>
-                  </button>
-                  <button
-                    onClick={() => setCurrentView("kanban")}
-                    className={`p-2 rounded-lg text-xs transition ${
-                      currentView === "kanban"
-                        ? "bg-violet-600 text-white shadow-sm"
-                        : "text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
-                    }`}
-                  >
-                    <i className="fa-solid fa-table-columns"></i>
-                  </button>
-                </div>
-              </div>
-            </div>
-
-                      
-            {/* ============================================================ */}
-            {/* SETTINGS PANEL                                               */}
-            {/* ============================================================ */}
-            {showSettings && (
-              <div className="px-4 md:px-8 pt-6">
-                <div className="bg-white dark:bg-slate-900/50 backdrop-blur-xl border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-sm">
-                  <div className="mb-4">
-                    <h2 className="text-base font-semibold text-slate-900 dark:text-white flex items-center gap-2">
-                      <i className="fa-solid fa-bell text-violet-600 dark:text-violet-400"></i>
-                      <span>Notification Settings</span>
-                    </h2>
-                    <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-                      Atur pengaturan reminder My Task Manager.
-                    </p>
-                  </div>
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between gap-4">
-                      <div>
-                        <p className="text-sm font-medium text-slate-800 dark:text-slate-200">
-                          Push Notification
-                        </p>
-                        <p className="text-xs text-slate-500">
-                          Terima reminder meskipun aplikasi tidak sedang dibuka.
-                        </p>
-                      </div>
-                      <span
-                        className={`rounded-full px-3 py-1 text-xs font-semibold ${
-                          notificationPermission === "granted"
-                            ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400"
-                            : "bg-slate-200 text-slate-600 dark:bg-slate-800 dark:text-slate-400"
-                        }`}
-                      >
-                        {notificationPermission === "granted" ? "ON" : "OFF"}
-                      </span>
-                    </div>
+              {/* METRICS */}
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                {/* Total Task */}
+                <div className="bg-white dark:bg-slate-900/50 backdrop-blur-xl border border-slate-200 dark:border-slate-800 rounded-2xl p-4 md:p-5 relative overflow-hidden group hover:border-violet-500/50 transition-all duration-300">
+                  <div className="absolute -right-4 -bottom-4 w-20 h-20 bg-violet-500/10 dark:bg-violet-600/10 rounded-full blur-xl transition"></div>
+                  <div className="flex justify-between items-start">
                     <div>
-                      <label className="mb-1.5 block text-sm font-medium text-slate-700 dark:text-slate-300">
-                        Default Daily Reminder
-                      </label>
-                      <input
-                        type="time"
-                        value={defaultReminder}
-                        onChange={(e) => updateDefaultReminder(e.target.value)}
-                        className="w-full rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 px-4 py-3 text-sm text-slate-900 dark:text-slate-200 outline-none transition focus:border-violet-500"
-                      />
-                      <p className="mt-1 text-xs text-slate-500">
-                        Waktu ini akan menjadi default saat membuat task baru.
+                      <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                        Total Task
                       </p>
+                      <h3 className="text-2xl md:text-3xl font-black text-slate-900 dark:text-white mt-1">
+                        {tasks.length + jokiOrders.length}
+                      </h3>
                     </div>
-                    {notificationPermission !== "granted" && (
-                      <button
-                        onClick={enableNotifications}
-                        className="w-full rounded-xl bg-slate-200 dark:bg-slate-800 px-4 py-3 text-sm font-semibold text-slate-800 dark:text-slate-200 hover:bg-slate-300 dark:hover:bg-slate-700 transition flex items-center justify-center gap-2"
-                      >
-                        <i className="fa-solid fa-bell"></i>
-                        <span>Enable Push Notification</span>
-                      </button>
-                    )}
+                    <div className="w-10 h-10 rounded-xl bg-violet-100 dark:bg-violet-500/10 text-violet-600 dark:text-violet-400 flex items-center justify-center border border-violet-200 dark:border-violet-500/20">
+                      <i className="fa-solid fa-boxes-stacked text-base"></i>
+                    </div>
+                  </div>
+                  <div className="mt-3 flex items-center text-[11px] font-semibold text-violet-600 dark:text-violet-400">
+                    <i className="fa-solid fa-robot mr-1.5"></i>
+                    <span>Sync Tokoku-bot</span>
+                  </div>
+                </div>
+
+                {/* Hari Ini */}
+                <div className="bg-white dark:bg-slate-900/50 backdrop-blur-xl border border-slate-200 dark:border-slate-800 rounded-2xl p-4 md:p-5 relative overflow-hidden group hover:border-amber-500/50 transition-all duration-300">
+                  <div className="absolute -right-4 -bottom-4 w-20 h-20 bg-amber-500/10 dark:bg-amber-600/10 rounded-full blur-xl transition"></div>
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <p className="text-xs font-bold text-amber-600 dark:text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
+                        <i className="fa-solid fa-fire text-xs"></i>
+                        <span>Hari Ini</span>
+                      </p>
+                      <h3 className="text-2xl md:text-3xl font-black text-amber-600 dark:text-amber-300 mt-1">
+                        {jokiToday}
+                      </h3>
+                    </div>
+                    <div className="w-10 h-10 rounded-xl bg-amber-100 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center border border-amber-200 dark:border-amber-500/20">
+                      <i className="fa-solid fa-fire text-base"></i>
+                    </div>
+                  </div>
+                  <div className="mt-3 flex items-center text-[11px] font-semibold text-amber-600 dark:text-amber-400">
+                    <i className="fa-solid fa-clock mr-1.5"></i>
+                    <span>Prioritas Pengerjaan</span>
+                  </div>
+                </div>
+
+                {/* Belum Dijadwalkan */}
+                <div className="bg-white dark:bg-slate-900/50 backdrop-blur-xl border border-slate-200 dark:border-slate-800 rounded-2xl p-4 md:p-5 relative overflow-hidden group hover:border-indigo-500/50 transition-all duration-300">
+                  <div className="absolute -right-4 -bottom-4 w-20 h-20 bg-indigo-500/10 dark:bg-indigo-600/10 rounded-full blur-xl transition"></div>
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <p className="text-xs font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-wider flex items-center gap-1.5">
+                        <i className="fa-solid fa-clock text-xs"></i>
+                        <span>Belum Dijadwalkan</span>
+                      </p>
+                      <h3 className="text-2xl md:text-3xl font-black text-indigo-600 dark:text-indigo-300 mt-1">
+                        {jokiNotScheduled}
+                      </h3>
+                    </div>
+                    <div className="w-10 h-10 rounded-xl bg-indigo-100 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 flex items-center justify-center border border-indigo-200 dark:border-indigo-500/20">
+                      <i className="fa-solid fa-clock text-base"></i>
+                    </div>
+                  </div>
+                  <div className="mt-3 flex items-center text-[11px] font-semibold text-indigo-600 dark:text-indigo-400">
+                    <i className="fa-solid fa-hourglass-half mr-1.5"></i>
+                    <span>Nunggu Jadwal</span>
+                  </div>
+                </div>
+
+                {/* Selesai */}
+                <div className="bg-white dark:bg-slate-900/50 backdrop-blur-xl border border-slate-200 dark:border-slate-800 rounded-2xl p-4 md:p-5 relative overflow-hidden group hover:border-emerald-500/50 transition-all duration-300">
+                  <div className="absolute -right-4 -bottom-4 w-20 h-20 bg-emerald-500/10 dark:bg-emerald-600/10 rounded-full blur-xl transition"></div>
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <p className="text-xs font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider flex items-center gap-1.5">
+                        <i className="fa-solid fa-circle-check text-xs"></i>
+                        <span>Selesai</span>
+                      </p>
+                      <h3 className="text-2xl md:text-3xl font-black text-emerald-600 dark:text-emerald-400 mt-1">
+                        {completedTasks}
+                      </h3>
+                    </div>
+                    <div className="w-10 h-10 rounded-xl bg-emerald-100 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center border border-emerald-200 dark:border-emerald-500/20">
+                      <i className="fa-solid fa-circle-check text-base"></i>
+                    </div>
+                  </div>
+                  <div className="mt-3 flex items-center text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">
+                    <i className="fa-solid fa-square-check mr-1.5"></i>
+                    <span>Sudah Tuntas</span>
                   </div>
                 </div>
               </div>
-            )}
 
-            {/* ============================================================ */}
-            {/* FORM MODAL                                                   */}
-            {/* ============================================================ */}
-            {showForm && (
-              <div className="fixed inset-0 bg-slate-950/40 dark:bg-slate-950/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
-                <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 max-w-lg w-full p-6 md:p-8 shadow-2xl relative max-h-[90vh] overflow-y-auto custom-scrollbar">
-                  <div className="flex justify-between items-center mb-6">
-                    <div className="flex items-center space-x-3">
-                      <div className="w-10 h-10 rounded-2xl bg-violet-100 dark:bg-violet-600/20 text-violet-600 dark:text-violet-400 border border-violet-200 dark:border-violet-500/30 flex items-center justify-center">
-                        <i className="fa-solid fa-pen-to-square text-base"></i>
-                      </div>
-                      <div>
-                        <h3 className="font-extrabold text-lg text-slate-900 dark:text-white">
-                          {editingId !== null ? "Edit Task" : "Tambah Task Baru"}
-                        </h3>
-                        <p className="text-xs text-slate-500 dark:text-slate-400">
-                          Masukkan rincian task
-                        </p>
-                      </div>
-                    </div>
+              {/* TOOLBAR */}
+              <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-white dark:bg-slate-900/60 p-4 rounded-2xl border border-slate-200 dark:border-slate-800/80 shadow-sm">
+                <div className="flex items-center space-x-1.5 overflow-x-auto pb-2 lg:pb-0 custom-scrollbar">
+                  <button
+                    onClick={() => setFilter("All")}
+                    className={`px-4 py-2 rounded-xl text-xs font-bold transition ${
+                      filter === "All"
+                        ? "bg-violet-600 text-white shadow-md shadow-violet-600/30"
+                        : "bg-slate-100 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700"
+                    }`}
+                  >
+                    Semua ({tasks.length + jokiOrders.length})
+                  </button>
+                  <button
+                    onClick={() => setFilter("Today")}
+                    className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 ${
+                      filter === "Today"
+                        ? "bg-violet-600 text-white shadow-md shadow-violet-600/30"
+                        : "bg-slate-100 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700"
+                    }`}
+                  >
+                    <span className="w-2 h-2 rounded-full bg-amber-400"></span> Hari Ini
+                  </button>
+                  <button
+                    onClick={() => setFilter("NotScheduled")}
+                    className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 ${
+                      filter === "NotScheduled"
+                        ? "bg-violet-600 text-white shadow-md shadow-violet-600/30"
+                        : "bg-slate-100 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700"
+                    }`}
+                  >
+                    <span className="w-2 h-2 rounded-full bg-indigo-400"></span> Belum Dijadwalkan
+                  </button>
+                  <button
+                    onClick={() => setFilter("Overdue")}
+                    className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 ${
+                      filter === "Overdue"
+                        ? "bg-violet-600 text-white shadow-md shadow-violet-600/30"
+                        : "bg-slate-100 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700"
+                    }`}
+                  >
+                    <span className="w-2 h-2 rounded-full bg-rose-400"></span> Overdue
+                  </button>
+                </div>
+
+                <div className="flex items-center space-x-3">
+                  <div className="relative flex-1 md:w-64">
+                    <i className="fa-solid fa-magnifying-glass absolute left-3.5 top-1/2 transform -translate-y-1/2 text-slate-400 text-xs"></i>
+                    <input
+                      type="text"
+                      value={search}
+                      onChange={(e) => setSearch(e.target.value)}
+                      placeholder="Cari Task / Category..."
+                      className="w-full bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-200 text-xs rounded-xl pl-9 pr-4 py-2.5 border border-slate-200 dark:border-slate-800 focus:outline-none focus:border-violet-500 transition"
+                    />
+                  </div>
+
+                  <button className="px-3 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-violet-600 dark:text-violet-400 text-xs font-semibold border border-slate-200 dark:border-slate-700/60 transition flex items-center gap-1.5">
+                    <i className="fa-regular fa-copy"></i>
+                    <span className="hidden md:inline">Salin Rekap</span>
+                  </button>
+
+                  <div className="flex items-center bg-slate-100 dark:bg-slate-950 p-1 rounded-xl border border-slate-200 dark:border-slate-800">
                     <button
-                      onClick={resetForm}
-                      className="text-slate-400 hover:text-slate-900 dark:hover:text-white p-2 rounded-lg"
+                      onClick={() => setCurrentView("list")}
+                      className={`p-2 rounded-lg text-xs transition ${
+                        currentView === "list"
+                          ? "bg-violet-600 text-white shadow-sm"
+                          : "text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+                      }`}
                     >
-                      <i className="fa-solid fa-xmark text-lg"></i>
+                      <i className="fa-solid fa-list-ul"></i>
+                    </button>
+                    <button
+                      onClick={() => setCurrentView("kanban")}
+                      className={`p-2 rounded-lg text-xs transition ${
+                        currentView === "kanban"
+                          ? "bg-violet-600 text-white shadow-sm"
+                          : "text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+                      }`}
+                    >
+                      <i className="fa-solid fa-table-columns"></i>
                     </button>
                   </div>
+                </div>
+              </div>
 
-                  <div className="space-y-4">
-                    <div>
-                      <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1.5">
-                        Task
-                      </label>
-                      <input
-                        type="text"
-                        value={title}
-                        onChange={(e) => setTitle(e.target.value)}
-                        placeholder="Contoh: Kerjakan laporan"
-                        className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm text-slate-900 dark:text-slate-200 focus:outline-none focus:border-violet-500 transition"
-                      />
+              {/* SETTINGS PANEL */}
+              {showSettings && (
+                <div className="px-4 md:px-8 pt-6">
+                  <div className="bg-white dark:bg-slate-900/50 backdrop-blur-xl border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-sm">
+                    <div className="mb-4">
+                      <h2 className="text-base font-semibold text-slate-900 dark:text-white flex items-center gap-2">
+                        <i className="fa-solid fa-bell text-violet-600 dark:text-violet-400"></i>
+                        <span>Notification Settings</span>
+                      </h2>
+                      <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                        Atur pengaturan reminder My Task Manager.
+                      </p>
                     </div>
-
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1.5">
-                          Deadline
-                        </label>
-                        <div className="relative">
-                          <input
-                            type="date"
-                            value={deadline}
-                            onChange={(e) => setDeadline(e.target.value)}
-                            className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 pr-11 text-sm text-slate-900 dark:text-slate-200 focus:outline-none focus:border-violet-500 transition"
-                          />
-                          <i className="fa-regular fa-calendar absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 text-sm pointer-events-none"></i>
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between gap-4">
+                        <div>
+                          <p className="text-sm font-medium text-slate-800 dark:text-slate-200">
+                            Push Notification
+                          </p>
+                          <p className="text-xs text-slate-500">
+                            Terima reminder meskipun aplikasi tidak sedang dibuka.
+                          </p>
                         </div>
-                      </div>
-                      <div>
-                        <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1.5">
-                          Daily Reminder
-                        </label>
-                        <div className="relative">
-                          <input
-                            type="time"
-                            value={reminder}
-                            onChange={(e) => setReminder(e.target.value)}
-                            className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 pr-11 text-sm text-slate-900 dark:text-slate-200 focus:outline-none focus:border-violet-500 transition"
-                          />
-                          <i className="fa-regular fa-clock absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 text-sm pointer-events-none"></i>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1.5">
-                          Priority
-                        </label>
-                        <select
-                          value={priority}
-                          onChange={(e) => setPriority(e.target.value as any)}
-                          className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm text-slate-900 dark:text-slate-200 focus:outline-none focus:border-violet-500 transition"
+                        <span
+                          className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                            notificationPermission === "granted"
+                              ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400"
+                              : "bg-slate-200 text-slate-600 dark:bg-slate-800 dark:text-slate-400"
+                          }`}
                         >
-                          <option value="Low">Low</option>
-                          <option value="Medium">Medium</option>
-                          <option value="High">High</option>
-                        </select>
+                          {notificationPermission === "granted" ? "ON" : "OFF"}
+                        </span>
                       </div>
                       <div>
+                        <label className="mb-1.5 block text-sm font-medium text-slate-700 dark:text-slate-300">
+                          Default Daily Reminder
+                        </label>
+                        <input
+                          type="time"
+                          value={defaultReminder}
+                          onChange={(e) => updateDefaultReminder(e.target.value)}
+                          className="w-full rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 px-4 py-3 text-sm text-slate-900 dark:text-slate-200 outline-none transition focus:border-violet-500"
+                        />
+                        <p className="mt-1 text-xs text-slate-500">
+                          Waktu ini akan menjadi default saat membuat task baru.
+                        </p>
+                      </div>
+                      {notificationPermission !== "granted" && (
+                        <button
+                          onClick={enableNotifications}
+                          className="w-full rounded-xl bg-slate-200 dark:bg-slate-800 px-4 py-3 text-sm font-semibold text-slate-800 dark:text-slate-200 hover:bg-slate-300 dark:hover:bg-slate-700 transition flex items-center justify-center gap-2"
+                        >
+                          <i className="fa-solid fa-bell"></i>
+                          <span>Enable Push Notification</span>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* FORM MODAL */}
+              {showForm && (
+                <div className="fixed inset-0 bg-slate-950/40 dark:bg-slate-950/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
+                  <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 max-w-lg w-full p-6 md:p-8 shadow-2xl relative max-h-[90vh] overflow-y-auto custom-scrollbar">
+                    <div className="flex justify-between items-center mb-6">
+                      <div className="flex items-center space-x-3">
+                        <div className="w-10 h-10 rounded-2xl bg-violet-100 dark:bg-violet-600/20 text-violet-600 dark:text-violet-400 border border-violet-200 dark:border-violet-500/30 flex items-center justify-center">
+                          <i className="fa-solid fa-pen-to-square text-base"></i>
+                        </div>
+                        <div>
+                          <h3 className="font-extrabold text-lg text-slate-900 dark:text-white">
+                            {editingId !== null ? "Edit Task" : "Tambah Task Baru"}
+                          </h3>
+                          <p className="text-xs text-slate-500 dark:text-slate-400">
+                            Masukkan rincian task
+                          </p>
+                        </div>
+                      </div>
+                      <button
+                        onClick={resetForm}
+                        className="text-slate-400 hover:text-slate-900 dark:hover:text-white p-2 rounded-lg"
+                      >
+                        <i className="fa-solid fa-xmark text-lg"></i>
+                      </button>
+                    </div>
+
+                    <div className="space-y-4">
+                      <div>
                         <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1.5">
-                          Category
+                          Task
                         </label>
                         <input
                           type="text"
-                          value={category}
-                          onChange={(e) => setCategory(e.target.value)}
-                          placeholder="Kuliah, Kerja..."
+                          value={title}
+                          onChange={(e) => setTitle(e.target.value)}
+                          placeholder="Contoh: Kerjakan laporan"
                           className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm text-slate-900 dark:text-slate-200 focus:outline-none focus:border-violet-500 transition"
                         />
                       </div>
-                    </div>
 
-                    <div>
-                      <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1.5">
-                        Notes
-                      </label>
-                      <textarea
-                        value={notes}
-                        onChange={(e) => setNotes(e.target.value)}
-                        rows={3}
-                        placeholder="Tambahkan catatan..."
-                        className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm text-slate-900 dark:text-slate-200 focus:outline-none focus:border-violet-500 transition resize-none"
-                      ></textarea>
-                    </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1.5">
+                            Deadline
+                          </label>
+                          <div className="relative">
+                            <input
+                              type="date"
+                              value={deadline}
+                              onChange={(e) => setDeadline(e.target.value)}
+                              className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 pr-11 text-sm text-slate-900 dark:text-slate-200 focus:outline-none focus:border-violet-500 transition"
+                            />
+                            <i className="fa-regular fa-calendar absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 text-sm pointer-events-none"></i>
+                          </div>
+                        </div>
+                        <div>
+                          <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1.5">
+                            Daily Reminder
+                          </label>
+                          <div className="relative">
+                            <input
+                              type="time"
+                              value={reminder}
+                              onChange={(e) => setReminder(e.target.value)}
+                              className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 pr-11 text-sm text-slate-900 dark:text-slate-200 focus:outline-none focus:border-violet-500 transition"
+                            />
+                            <i className="fa-regular fa-clock absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 text-sm pointer-events-none"></i>
+                          </div>
+                        </div>
+                      </div>
 
-                    <div className="pt-4 flex justify-end space-x-3 border-t border-slate-200 dark:border-slate-800/80">
-                      <button
-                        onClick={resetForm}
-                        className="px-5 py-2.5 rounded-xl text-xs font-bold text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition"
-                      >
-                        Batal
-                      </button>
-                      <button
-                        onClick={editingId !== null ? updateTask : addTask}
-                        className="px-6 py-2.5 rounded-xl text-xs font-extrabold bg-linear-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white shadow-lg shadow-violet-600/30 transition"
-                      >
-                        {editingId !== null ? "Update Task" : "Simpan Task"}
-                      </button>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1.5">
+                            Priority
+                          </label>
+                          <select
+                            value={priority}
+                            onChange={(e) => setPriority(e.target.value as any)}
+                            className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm text-slate-900 dark:text-slate-200 focus:outline-none focus:border-violet-500 transition"
+                          >
+                            <option value="Low">Low</option>
+                            <option value="Medium">Medium</option>
+                            <option value="High">High</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1.5">
+                            Category
+                          </label>
+                          <input
+                            type="text"
+                            value={category}
+                            onChange={(e) => setCategory(e.target.value)}
+                            placeholder="Kuliah, Kerja..."
+                            className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm text-slate-900 dark:text-slate-200 focus:outline-none focus:border-violet-500 transition"
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1.5">
+                          Notes
+                        </label>
+                        <textarea
+                          value={notes}
+                          onChange={(e) => setNotes(e.target.value)}
+                          rows={3}
+                          placeholder="Tambahkan catatan..."
+                          className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm text-slate-900 dark:text-slate-200 focus:outline-none focus:border-violet-500 transition resize-none"
+                        ></textarea>
+                      </div>
+
+                      <div className="pt-4 flex justify-end space-x-3 border-t border-slate-200 dark:border-slate-800/80">
+                        <button
+                          onClick={resetForm}
+                          className="px-5 py-2.5 rounded-xl text-xs font-bold text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+                        >
+                          Batal
+                        </button>
+                        <button
+                          onClick={editingId !== null ? updateTask : addTask}
+                          className="px-6 py-2.5 rounded-xl text-xs font-extrabold bg-linear-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white shadow-lg shadow-violet-600/30 transition"
+                        >
+                          {editingId !== null ? "Update Task" : "Simpan Task"}
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
-            )}
+              )}
 
-            {/* ============================================================ */}
-            {/* HEADER SECTION BANNER                                        */}
-            {/* ============================================================ */}
-            <div className="flex items-center justify-between px-4 md:px-8 pt-6 pb-2">
-              <div className="flex items-center space-x-2.5">
-                <div className="w-7 h-7 rounded-lg bg-violet-100 dark:bg-violet-600/20 text-violet-600 dark:text-violet-400 border border-violet-200 dark:border-violet-500/30 flex items-center justify-center text-xs">
-                  <i className="fa-solid fa-gamepad"></i>
+              {/* HEADER SECTION BANNER */}
+              <div className="flex items-center justify-between px-4 md:px-8 pt-6 pb-2">
+                <div className="flex items-center space-x-2.5">
+                  <div className="w-7 h-7 rounded-lg bg-violet-100 dark:bg-violet-600/20 text-violet-600 dark:text-violet-400 border border-violet-200 dark:border-violet-500/30 flex items-center justify-center text-xs">
+                    <i className="fa-solid fa-gamepad"></i>
+                  </div>
+                  <h3 className="font-extrabold text-slate-900 dark:text-slate-100 text-base md:text-lg">
+                    Jadwal Task & Jokian Aktif
+                  </h3>
                 </div>
-                <h3 className="font-extrabold text-slate-900 dark:text-slate-100 text-base md:text-lg">
-                  Jadwal Task & Jokian Aktif
-                </h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  Menampilkan {filteredTasks.length} task • {filteredJokiOrders.length} jokian
+                </p>
               </div>
-                            <p className="text-xs text-slate-500 dark:text-slate-400">
-                Menampilkan {filteredTasks.length} task • {filteredJokiOrders.length} jokian
-              </p>
-            </div>
 
-            {/* ============================================================ */}
-            {/* LIST VIEW CONTAINER                                          */}
-            {/* ============================================================ */}
-            {currentView === "list" && (
-              <>
-                {/* ===================================================== */}
-                {/* MY TASKS SECTION — Section header sticky sendiri      */}
-                {/* ===================================================== */}
-                                {filter !== "NotScheduled" && (
+              {/* LIST VIEW */}
+              {currentView === "list" && (
+                <>
+                  {/* MY TASKS SECTION */}
+                  {filter !== "NotScheduled" && (
+                    <section className="px-4 md:px-8">
+                      <div className="sticky top-0 z-20 -mx-4 md:-mx-8 px-4 md:px-8 py-3 bg-slate-100 dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800/60">
+                        <h3 className="text-sm font-bold text-slate-700 dark:text-slate-300 flex items-center gap-2">
+                          <i className="fa-solid fa-clipboard-list text-violet-600 dark:text-violet-400"></i>
+                          <span>My Tasks</span>
+                        </h3>
+                      </div>
+
+                      <div className="pt-4 pb-6 space-y-3.5">
+                        {filteredTasks.length === 0 ? (
+                          <div className="bg-white dark:bg-slate-900/50 backdrop-blur-xl border border-slate-200 dark:border-slate-800 rounded-3xl p-8 text-center">
+                            <div className="w-14 h-14 rounded-2xl bg-violet-100 dark:bg-violet-600/10 text-violet-600 dark:text-violet-400 flex items-center justify-center mx-auto mb-3 border border-violet-200 dark:border-violet-500/20">
+                              <i className="fa-regular fa-clipboard text-2xl"></i>
+                            </div>
+                            <h4 className="font-bold text-slate-700 dark:text-slate-200 text-sm">
+                              Tidak ada task ditemukan
+                            </h4>
+                            <p className="text-xs text-slate-500 mt-1">
+                              Coba ubah filter atau tambah task baru.
+                            </p>
+                          </div>
+                        ) : (
+                          filteredTasks.map((task) => {
+                            const deadlineStatus = getDeadlineStatus(task.deadline);
+
+                            return (
+                              <div
+                                key={task.id}
+                                className={`relative bg-white dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 md:p-5 hover:border-slate-300 dark:hover:border-slate-700 transition-all duration-300 ${
+                                  task.completed ? "opacity-60" : ""
+                                }`}
+                              >
+                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                                  <div className="flex items-start gap-4 min-w-0 flex-1">
+                                    <button
+                                      onClick={() => toggleTask(task.id)}
+                                      className={`mt-1 w-6 h-6 rounded-lg border-2 flex items-center justify-center shrink-0 transition-all ${
+                                        task.completed
+                                          ? "bg-emerald-500 border-emerald-500 text-white"
+                                          : "border-slate-300 dark:border-slate-600 bg-transparent hover:border-violet-500 text-transparent"
+                                      }`}
+                                    >
+                                      <i className="fa-solid fa-check text-xs"></i>
+                                    </button>
+
+                                    <div className="min-w-0 flex-1">
+                                      <div className="flex items-center gap-2.5">
+                                        <h4
+                                          className={`font-extrabold text-base md:text-lg text-slate-900 dark:text-white truncate ${
+                                            task.completed ? "line-through text-slate-400 dark:text-slate-400" : ""
+                                          }`}
+                                        >
+                                          {task.title}
+                                        </h4>
+                                      </div>
+
+                                      <div className="flex flex-wrap items-center gap-2 mt-3">
+                                        {task.reminder && (
+                                          <span className="inline-flex items-center gap-1.5 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 px-3 py-1.5 rounded-xl text-xs font-semibold border border-slate-200 dark:border-slate-700/70">
+                                            <i className="fa-regular fa-clock text-[11px] text-amber-500 dark:text-amber-400"></i>
+                                            <span>{task.reminder.slice(0, 5)}</span>
+                                          </span>
+                                        )}
+
+                                        <span className="inline-flex items-center gap-1.5 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 px-3 py-1.5 rounded-xl text-xs font-semibold border border-slate-200 dark:border-slate-700/70">
+                                          <i className="fa-regular fa-calendar text-[11px] text-indigo-500 dark:text-indigo-400"></i>
+                                          <span>{formatDate(task.deadline)}</span>
+                                        </span>
+
+                                        {(task.notes || task.category) && (
+                                          <span className="inline-flex items-center gap-1.5 bg-violet-100 dark:bg-violet-500/10 text-violet-700 dark:text-violet-300 px-3 py-1.5 rounded-xl text-xs font-semibold border border-violet-200 dark:border-violet-500/20">
+                                            <i className="fa-regular fa-note-sticky text-[11px] text-violet-500 dark:text-violet-400"></i>
+                                            <span className="truncate max-w-45">
+                                              {task.notes || task.category}
+                                            </span>
+                                          </span>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  <div className="flex items-center gap-3 shrink-0">
+                                    {!task.completed ? (
+                                      <span
+                                        className={`inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold border ${deadlineStatus.className}`}
+                                      >
+                                        <i className={`fa-solid ${deadlineStatus.icon} text-[11px]`}></i>
+                                        {deadlineStatus.displayText}
+                                      </span>
+                                    ) : (
+                                      <span className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-500/30">
+                                        <i className="fa-solid fa-check text-[11px]"></i>
+                                        Selesai
+                                      </span>
+                                    )}
+
+                                    <button
+                                      onClick={() => editTask(task)}
+                                      className="w-9 h-9 flex items-center justify-center rounded-xl text-slate-400 hover:text-violet-600 dark:hover:text-violet-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+                                      title="Edit Task"
+                                    >
+                                      <i className="fa-solid fa-pen-to-square text-base"></i>
+                                    </button>
+
+                                    <button
+                                      onClick={() => deleteTask(task.id)}
+                                      className="w-9 h-9 flex items-center justify-center rounded-xl text-slate-400 hover:text-rose-500 dark:hover:text-rose-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+                                      title="Hapus Task"
+                                    >
+                                      <i className="fa-regular fa-trash-can text-base"></i>
+                                    </button>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })
+                        )}
+                      </div>
+                    </section>
+                  )}
+
+                  {/* ══════════════════════════════════════════════════════ */}
+                  {/* SECTION 1: JADWAL JOKIAN (yang udah dijadwalkan)      */}
+                  {/* ══════════════════════════════════════════════════════ */}
                   <section className="px-4 md:px-8">
                     <div className="sticky top-0 z-20 -mx-4 md:-mx-8 px-4 md:px-8 py-3 bg-slate-100 dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800/60">
                       <h3 className="text-sm font-bold text-slate-700 dark:text-slate-300 flex items-center gap-2">
-                        <i className="fa-solid fa-clipboard-list text-violet-600 dark:text-violet-400"></i>
-                        <span>My Tasks</span>
+                        <i className="fa-solid fa-gamepad text-violet-600 dark:text-violet-400"></i>
+                        <span>Jadwal Jokian</span>
+                        <span className="text-xs font-bold bg-violet-100 dark:bg-violet-500/20 text-violet-700 dark:text-violet-300 px-2 py-0.5 rounded-full">
+                          {scheduledJokiOrders.length}
+                        </span>
                       </h3>
                     </div>
 
                     <div className="pt-4 pb-6 space-y-3.5">
-                      {filteredTasks.length === 0 ? (
-                        <div className="bg-white dark:bg-slate-900/50 backdrop-blur-xl border border-slate-200 dark:border-slate-800 rounded-3xl p-8 text-center">
-                          <div className="w-14 h-14 rounded-2xl bg-violet-100 dark:bg-violet-600/10 text-violet-600 dark:text-violet-400 flex items-center justify-center mx-auto mb-3 border border-violet-200 dark:border-violet-500/20">
-                            <i className="fa-regular fa-clipboard text-2xl"></i>
+                      {scheduledJokiOrders.length === 0 ? (
+                        <div className="bg-white dark:bg-slate-900/50 backdrop-blur-xl border border-slate-200 dark:border-slate-800 rounded-3xl p-12 text-center">
+                          <div className="w-16 h-16 rounded-2xl bg-violet-100 dark:bg-violet-600/10 text-violet-600 dark:text-violet-400 flex items-center justify-center mx-auto mb-4 border border-violet-200 dark:border-violet-500/20">
+                            <i className="fa-solid fa-folder-open text-2xl"></i>
                           </div>
-                          <h4 className="font-bold text-slate-700 dark:text-slate-200 text-sm">
-                            Tidak ada task ditemukan
+                          <h4 className="font-bold text-slate-700 dark:text-slate-200 text-base">
+                            Tidak ada jadwal jokian aktif
                           </h4>
                           <p className="text-xs text-slate-500 mt-1">
-                            Coba ubah filter atau tambah task baru.
+                            Order yang sudah dijadwalkan akan muncul di sini.
                           </p>
                         </div>
                       ) : (
-                        filteredTasks.map((task) => {
-                          const deadlineStatus = getDeadlineStatus(task.deadline);
-
-                          return (
-                            <div
-                              key={task.id}
-                              className={`relative bg-white dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 md:p-5 hover:border-slate-300 dark:hover:border-slate-700 transition-all duration-300 ${
-                                task.completed ? "opacity-60" : ""
-                              }`}
-                            >
-                              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                                <div className="flex items-start gap-4 min-w-0 flex-1">
-                                  <button
-                                    onClick={() => toggleTask(task.id)}
-                                    className={`mt-1 w-6 h-6 rounded-lg border-2 flex items-center justify-center shrink-0 transition-all ${
-                                      task.completed
-                                        ? "bg-emerald-500 border-emerald-500 text-white"
-                                        : "border-slate-300 dark:border-slate-600 bg-transparent hover:border-violet-500 text-transparent"
-                                    }`}
-                                  >
-                                    <i className="fa-solid fa-check text-xs"></i>
-                                  </button>
-
-                                  <div className="min-w-0 flex-1">
-                                    <div className="flex items-center gap-2.5">
-                                      <h4
-                                        className={`font-extrabold text-base md:text-lg text-slate-900 dark:text-white truncate ${
-                                          task.completed ? "line-through text-slate-400 dark:text-slate-400" : ""
-                                        }`}
-                                      >
-                                        {task.title}
-                                      </h4>
-                                    </div>
-
-                                    <div className="flex flex-wrap items-center gap-2 mt-3">
-                                      {task.reminder && (
-                                        <span className="inline-flex items-center gap-1.5 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 px-3 py-1.5 rounded-xl text-xs font-semibold border border-slate-200 dark:border-slate-700/70">
-                                          <i className="fa-regular fa-clock text-[11px] text-amber-500 dark:text-amber-400"></i>
-                                          <span>{task.reminder.slice(0, 5)}</span>
-                                        </span>
-                                      )}
-
-                                      <span className="inline-flex items-center gap-1.5 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 px-3 py-1.5 rounded-xl text-xs font-semibold border border-slate-200 dark:border-slate-700/70">
-                                        <i className="fa-regular fa-calendar text-[11px] text-indigo-500 dark:text-indigo-400"></i>
-                                        <span>{formatDate(task.deadline)}</span>
-                                      </span>
-
-                                      {(task.notes || task.category) && (
-                                        <span className="inline-flex items-center gap-1.5 bg-violet-100 dark:bg-violet-500/10 text-violet-700 dark:text-violet-300 px-3 py-1.5 rounded-xl text-xs font-semibold border border-violet-200 dark:border-violet-500/20">
-                                          <i className="fa-regular fa-note-sticky text-[11px] text-violet-500 dark:text-violet-400"></i>
-                                          <span className="truncate max-w-45">
-                                            {task.notes || task.category}
-                                          </span>
-                                        </span>
-                                      )}
-                                    </div>
-                                  </div>
-                                </div>
-
-                                <div className="flex items-center gap-3 shrink-0">
-                                  {!task.completed ? (
-                                    <span
-                                      className={`inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold border ${deadlineStatus.className}`}
-                                    >
-                                      <i className={`fa-solid ${deadlineStatus.icon} text-[11px]`}></i>
-                                      {deadlineStatus.displayText}
-                                    </span>
-                                  ) : (
-                                    <span className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-500/30">
-                                      <i className="fa-solid fa-check text-[11px]"></i>
-                                      Selesai
-                                    </span>
-                                  )}
-
-                                  <button
-                                    onClick={() => editTask(task)}
-                                    className="w-9 h-9 flex items-center justify-center rounded-xl text-slate-400 hover:text-violet-600 dark:hover:text-violet-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
-                                    title="Edit Task"
-                                  >
-                                    <i className="fa-solid fa-pen-to-square text-base"></i>
-                                  </button>
-
-                                  <button
-                                    onClick={() => deleteTask(task.id)}
-                                    className="w-9 h-9 flex items-center justify-center rounded-xl text-slate-400 hover:text-rose-500 dark:hover:text-rose-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
-                                    title="Hapus Task"
-                                  >
-                                    <i className="fa-regular fa-trash-can text-base"></i>
-                                  </button>
-                                </div>
-                              </div>
-                            </div>
-                          );
-                        })
+                        scheduledJokiOrders.map((order) => (
+                          <JokiOrderCard
+                            key={order.id}
+                            order={order}
+                            now={now}
+                            isProcessing={processingOrders.has(order.id)}
+                            isStarting={startingOrders.has(order.id)}
+                            isAdmin={true}
+                            editingUsername={editingUsername}
+                            ramAccounts={ramAccounts}
+                            loadingAccounts={loadingAccounts}
+                            setEditingUsername={setEditingUsername}
+                            fetchRamAccounts={fetchRamAccounts}
+                            updateOrderUsername={updateOrderUsername}
+                            handleCompleteOrder={handleCompleteOrder}
+                            handleStartProgressOrder={handleStartProgressOrder}
+                            isUsernameUsedInOtherCards={isUsernameUsedInOtherCards}
+                          />
+                        ))
                       )}
                     </div>
                   </section>
-                )}
 
-                {/* ===================================================== */}
-                {/* JADWAL JOKIAN SECTION — Section header sticky sendiri */}
-                {/* ===================================================== */}
-                <section className="px-4 md:px-8">
-                  <div className="sticky top-0 z-20 -mx-4 md:-mx-8 px-4 md:px-8 py-3 bg-slate-100 dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800/60">
-                    <h3 className="text-sm font-bold text-slate-700 dark:text-slate-300 flex items-center gap-2">
-                      <i className="fa-solid fa-gamepad text-violet-600 dark:text-violet-400"></i>
-                      <span>Jadwal Jokian</span>
-                    </h3>
-                  </div>
+                  {/* ══════════════════════════════════════════════════════ */}
+                  {/* SECTION 2: BELUM DIJADWALKAN                          */}
+                  {/* ══════════════════════════════════════════════════════ */}
+                  {unscheduledJokiOrders.length > 0 && (
+                    <section className="px-4 md:px-8">
+                      <div className="sticky top-0 z-20 -mx-4 md:-mx-8 px-4 md:px-8 py-3 bg-slate-100 dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800/60">
+                        <h3 className="text-sm font-bold text-slate-700 dark:text-slate-300 flex items-center gap-2">
+                          <i className="fa-solid fa-clock text-indigo-600 dark:text-indigo-400"></i>
+                          <span>Belum Dijadwalkan</span>
+                          <span className="text-xs font-bold bg-indigo-100 dark:bg-indigo-500/20 text-indigo-700 dark:text-indigo-300 px-2 py-0.5 rounded-full">
+                            {unscheduledJokiOrders.length}
+                          </span>
+                        </h3>
+                      </div>
 
-                  <div className="pt-4 pb-6 space-y-3.5">
-  {/* ★ Cek: apakah ada jokian yang sesuai filter? */}
-  {filteredJokiOrders.length === 0 ? (
-    <div className="bg-white dark:bg-slate-900/50 backdrop-blur-xl border border-slate-200 dark:border-slate-800 rounded-3xl p-12 text-center">
-      <div className="w-16 h-16 rounded-2xl bg-violet-100 dark:bg-violet-600/10 text-violet-600 dark:text-violet-400 flex items-center justify-center mx-auto mb-4 border border-violet-200 dark:border-violet-500/20">
-        <i className="fa-solid fa-folder-open text-2xl"></i>
-      </div>
-      <h4 className="font-bold text-slate-700 dark:text-slate-200 text-base">
-        Tidak ada jadwal jokian ditemukan
-      </h4>
-      <p className="text-xs text-slate-500 mt-1">
-        Coba ubah filter atau tunggu order baru dari Tokoku-bot.
-      </p>
-    </div>
-  ) : (
-    filteredJokiOrders.map((order) => {
-                        const isCompletedByBot =
-                          order.completed_by_bot === true ||
-                          order.queue_status === "completed";
-                        const isProcessing = processingOrders.has(order.id);
+                      <div className="pt-4 pb-6 space-y-3.5">
+                        {unscheduledJokiOrders.map((order) => (
+                          <JokiOrderCard
+                            key={order.id}
+                            order={order}
+                            now={now}
+                            isProcessing={processingOrders.has(order.id)}
+                            isStarting={startingOrders.has(order.id)}
+                            isAdmin={true}
+                            editingUsername={editingUsername}
+                            ramAccounts={ramAccounts}
+                            loadingAccounts={loadingAccounts}
+                            setEditingUsername={setEditingUsername}
+                            fetchRamAccounts={fetchRamAccounts}
+                            updateOrderUsername={updateOrderUsername}
+                            handleCompleteOrder={handleCompleteOrder}
+                            handleStartProgressOrder={handleStartProgressOrder}
+                            isUsernameUsedInOtherCards={isUsernameUsedInOtherCards}
+                          />
+                        ))}
+                      </div>
+                    </section>
+                  )}
+                </>
+              )}
 
-                        const endDate = order.estimated_end_at
-                          ? new Date(order.estimated_end_at)
-                          : null;
-
-                        const todayMidnight = new Date();
-                        todayMidnight.setHours(0, 0, 0, 0);
-
-                        let daysLeft = null;
-                        let isToday = false;
-                        let isOverdue = false;
-
-                        if (endDate) {
-                          const endDateMidnight = new Date(endDate);
-                          endDateMidnight.setHours(0, 0, 0, 0);
-
-                          const diffMs = endDateMidnight.getTime() - todayMidnight.getTime();
-                          daysLeft = Math.round(diffMs / (1000 * 60 * 60 * 24));
-
-                          isToday = daysLeft === 0;
-                          isOverdue = daysLeft < 0;
-                        }
-
-                        return (
+              {/* KANBAN VIEW */}
+              {currentView === "kanban" && (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  <div className="bg-white dark:bg-slate-900/40 rounded-2xl p-4 border border-slate-200 dark:border-slate-800/80 space-y-3 flex flex-col">
+                    <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800">
+                      <div className="flex items-center space-x-2">
+                        <span className="w-3 h-3 rounded-full bg-amber-500 animate-pulse"></span>
+                        <h4 className="font-extrabold text-sm text-amber-600 dark:text-amber-400 flex items-center gap-1.5">
+                          <i className="fa-solid fa-fire text-xs"></i> Hari Ini
+                        </h4>
+                      </div>
+                      <span className="text-xs bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-300 px-2.5 py-0.5 rounded-full font-bold">
+                        {jokiToday}
+                      </span>
+                    </div>
+                    <div className="space-y-3 flex-1 min-h-50">
+                      {jokiOrders
+                        .filter((o) => {
+                          if (o.completed_by_bot || o.queue_status === "completed") return false;
+                          if (!o.estimated_end_at) return false;
+                          const endDate = new Date(o.estimated_end_at);
+                          endDate.setHours(0, 0, 0, 0);
+                          const todayMidnight = new Date();
+                          todayMidnight.setHours(0, 0, 0, 0);
+                          return endDate.getTime() === todayMidnight.getTime();
+                        })
+                        .map((order) => (
                           <div
                             key={order.id}
-                            className={`bg-white dark:bg-slate-900/50 backdrop-blur-xl border rounded-2xl p-4 md:p-5 transition-all duration-500 ease-out ${
-                              isProcessing
-                                ? "opacity-0 scale-95 blur-sm pointer-events-none"
-                                : isCompletedByBot
-                                ? "border-emerald-300 dark:border-emerald-500/40 opacity-60"
-                                : isToday
-                                ? "border-amber-300 dark:border-amber-500/30 shadow-[0_0_15px_rgba(245,158,11,0.15)]"
-                                : "border-slate-200 dark:border-slate-800 hover:border-violet-300 dark:hover:border-violet-500/40"
-                            }`}
+                            className="bg-slate-50 dark:bg-slate-900/90 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-3 hover:border-violet-300 dark:hover:border-violet-500/50 transition shadow-sm"
                           >
-                            {/* ... (ISI CARD JOKIAN — SAMA PERSIS KAYAK SEBELUMNYA, JANGAN DIUBAH) ... */}
-                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                              <div className="flex items-start space-x-3.5 flex-1 min-w-0">
+                            <div className="flex justify-between items-start">
+                              <div>
+                                <h5 className="font-extrabold text-sm text-slate-900 dark:text-white">
+                                  {order.roblox_username || "Pembeli"}
+                                </h5>
+                                <p className="text-[11px] text-violet-600 dark:text-violet-400 font-mono mt-0.5">
+                                  #{order.order_id}
+                                </p>
+                              </div>
+                            </div>
+                            <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 pt-2 border-t border-slate-200 dark:border-slate-800/80">
+                              <span className="font-semibold text-violet-600 dark:text-violet-300">
+                                <i className="fa-regular fa-user mr-1 text-[11px]"></i>
+                                {order.joki_name || "Ellan"}
+                              </span>
+                              <span className="font-mono text-amber-600 dark:text-amber-400">
+                                <i className="fa-regular fa-clock mr-1"></i>
+                                {order.schedule_time ? order.schedule_time.slice(0, 5) : "-"}
+                              </span>
+                            </div>
+                          </div>
+                        ))}
+                    </div>
+                  </div>
+
+                  <div className="bg-white dark:bg-slate-900/40 rounded-2xl p-4 border border-slate-200 dark:border-slate-800/80 space-y-3 flex flex-col">
+                    <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800">
+                      <div className="flex items-center space-x-2">
+                        <span className="w-3 h-3 rounded-full bg-indigo-500"></span>
+                        <h4 className="font-extrabold text-sm text-indigo-600 dark:text-indigo-400 flex items-center gap-1.5">
+                          <i className="fa-solid fa-clock text-xs"></i> Belum Dijadwalkan
+                        </h4>
+                      </div>
+                      <span className="text-xs bg-indigo-100 dark:bg-indigo-500/20 text-indigo-700 dark:text-indigo-300 px-2.5 py-0.5 rounded-full font-bold">
+                        {jokiNotScheduled}
+                      </span>
+                    </div>
+                    <div className="space-y-3 flex-1 min-h-50">
+                      {jokiOrders
+                        .filter((o) =>
+                          !o.estimated_end_at &&
+                          o.completed_by_bot !== true &&
+                          o.queue_status !== "completed"
+                        )
+                        .map((order) => (
+                          <div
+                            key={order.id}
+                            className="bg-slate-50 dark:bg-slate-900/90 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-3 hover:border-violet-300 dark:hover:border-violet-500/50 transition shadow-sm"
+                          >
+                            <div className="flex justify-between items-start">
+                              <div>
+                                <h5 className="font-extrabold text-sm text-slate-900 dark:text-white">
+                                  {order.roblox_username || "Pembeli"}
+                                </h5>
+                                <p className="text-[11px] text-violet-600 dark:text-violet-400 font-mono mt-0.5">
+                                  #{order.order_id}
+                                </p>
+                              </div>
+                            </div>
+                            <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 pt-2 border-t border-slate-200 dark:border-slate-800/80">
+                              <span className="font-semibold text-violet-600 dark:text-violet-300">
+                                <i className="fa-regular fa-user mr-1 text-[11px]"></i>
+                                {order.joki_name || "Ellan"}
+                              </span>
+                              <span className="font-mono text-slate-500 dark:text-slate-400">
+                                <i className="fa-solid fa-hourglass-half mr-1"></i>
+                                Belum dijadwalkan
+                              </span>
+                            </div>
+                          </div>
+                        ))}
+                    </div>
+                  </div>
+
+                  <div className="bg-white dark:bg-slate-900/40 rounded-2xl p-4 border border-slate-200 dark:border-slate-800/80 space-y-3 flex flex-col">
+                    <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800">
+                      <div className="flex items-center space-x-2">
+                        <span className="w-3 h-3 rounded-full bg-emerald-500"></span>
+                        <h4 className="font-extrabold text-sm text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
+                          <i className="fa-solid fa-circle-check text-xs"></i> Selesai
+                        </h4>
+                      </div>
+                      <span className="text-xs bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 px-2.5 py-0.5 rounded-full font-bold">
+                        {completedTasks}
+                      </span>
+                    </div>
+                    <div className="space-y-3 flex-1 min-h-50">
+                      {tasks
+                        .filter((t) => t.completed)
+                        .map((task) => (
+                          <div
+                            key={task.id}
+                            className="bg-slate-50 dark:bg-slate-900/90 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-3 hover:border-violet-300 dark:hover:border-violet-500/50 transition shadow-sm opacity-70"
+                          >
+                            <div className="flex justify-between items-start">
+                              <div>
+                                <h5 className="font-extrabold text-sm text-slate-900 dark:text-white line-through">
+                                  {task.title}
+                                </h5>
+                                <p className="text-[11px] text-violet-600 dark:text-violet-400 font-mono mt-0.5">
+                                  {task.category}
+                                </p>
+                              </div>
+                              <div className="flex items-center space-x-1">
                                 <button
-                                  onClick={() => handleCompleteOrder(order)}
-                                  disabled={isProcessing}
-                                  className={`mt-1 w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all shrink-0 ${
-                                    isProcessing
-                                      ? "border-emerald-500 bg-emerald-500 text-white cursor-wait"
-                                      : isCompletedByBot
-                                      ? "bg-emerald-500 border-emerald-500 text-white hover:bg-emerald-600"
-                                      : "border-slate-300 dark:border-slate-600 hover:border-violet-500 text-transparent"
-                                  }`}
-                                  title={isCompletedByBot ? "Konfirmasi Selesai" : "Selesaikan"}
+                                  onClick={() => editTask(task)}
+                                  className="text-slate-400 hover:text-violet-600 dark:hover:text-violet-400 p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800/80 transition"
+                                  title="Edit Task"
                                 >
-                                  {isProcessing ? (
-                                    <i className="fa-solid fa-spinner fa-spin text-xs"></i>
-                                  ) : (
-                                    <i className="fa-solid fa-check text-xs"></i>
-                                  )}
+                                  <i className="fa-solid fa-pen-to-square text-xs"></i>
                                 </button>
-
-                                {/* ... sisa konten card jokian SAMA PERSIS ... */}
-                                <div className="space-y-2 flex-1 min-w-0">
-            <div className="flex items-center space-x-2">
-  {editingUsername?.orderId === order.id ? (
-  // === MODE EDIT ===
-  <div className="flex flex-col gap-2 flex-1 min-w-0">
-    {/* Input + Tombol */}
-    <div className="flex items-center gap-2">
-      <input
-        type="text"
-        value={editingUsername.value}
-        onChange={(e) =>
-          setEditingUsername({ orderId: order.id, value: e.target.value })
-        }
-        onKeyDown={(e) => {
-          if (e.key === "Enter") {
-            const trimmed = editingUsername.value.trim();
-            if (isUsernameUsedInOtherCards(trimmed, order.id)) {
-              alert(`Username "${trimmed}" sudah dipakai di card lain!`);
-              return;
-            }
-            updateOrderUsername(order.id, trimmed);
-          } else if (e.key === "Escape") {
-            setEditingUsername(null);
-          }
-        }}
-        autoFocus
-        placeholder="Ketik atau pilih dari dropdown..."
-        className="bg-slate-50 dark:bg-slate-950 border border-violet-500 rounded-lg px-3 py-1.5 text-sm font-bold text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-violet-500/50 min-w-0 flex-1"
-      />
-      <button
-        onClick={() => {
-          const trimmed = editingUsername.value.trim();
-          if (isUsernameUsedInOtherCards(trimmed, order.id)) {
-            alert(`Username "${trimmed}" sudah dipakai di card lain!`);
-            return;
-          }
-          updateOrderUsername(order.id, trimmed);
-        }}
-        className="w-7 h-7 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white flex items-center justify-center transition shrink-0"
-        title="Simpan"
-      >
-        <i className="fa-solid fa-check text-xs"></i>
-      </button>
-      <button
-        onClick={() => setEditingUsername(null)}
-        className="w-7 h-7 rounded-lg bg-slate-300 dark:bg-slate-700 hover:bg-slate-400 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 flex items-center justify-center transition shrink-0"
-        title="Batal"
-      >
-        <i className="fa-solid fa-xmark text-xs"></i>
-      </button>
-    </div>
-
-    {/* Dropdown Akun dari RAM */}
-    {loadingAccounts ? (
-      <div className="text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-2 px-2">
-        <i className="fa-solid fa-spinner fa-spin text-[10px]"></i>
-        Memuat akun dari RAM...
-      </div>
-    ) : ramAccounts.length > 0 ? (
-      <div className="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg max-h-48 overflow-y-auto scrollbar-hide">
-        <div className="text-[10px] font-bold text-slate-500 dark:text-slate-400 px-2 py-1 border-b border-slate-200 dark:border-slate-800 uppercase tracking-wider">
-          Akun di RAM ({ramAccounts.length})
-        </div>
-        {ramAccounts.map((acc) => {
-          const isUsed = isUsernameUsedInOtherCards(acc.Username, order.id);
-          const isCurrent = acc.Username.toLowerCase() === editingUsername.value.toLowerCase();
-
-          return (
-            <button
-              key={acc.UserID}
-              onClick={() => {
-                if (isUsed) return;
-                setEditingUsername({
-                  orderId: order.id,
-                  value: acc.Username
-                });
-              }}
-              disabled={isUsed}
-              className={`w-full text-left px-2 py-1.5 text-xs flex items-center justify-between gap-2 transition border-b border-slate-100 dark:border-slate-800/50 last:border-0 ${
-                isUsed
-                  ? "text-slate-400 dark:text-slate-600 cursor-not-allowed bg-slate-100/50 dark:bg-slate-900/30"
-                  : isCurrent
-                  ? "bg-violet-100 dark:bg-violet-500/20 text-violet-700 dark:text-violet-300 font-bold"
-                  : "text-slate-700 dark:text-slate-300 hover:bg-violet-50 dark:hover:bg-violet-500/10 cursor-pointer"
-              }`}
-            >
-              <span className="truncate font-mono">{acc.Username}</span>
-              <span className="flex items-center gap-1.5 shrink-0">
-                {isUsed && (
-                  <span className="text-[9px] font-bold bg-rose-100 dark:bg-rose-500/20 text-rose-600 dark:text-rose-400 px-1.5 py-0.5 rounded">
-                    DIPAKAI
-                  </span>
-                )}
-                {acc.Alias && (
-                  <span className="text-[10px] text-slate-400 dark:text-slate-500 truncate max-w-20">
-                    {acc.Alias}
-                  </span>
-                )}
-              </span>
-            </button>
-          );
-        })}
-      </div>
-    ) : (
-      <div className="text-[11px] text-slate-500 dark:text-slate-400 italic px-2">
-        Tidak ada akun di RAM atau gagal load.
-      </div>
-    )}
-  </div>
-) : (
-    // === MODE VIEW ===
-    <>
-      <h4 className={`font-extrabold text-base md:text-lg truncate ${
-        isCompletedByBot
-          ? "text-slate-400 dark:text-slate-500 line-through"
-          : "text-slate-900 dark:text-white"
-      }`}>
-        {order.roblox_username || "Pembeli"}
-      </h4>
-      
-      {/* Icon Pensil untuk Edit Username */}
-      <button
-        onClick={() => {
-          setEditingUsername({
-            orderId: order.id,
-            value: order.roblox_username || "",
-          });
-          fetchRamAccounts(); // ← Fetch saat buka edit
-        }}
-        className="w-6 h-6 rounded-md text-slate-400 hover:text-violet-600 dark:hover:text-violet-400 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center transition shrink-0"
-        title="Edit Username"
-      >
-        <i className="fa-solid fa-pen text-[10px]"></i>
-      </button>
-
-      {isCompletedByBot && (
-        <span className="inline-flex items-center gap-1 bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 px-2 py-0.5 rounded-md text-[10px] font-bold border border-emerald-200 dark:border-emerald-500/30">
-          <i className="fa-solid fa-robot text-[9px]"></i>
-          Bot Selesai
-        </span>
-      )}
-    </>
-  )}
-  
-  {isProcessing && (
-    <span className="inline-flex items-center gap-1 bg-blue-100 dark:bg-blue-500/20 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded-md text-[10px] font-bold border border-blue-200 dark:border-blue-500/30 animate-pulse">
-      <i className="fa-solid fa-spinner fa-spin text-[9px]"></i>
-      Memproses...
-    </span>
-  )}
-</div>
-            <div className="flex items-center space-x-2 text-xs text-slate-500 dark:text-slate-400 font-mono">
-              <span>
-                Order{" "}
-                <strong className="text-violet-600 dark:text-violet-400 font-semibold">
-                  #{order.order_id}
-                </strong>
-              </span>
-              <button
-                onClick={() => navigator.clipboard.writeText(order.order_id)}
-                className="text-slate-400 hover:text-violet-600 dark:hover:text-violet-400 transition p-0.5"
-                title="Copy Order ID"
-              >
-                <i className="fa-regular fa-copy text-xs"></i>
-              </button>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-2 pt-1 text-xs">
-              <span className="inline-flex items-center space-x-1.5 bg-violet-100 dark:bg-violet-500/10 text-violet-700 dark:text-violet-300 px-2.5 py-1 rounded-lg font-semibold border border-violet-200 dark:border-violet-500/20">
-                <i className="fa-regular fa-user text-[11px]"></i>
-                <span>{order.joki_name || "Ellan"}</span>
-              </span>
-                            {order.schedule_time && (
-                <span className="inline-flex items-center space-x-1.5 bg-slate-100 dark:bg-slate-800/80 text-slate-700 dark:text-slate-300 px-2.5 py-1 rounded-lg font-semibold border border-slate-200 dark:border-slate-700/50">
-                  <i className="fa-regular fa-clock text-[11px] text-amber-500 dark:text-amber-400"></i>
-                  <span>{order.schedule_time.slice(0, 5)}</span>
-                </span>
-              )}
-              {order.schedule_date && (
-                <span className="inline-flex items-center space-x-1.5 bg-slate-100 dark:bg-slate-800/80 text-slate-700 dark:text-slate-300 px-2.5 py-1 rounded-lg font-semibold border border-slate-200 dark:border-slate-700/50">
-                  <i className="fa-regular fa-calendar-days text-[11px] text-indigo-500 dark:text-indigo-400"></i>
-                  <span>
-                    {new Date(`${order.schedule_date}T00:00:00`).toLocaleDateString("id-ID", {
-                      day: "numeric",
-                      month: "long",
-                      year: "numeric",
-                    })}
-                  </span>
-                </span>
-              )}
-              {order.note && (
-                <span className="inline-flex items-center space-x-1.5 bg-violet-100 dark:bg-violet-500/10 text-violet-700 dark:text-violet-300 px-2.5 py-1 rounded-lg font-mono text-[11px] border border-violet-200 dark:border-violet-500/20">
-                  <i className="fa-regular fa-note-sticky text-[11px] text-violet-500 dark:text-violet-400"></i>
-                  <span>{order.note}</span>
-                </span>
+                                <button
+                                  onClick={() => deleteTask(task.id)}
+                                  className="text-slate-400 hover:text-rose-500 dark:hover:text-rose-400 p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800/80 transition"
+                                  title="Hapus Task"
+                                >
+                                  <i className="fa-regular fa-trash-can text-xs"></i>
+                                </button>
+                              </div>
+                            </div>
+                            <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 pt-2 border-t border-slate-200 dark:border-slate-800/80">
+                              <span className="font-semibold text-violet-600 dark:text-violet-300">
+                                <i className="fa-regular fa-user mr-1 text-[11px]"></i>Task
+                              </span>
+                              <span className="font-mono text-amber-600 dark:text-amber-400">
+                                <i className="fa-regular fa-clock mr-1"></i>
+                                {formatDate(task.deadline)}
+                              </span>
+                            </div>
+                          </div>
+                        ))}
+                    </div>
+                  </div>
+                </div>
               )}
             </div>
           </div>
-        </div>
-
-                        <div className="flex items-center justify-between sm:justify-end space-x-3 pt-3 sm:pt-0 border-t sm:border-t-0 border-slate-200 dark:border-slate-800/60">
-  {isCompletedByBot && order.buyer_confirmed ? (
-    // ✅ Buyer udah konfirmasi
-    <span className="bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-500/30 text-[11px] font-bold px-3 py-1.5 rounded-xl flex items-center gap-1.5">
-      <i className="fa-solid fa-circle-check text-xs"></i> Buyer Konfirmasi
-    </span>
-  ) : isCompletedByBot ? (
-    // ⏳ Jokian selesai, nunggu buyer konfirmasi
-    <span className="bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-500/30 text-[11px] font-bold px-3 py-1.5 rounded-xl flex items-center gap-1.5">
-      <i className="fa-solid fa-hourglass-half text-xs"></i> Menunggu Buyer
-    </span>
-  ) : isOverdue ? (
-    // 🔴 Jokian udah lewat jadwal selesai
-    <span className="bg-rose-100 dark:bg-rose-500/20 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-500/30 text-[11px] font-bold px-3 py-1.5 rounded-xl flex items-center gap-1.5">
-      <i className="fa-solid fa-triangle-exclamation text-xs"></i> Overdue
-    </span>
-  ) : isToday ? (
-    // 🔥 Selesai hari ini
-    <span className="bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-500/30 text-[11px] font-bold px-3 py-1.5 rounded-xl flex items-center gap-1.5">
-      <i className="fa-solid fa-fire text-xs text-amber-500 dark:text-amber-400"></i> Hari Ini
-    </span>
-  ) : daysLeft === 1 ? (
-    // 🌤️ Besok
-    <span className="bg-yellow-100 dark:bg-yellow-500/20 text-yellow-700 dark:text-yellow-300 border border-yellow-200 dark:border-yellow-500/30 text-[11px] font-bold px-3 py-1.5 rounded-xl flex items-center gap-1.5">
-      <i className="fa-solid fa-calendar-day text-xs"></i> Besok
-    </span>
-  ) : daysLeft !== null && daysLeft > 1 ? (
-    // 📅 X hari lagi
-    <span className="bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-500/30 text-[11px] font-bold px-3 py-1.5 rounded-xl flex items-center gap-1.5">
-      <i className="fa-solid fa-calendar-check text-xs"></i> {daysLeft} hari lagi
-    </span>
-  ) : (
-    // ⚪ Belum ada estimated_end_at
-    <span className="bg-slate-100 dark:bg-slate-800/80 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700/50 text-[11px] font-bold px-3 py-1.5 rounded-xl flex items-center gap-1.5">
-      <i className="fa-solid fa-clock text-xs"></i> Belum dijadwalkan
-    </span>
-  )}
-</div>
-      </div>
-            {/* COUNTDOWN + JAM SELESAI */}
-            {order.estimated_end_at && (
-              <div className="pt-3 mt-3 border-t border-slate-200 dark:border-slate-800/60 space-y-2">
-                {/* Row 1: Sisa Waktu (countdown) */}
-                <div className="flex items-center justify-between">
-                  <span className="text-[10px] text-slate-500 dark:text-slate-400 uppercase tracking-wider font-bold flex items-center gap-1.5">
-                    <i className="fa-regular fa-clock text-amber-500 dark:text-amber-400"></i>
-                    Sisa Waktu
-                  </span>
-                  <span
-                    className={`text-sm font-black font-mono tracking-tight ${
-                      new Date(order.estimated_end_at).getTime() - now <= 0
-                        ? "text-rose-500 dark:text-rose-400"
-                        : "text-amber-600 dark:text-amber-400"
-                    }`}
-                  >
-                    {(() => {
-                      const remaining = Math.max(
-                        0,
-                        new Date(order.estimated_end_at!).getTime() - now
-                      );
-                      const h = Math.floor(remaining / 3600000);
-                      const m = Math.floor((remaining % 3600000) / 60000);
-                      const s = Math.floor((remaining % 60000) / 1000);
-                      if (remaining === 0) return "SEGERA SELESAI";
-                      return `${h > 0 ? h + ":" : ""}${m
-                        .toString()
-                        .padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
-                    })()}
-                  </span>
-                </div>
-
-                {/* Row 2: Jam Selesai */}
-                <div className="flex items-center justify-between">
-                  <span className="text-[10px] text-slate-500 dark:text-slate-400 uppercase tracking-wider font-bold flex items-center gap-1.5">
-                    <i className="fa-solid fa-flag-checkered text-emerald-500 dark:text-emerald-400"></i>
-                    Selesai Jam
-                  </span>
-                  <span className="text-sm font-black font-mono tracking-tight text-emerald-600 dark:text-emerald-400">
-                    {new Date(order.estimated_end_at).toLocaleTimeString("id-ID", {
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}{" "}
-                    WIB
-                  </span>
-                </div>
-              </div>
-            )}
-
-            {/* ══════════════════════════════════════════════════════════ */}
-            {/* ⭐ TOMBOL MULAI ORDERAN — cuma buat order progress           */}
-            {/* ══════════════════════════════════════════════════════════ */}
-            {order.queue_status === "waiting_confirm" && 
-            (order as any).order_type === "progress" && (
-              <button
-                onClick={() => handleStartProgressOrder(order)}
-                disabled={startingOrders.has(order.id)}
-                className="w-full mt-3 bg-linear-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 disabled:opacity-50 text-white font-bold py-2.5 rounded-xl transition shadow-lg shadow-violet-600/30 flex items-center justify-center gap-2 text-sm"
-              >
-                {startingOrders.has(order.id) ? (
-                  <>
-                    <i className="fa-solid fa-spinner fa-spin"></i>
-                    Memulai...
-                  </>
-                ) : (
-                  <>
-                    <i className="fa-solid fa-play"></i>
-                    Mulai Orderan
-                  </>
-                )}
-              </button>
-            )}
-
-                </div>            
-              );
-            })
-                  )}
-                </div>
-                </section>
-              </>
-            )}
-
-            {/* ============================================================ */}
-            {/* KANBAN VIEW CONTAINER                                        */}
-            {/* ============================================================ */}
-            {currentView === "kanban" && (
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div className="bg-white dark:bg-slate-900/40 rounded-2xl p-4 border border-slate-200 dark:border-slate-800/80 space-y-3 flex flex-col">
-                  <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800">
-                    <div className="flex items-center space-x-2">
-                      <span className="w-3 h-3 rounded-full bg-amber-500 animate-pulse"></span>
-                      <h4 className="font-extrabold text-sm text-amber-600 dark:text-amber-400 flex items-center gap-1.5">
-                        <i className="fa-solid fa-fire text-xs"></i> Hari Ini
-                      </h4>
-                    </div>
-                    <span className="text-xs bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-300 px-2.5 py-0.5 rounded-full font-bold">
-                      {jokiToday}
-                    </span>
-                  </div>
-                  <div className="space-y-3 flex-1 min-h-50">
-                    {jokiOrders
-  .filter((o) => {
-    if (o.completed_by_bot || o.queue_status === "completed") return false;
-    if (!o.estimated_end_at) return false;
-    const endDate = new Date(o.estimated_end_at);
-    endDate.setHours(0, 0, 0, 0);
-    const todayMidnight = new Date();
-    todayMidnight.setHours(0, 0, 0, 0);
-    return endDate.getTime() === todayMidnight.getTime();
-  })
-                      .map((order) => (
-                        <div
-                          key={order.id}
-                          className="bg-slate-50 dark:bg-slate-900/90 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-3 hover:border-violet-300 dark:hover:border-violet-500/50 transition shadow-sm"
-                        >
-                          <div className="flex justify-between items-start">
-                            <div>
-                              <h5 className="font-extrabold text-sm text-slate-900 dark:text-white">
-                                {order.roblox_username || "Pembeli"}
-                              </h5>
-                              <p className="text-[11px] text-violet-600 dark:text-violet-400 font-mono mt-0.5">
-                                #{order.order_id}
-                              </p>
-                            </div>
-                          </div>
-                          <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 pt-2 border-t border-slate-200 dark:border-slate-800/80">
-                            <span className="font-semibold text-violet-600 dark:text-violet-300">
-                              <i className="fa-regular fa-user mr-1 text-[11px]"></i>
-                              {order.joki_name || "Ellan"}
-                            </span>
-                            <span className="font-mono text-amber-600 dark:text-amber-400">
-  <i className="fa-regular fa-clock mr-1"></i>
-  {order.schedule_time ? order.schedule_time.slice(0, 5) : "-"}
-</span>
-                          </div>
-                        </div>
-                      ))}
-                  </div>
-                </div>
-
-                                                <div className="bg-white dark:bg-slate-900/40 rounded-2xl p-4 border border-slate-200 dark:border-slate-800/80 space-y-3 flex flex-col">
-                  <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800">
-                    <div className="flex items-center space-x-2">
-                      <span className="w-3 h-3 rounded-full bg-indigo-500"></span>
-                      <h4 className="font-extrabold text-sm text-indigo-600 dark:text-indigo-400 flex items-center gap-1.5">
-                        <i className="fa-solid fa-clock text-xs"></i> Belum Dijadwalkan
-                      </h4>
-                    </div>
-                    <span className="text-xs bg-indigo-100 dark:bg-indigo-500/20 text-indigo-700 dark:text-indigo-300 px-2.5 py-0.5 rounded-full font-bold">
-                      {jokiNotScheduled}
-                    </span>
-                  </div>
-                  <div className="space-y-3 flex-1 min-h-50">
-                    {jokiOrders
-                      .filter((o) => 
-                        !o.estimated_end_at &&
-                        o.completed_by_bot !== true &&
-                        o.queue_status !== "completed"
-                      )
-                      .map((order) => (
-                        <div
-                          key={order.id}
-                          className="bg-slate-50 dark:bg-slate-900/90 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-3 hover:border-violet-300 dark:hover:border-violet-500/50 transition shadow-sm"
-                        >
-                          <div className="flex justify-between items-start">
-                            <div>
-                              <h5 className="font-extrabold text-sm text-slate-900 dark:text-white">
-                                {order.roblox_username || "Pembeli"}
-                              </h5>
-                              <p className="text-[11px] text-violet-600 dark:text-violet-400 font-mono mt-0.5">
-                                #{order.order_id}
-                              </p>
-                            </div>
-                          </div>
-                          <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 pt-2 border-t border-slate-200 dark:border-slate-800/80">
-                            <span className="font-semibold text-violet-600 dark:text-violet-300">
-                              <i className="fa-regular fa-user mr-1 text-[11px]"></i>
-                              {order.joki_name || "Ellan"}
-                            </span>
-                            <span className="font-mono text-slate-500 dark:text-slate-400">
-                              <i className="fa-solid fa-hourglass-half mr-1"></i>
-                              Belum dijadwalkan
-                            </span>
-                          </div>
-                        </div>
-                      ))}
-                  </div>
-                </div>
-
-                <div className="bg-white dark:bg-slate-900/40 rounded-2xl p-4 border border-slate-200 dark:border-slate-800/80 space-y-3 flex flex-col">
-                  <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800">
-                    <div className="flex items-center space-x-2">
-                      <span className="w-3 h-3 rounded-full bg-emerald-500"></span>
-                      <h4 className="font-extrabold text-sm text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
-                        <i className="fa-solid fa-circle-check text-xs"></i> Selesai
-                      </h4>
-                    </div>
-                    <span className="text-xs bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 px-2.5 py-0.5 rounded-full font-bold">
-                      {completedTasks}
-                    </span>
-                  </div>
-                  <div className="space-y-3 flex-1 min-h-50">
-                    {tasks
-                      .filter((t) => t.completed)
-                      .map((task) => (
-                        <div
-                          key={task.id}
-                          className="bg-slate-50 dark:bg-slate-900/90 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-3 hover:border-violet-300 dark:hover:border-violet-500/50 transition shadow-sm opacity-70"
-                        >
-                          <div className="flex justify-between items-start">
-                            <div>
-                              <h5 className="font-extrabold text-sm text-slate-900 dark:text-white line-through">
-                                {task.title}
-                              </h5>
-                              <p className="text-[11px] text-violet-600 dark:text-violet-400 font-mono mt-0.5">
-                                {task.category}
-                              </p>
-                            </div>
-                            <div className="flex items-center space-x-1">
-                              <button
-                                onClick={() => editTask(task)}
-                                className="text-slate-400 hover:text-violet-600 dark:hover:text-violet-400 p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800/80 transition"
-                                title="Edit Task"
-                              >
-                                <i className="fa-solid fa-pen-to-square text-xs"></i>
-                              </button>
-                              <button
-                                onClick={() => deleteTask(task.id)}
-                                className="text-slate-400 hover:text-rose-500 dark:hover:text-rose-400 p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800/80 transition"
-                                title="Hapus Task"
-                              >
-                                <i className="fa-regular fa-trash-can text-xs"></i>
-                              </button>
-                            </div>
-                          </div>
-                          <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 pt-2 border-t border-slate-200 dark:border-slate-800/80">
-                            <span className="font-semibold text-violet-600 dark:text-violet-300">
-                              <i className="fa-regular fa-user mr-1 text-[11px]"></i>Task
-                            </span>
-                            <span className="font-mono text-amber-600 dark:text-amber-400">
-                              <i className="fa-regular fa-clock mr-1"></i>
-                              {formatDate(task.deadline)}
-                            </span>
-                          </div>
-                        </div>
-                      ))}
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-          </div> 
         </main>
 
-        {/* CUSTOM CONFIRM DIALOG */}
+        {/* CONFIRM DIALOG */}
         {confirmDialog.open && (
           <div className="fixed inset-0 bg-slate-950/40 dark:bg-slate-950/80 backdrop-blur-md z-60 flex items-center justify-center p-4">
             <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 max-w-md w-full p-6 md:p-7 shadow-2xl relative animate-in">
@@ -2311,5 +1958,433 @@ body::-webkit-scrollbar {
         )}
       </div>
     </>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════
+// JOKI ORDER CARD COMPONENT — di-extract biar gak duplikat
+// ══════════════════════════════════════════════════════════════
+
+function JokiOrderCard({
+  order,
+  now,
+  isProcessing,
+  isStarting,
+  isAdmin,
+  editingUsername,
+  ramAccounts,
+  loadingAccounts,
+  setEditingUsername,
+  fetchRamAccounts,
+  updateOrderUsername,
+  handleCompleteOrder,
+  handleStartProgressOrder,
+  isUsernameUsedInOtherCards,
+}: {
+  order: JokiOrder;
+  now: number;
+  isProcessing: boolean;
+  isStarting: boolean;
+  isAdmin: boolean;
+  editingUsername: { orderId: number; value: string } | null;
+  ramAccounts: { Username: string; UserID: number; Alias: string; Group: string }[];
+  loadingAccounts: boolean;
+  setEditingUsername: (val: { orderId: number; value: string } | null) => void;
+  fetchRamAccounts: () => void;
+  updateOrderUsername: (orderId: number, username: string) => void;
+  handleCompleteOrder: (order: JokiOrder) => void;
+  handleStartProgressOrder: (order: JokiOrder) => void;
+  isUsernameUsedInOtherCards: (username: string, currentOrderId: number) => boolean;
+}) {
+  const isCompletedByBot =
+    order.completed_by_bot === true || order.queue_status === "completed";
+
+  const isProgressOrder =
+    order.order_type === "progress" ||
+    (order.progress_keyword != null && (order.target_count ?? 0) > 0);
+
+  const endDate = order.estimated_end_at
+    ? new Date(order.estimated_end_at)
+    : null;
+
+  const todayMidnight = new Date();
+  todayMidnight.setHours(0, 0, 0, 0);
+
+  let daysLeft: number | null = null;
+  let isToday = false;
+  let isOverdue = false;
+
+  if (endDate) {
+    const endDateMidnight = new Date(endDate);
+    endDateMidnight.setHours(0, 0, 0, 0);
+    const diffMs = endDateMidnight.getTime() - todayMidnight.getTime();
+    daysLeft = Math.round(diffMs / (1000 * 60 * 60 * 24));
+    isToday = daysLeft === 0;
+    isOverdue = daysLeft < 0;
+  }
+
+  return (
+    <div
+      className={`bg-white dark:bg-slate-900/50 backdrop-blur-xl border rounded-2xl p-4 md:p-5 transition-all duration-500 ease-out ${
+        isProcessing
+          ? "opacity-0 scale-95 blur-sm pointer-events-none"
+          : isCompletedByBot
+          ? "border-emerald-300 dark:border-emerald-500/40 opacity-60"
+          : isToday
+          ? "border-amber-300 dark:border-amber-500/30 shadow-[0_0_15px_rgba(245,158,11,0.15)]"
+          : "border-slate-200 dark:border-slate-800 hover:border-violet-300 dark:hover:border-violet-500/40"
+      }`}
+    >
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="flex items-start space-x-3.5 flex-1 min-w-0">
+          <button
+            onClick={() => handleCompleteOrder(order)}
+            disabled={isProcessing}
+            className={`mt-1 w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all shrink-0 ${
+              isProcessing
+                ? "border-emerald-500 bg-emerald-500 text-white cursor-wait"
+                : isCompletedByBot
+                ? "bg-emerald-500 border-emerald-500 text-white hover:bg-emerald-600"
+                : "border-slate-300 dark:border-slate-600 hover:border-violet-500 text-transparent"
+            }`}
+            title={isCompletedByBot ? "Konfirmasi Selesai" : "Selesaikan"}
+          >
+            {isProcessing ? (
+              <i className="fa-solid fa-spinner fa-spin text-xs"></i>
+            ) : (
+              <i className="fa-solid fa-check text-xs"></i>
+            )}
+          </button>
+
+          <div className="space-y-2 flex-1 min-w-0">
+            <div className="flex items-center space-x-2">
+              {editingUsername?.orderId === order.id ? (
+                <div className="flex flex-col gap-2 flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={editingUsername.value}
+                      onChange={(e) =>
+                        setEditingUsername({ orderId: order.id, value: e.target.value })
+                      }
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          const trimmed = editingUsername.value.trim();
+                          if (isUsernameUsedInOtherCards(trimmed, order.id)) {
+                            alert(`Username "${trimmed}" sudah dipakai di card lain!`);
+                            return;
+                          }
+                          updateOrderUsername(order.id, trimmed);
+                        } else if (e.key === "Escape") {
+                          setEditingUsername(null);
+                        }
+                      }}
+                      autoFocus
+                      placeholder="Ketik atau pilih dari dropdown..."
+                      className="bg-slate-50 dark:bg-slate-950 border border-violet-500 rounded-lg px-3 py-1.5 text-sm font-bold text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-violet-500/50 min-w-0 flex-1"
+                    />
+                    <button
+                      onClick={() => {
+                        const trimmed = editingUsername.value.trim();
+                        if (isUsernameUsedInOtherCards(trimmed, order.id)) {
+                          alert(`Username "${trimmed}" sudah dipakai di card lain!`);
+                          return;
+                        }
+                        updateOrderUsername(order.id, trimmed);
+                      }}
+                      className="w-7 h-7 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white flex items-center justify-center transition shrink-0"
+                      title="Simpan"
+                    >
+                      <i className="fa-solid fa-check text-xs"></i>
+                    </button>
+                    <button
+                      onClick={() => setEditingUsername(null)}
+                      className="w-7 h-7 rounded-lg bg-slate-300 dark:bg-slate-700 hover:bg-slate-400 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 flex items-center justify-center transition shrink-0"
+                      title="Batal"
+                    >
+                      <i className="fa-solid fa-xmark text-xs"></i>
+                    </button>
+                  </div>
+
+                  {loadingAccounts ? (
+                    <div className="text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-2 px-2">
+                      <i className="fa-solid fa-spinner fa-spin text-[10px]"></i>
+                      Memuat akun dari RAM...
+                    </div>
+                  ) : ramAccounts.length > 0 ? (
+                    <div className="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg max-h-48 overflow-y-auto scrollbar-hide">
+                      <div className="text-[10px] font-bold text-slate-500 dark:text-slate-400 px-2 py-1 border-b border-slate-200 dark:border-slate-800 uppercase tracking-wider">
+                        Akun di RAM ({ramAccounts.length})
+                      </div>
+                      {ramAccounts.map((acc) => {
+                        const isUsed = isUsernameUsedInOtherCards(acc.Username, order.id);
+                        const isCurrent =
+                          acc.Username.toLowerCase() === editingUsername.value.toLowerCase();
+
+                        return (
+                          <button
+                            key={acc.UserID}
+                            onClick={() => {
+                              if (isUsed) return;
+                              setEditingUsername({
+                                orderId: order.id,
+                                value: acc.Username,
+                              });
+                            }}
+                            disabled={isUsed}
+                            className={`w-full text-left px-2 py-1.5 text-xs flex items-center justify-between gap-2 transition border-b border-slate-100 dark:border-slate-800/50 last:border-0 ${
+                              isUsed
+                                ? "text-slate-400 dark:text-slate-600 cursor-not-allowed bg-slate-100/50 dark:bg-slate-900/30"
+                                : isCurrent
+                                ? "bg-violet-100 dark:bg-violet-500/20 text-violet-700 dark:text-violet-300 font-bold"
+                                : "text-slate-700 dark:text-slate-300 hover:bg-violet-50 dark:hover:bg-violet-500/10 cursor-pointer"
+                            }`}
+                          >
+                            <span className="truncate font-mono">{acc.Username}</span>
+                            <span className="flex items-center gap-1.5 shrink-0">
+                              {isUsed && (
+                                <span className="text-[9px] font-bold bg-rose-100 dark:bg-rose-500/20 text-rose-600 dark:text-rose-400 px-1.5 py-0.5 rounded">
+                                  DIPAKAI
+                                </span>
+                              )}
+                              {acc.Alias && (
+                                <span className="text-[10px] text-slate-400 dark:text-slate-500 truncate max-w-20">
+                                  {acc.Alias}
+                                </span>
+                              )}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="text-[11px] text-slate-500 dark:text-slate-400 italic px-2">
+                      Tidak ada akun di RAM atau gagal load.
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <>
+                  <h4
+                    className={`font-extrabold text-base md:text-lg truncate ${
+                      isCompletedByBot
+                        ? "text-slate-400 dark:text-slate-500 line-through"
+                        : "text-slate-900 dark:text-white"
+                    }`}
+                  >
+                    {order.roblox_username || "Pembeli"}
+                  </h4>
+
+                  <button
+                    onClick={() => {
+                      setEditingUsername({
+                        orderId: order.id,
+                        value: order.roblox_username || "",
+                      });
+                      fetchRamAccounts();
+                    }}
+                    className="w-6 h-6 rounded-md text-slate-400 hover:text-violet-600 dark:hover:text-violet-400 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center transition shrink-0"
+                    title="Edit Username"
+                  >
+                    <i className="fa-solid fa-pen text-[10px]"></i>
+                  </button>
+
+                  {isCompletedByBot && (
+                    <span className="inline-flex items-center gap-1 bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 px-2 py-0.5 rounded-md text-[10px] font-bold border border-emerald-200 dark:border-emerald-500/30">
+                      <i className="fa-solid fa-robot text-[9px]"></i>
+                      Bot Selesai
+                    </span>
+                  )}
+                </>
+              )}
+
+              {isProcessing && (
+                <span className="inline-flex items-center gap-1 bg-blue-100 dark:bg-blue-500/20 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded-md text-[10px] font-bold border border-blue-200 dark:border-blue-500/30 animate-pulse">
+                  <i className="fa-solid fa-spinner fa-spin text-[9px]"></i>
+                  Memproses...
+                </span>
+              )}
+            </div>
+
+            <div className="flex items-center space-x-2 text-xs text-slate-500 dark:text-slate-400 font-mono">
+              <span>
+                Order{" "}
+                <strong className="text-violet-600 dark:text-violet-400 font-semibold">
+                  #{order.order_id}
+                </strong>
+              </span>
+              <button
+                onClick={() => navigator.clipboard.writeText(order.order_id)}
+                className="text-slate-400 hover:text-violet-600 dark:hover:text-violet-400 transition p-0.5"
+                title="Copy Order ID"
+              >
+                <i className="fa-regular fa-copy text-xs"></i>
+              </button>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2 pt-1 text-xs">
+              <span className="inline-flex items-center space-x-1.5 bg-violet-100 dark:bg-violet-500/10 text-violet-700 dark:text-violet-300 px-2.5 py-1 rounded-lg font-semibold border border-violet-200 dark:border-violet-500/20">
+                <i className="fa-regular fa-user text-[11px]"></i>
+                <span>{order.joki_name || "Ellan"}</span>
+              </span>
+              {order.schedule_time && (
+                <span className="inline-flex items-center space-x-1.5 bg-slate-100 dark:bg-slate-800/80 text-slate-700 dark:text-slate-300 px-2.5 py-1 rounded-lg font-semibold border border-slate-200 dark:border-slate-700/50">
+                  <i className="fa-regular fa-clock text-[11px] text-amber-500 dark:text-amber-400"></i>
+                  <span>{order.schedule_time.slice(0, 5)}</span>
+                </span>
+              )}
+              {order.schedule_date && (
+                <span className="inline-flex items-center space-x-1.5 bg-slate-100 dark:bg-slate-800/80 text-slate-700 dark:text-slate-300 px-2.5 py-1 rounded-lg font-semibold border border-slate-200 dark:border-slate-700/50">
+                  <i className="fa-regular fa-calendar-days text-[11px] text-indigo-500 dark:text-indigo-400"></i>
+                  <span>
+                    {new Date(`${order.schedule_date}T00:00:00`).toLocaleDateString("id-ID", {
+                      day: "numeric",
+                      month: "long",
+                      year: "numeric",
+                    })}
+                  </span>
+                </span>
+              )}
+              {order.note && (
+                <span className="inline-flex items-center space-x-1.5 bg-violet-100 dark:bg-violet-500/10 text-violet-700 dark:text-violet-300 px-2.5 py-1 rounded-lg font-mono text-[11px] border border-violet-200 dark:border-violet-500/20">
+                  <i className="fa-regular fa-note-sticky text-[11px] text-violet-500 dark:text-violet-400"></i>
+                  <span>{order.note}</span>
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between sm:justify-end space-x-3 pt-3 sm:pt-0 border-t sm:border-t-0 border-slate-200 dark:border-slate-800/60">
+          {isCompletedByBot && order.buyer_confirmed ? (
+            <span className="bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-500/30 text-[11px] font-bold px-3 py-1.5 rounded-xl flex items-center gap-1.5">
+              <i className="fa-solid fa-circle-check text-xs"></i> Buyer Konfirmasi
+            </span>
+          ) : isCompletedByBot ? (
+            <span className="bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-500/30 text-[11px] font-bold px-3 py-1.5 rounded-xl flex items-center gap-1.5">
+              <i className="fa-solid fa-hourglass-half text-xs"></i> Menunggu Buyer
+            </span>
+          ) : isProgressOrder ? (
+            <span className="bg-violet-100 dark:bg-violet-500/20 text-violet-700 dark:text-violet-300 border border-violet-200 dark:border-violet-500/30 text-[11px] font-bold px-3 py-1.5 rounded-xl flex items-center gap-1.5">
+              <i className="fa-solid fa-egg text-xs"></i>
+              {(order.progress_keyword || "Egg").toUpperCase()} {order.progress_count ?? 0}/
+              {order.target_count ?? 0}
+            </span>
+          ) : isOverdue ? (
+            <span className="bg-rose-100 dark:bg-rose-500/20 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-500/30 text-[11px] font-bold px-3 py-1.5 rounded-xl flex items-center gap-1.5">
+              <i className="fa-solid fa-triangle-exclamation text-xs"></i> Overdue
+            </span>
+          ) : isToday ? (
+            <span className="bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-500/30 text-[11px] font-bold px-3 py-1.5 rounded-xl flex items-center gap-1.5">
+              <i className="fa-solid fa-fire text-xs text-amber-500 dark:text-amber-400"></i> Hari Ini
+            </span>
+          ) : daysLeft === 1 ? (
+            <span className="bg-yellow-100 dark:bg-yellow-500/20 text-yellow-700 dark:text-yellow-300 border border-yellow-200 dark:border-yellow-500/30 text-[11px] font-bold px-3 py-1.5 rounded-xl flex items-center gap-1.5">
+              <i className="fa-solid fa-calendar-day text-xs"></i> Besok
+            </span>
+          ) : daysLeft !== null && daysLeft > 1 ? (
+            <span className="bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-500/30 text-[11px] font-bold px-3 py-1.5 rounded-xl flex items-center gap-1.5">
+              <i className="fa-solid fa-calendar-check text-xs"></i> {daysLeft} hari lagi
+            </span>
+          ) : (
+            <span className="bg-slate-100 dark:bg-slate-800/80 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700/50 text-[11px] font-bold px-3 py-1.5 rounded-xl flex items-center gap-1.5">
+              <i className="fa-solid fa-clock text-xs"></i> Belum dijadwalkan
+            </span>
+          )}
+        </div>
+      </div>
+
+      {isProgressOrder && (
+        <div className="pt-3 mt-3 border-t border-slate-200 dark:border-slate-800/60 space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] text-slate-500 dark:text-slate-400 uppercase tracking-wider font-bold flex items-center gap-1.5">
+              <i className="fa-solid fa-egg text-violet-500 dark:text-violet-400"></i>
+              Progress {(order.progress_keyword || "Egg").toUpperCase()}
+            </span>
+            <span className="text-sm font-black text-violet-600 dark:text-violet-400 font-mono">
+              {order.progress_count ?? 0} / {order.target_count ?? 0}
+            </span>
+          </div>
+          <div className="w-full h-2 bg-slate-100 dark:bg-slate-950 rounded-full overflow-hidden border border-slate-200 dark:border-slate-800">
+            <div
+              className="h-full bg-linear-to-r from-violet-500 to-indigo-500 transition-all duration-500"
+              style={{
+                width: `${
+                  order.target_count
+                    ? Math.min(100, ((order.progress_count ?? 0) / order.target_count) * 100)
+                    : 0
+                }%`,
+              }}
+            />
+          </div>
+        </div>
+      )}
+
+      {!isProgressOrder && order.estimated_end_at && (
+        <div className="pt-3 mt-3 border-t border-slate-200 dark:border-slate-800/60 space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] text-slate-500 dark:text-slate-400 uppercase tracking-wider font-bold flex items-center gap-1.5">
+              <i className="fa-regular fa-clock text-amber-500 dark:text-amber-400"></i>
+              Sisa Waktu
+            </span>
+            <span
+              className={`text-sm font-black font-mono tracking-tight ${
+                new Date(order.estimated_end_at).getTime() - now <= 0
+                  ? "text-rose-500 dark:text-rose-400"
+                  : "text-amber-600 dark:text-amber-400"
+              }`}
+            >
+              {(() => {
+                const remaining = Math.max(
+                  0,
+                  new Date(order.estimated_end_at!).getTime() - now
+                );
+                const h = Math.floor(remaining / 3600000);
+                const m = Math.floor((remaining % 3600000) / 60000);
+                const s = Math.floor((remaining % 60000) / 1000);
+                if (remaining === 0) return "SEGERA SELESAI";
+                return `${h > 0 ? h + ":" : ""}${m
+                  .toString()
+                  .padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
+              })()}
+            </span>
+          </div>
+
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] text-slate-500 dark:text-slate-400 uppercase tracking-wider font-bold flex items-center gap-1.5">
+              <i className="fa-solid fa-flag-checkered text-emerald-500 dark:text-emerald-400"></i>
+              Selesai Jam
+            </span>
+            <span className="text-sm font-black font-mono tracking-tight text-emerald-600 dark:text-emerald-400">
+              {new Date(order.estimated_end_at).toLocaleTimeString("id-ID", {
+                hour: "2-digit",
+                minute: "2-digit",
+              })}{" "}
+              WIB
+            </span>
+          </div>
+        </div>
+      )}
+
+      {order.queue_status === "waiting_confirm" && order.order_type === "progress" && (
+        <button
+          onClick={() => handleStartProgressOrder(order)}
+          disabled={isStarting}
+          className="w-full mt-3 bg-linear-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 disabled:opacity-50 text-white font-bold py-2.5 rounded-xl transition shadow-lg shadow-violet-600/30 flex items-center justify-center gap-2 text-sm"
+        >
+          {isStarting ? (
+            <>
+              <i className="fa-solid fa-spinner fa-spin"></i>
+              Memulai...
+            </>
+          ) : (
+            <>
+              <i className="fa-solid fa-play"></i>
+              Mulai Orderan
+            </>
+          )}
+        </button>
+      )}
+    </div>
   );
 }

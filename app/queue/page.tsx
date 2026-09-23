@@ -16,6 +16,11 @@ type QueueOrder = {
   estimated_end_at: string | null;
   schedule_date: string;
   schedule_time: string;
+  // ⭐ Field progress — TAMBAH 4 INI
+  order_type: string | null;
+  progress_keyword: string | null;
+  progress_count: number | null;
+  target_count: number | null;
 };
 
 export default function QueuePage() {
@@ -394,15 +399,34 @@ function EmptyState({ icon, text }: { icon: string; text: string }) {
 // ============================
 // PROCESSING CARD
 // ============================
+// ============================
+// PROCESSING CARD
+// ============================
 function ProcessingCard({ order, now }: { order: QueueOrder; now: number }) {
-  const endTime = order.estimated_end_at
-    ? new Date(order.estimated_end_at).getTime()
+  // ⭐ Detect progress order
+  const isProgressOrder =
+    order.order_type === "progress" ||
+    (order.progress_keyword != null && (order.target_count ?? 0) > 0);
+
+  // ⭐ Effective estimated end — null kalau progress order
+  const effectiveEstimatedEnd = isProgressOrder ? null : order.estimated_end_at;
+
+  const endTime = effectiveEstimatedEnd
+    ? new Date(effectiveEstimatedEnd).getTime()
     : 0;
   const remaining = Math.max(0, endTime - now);
   const hours = Math.floor(remaining / 3600000);
   const minutes = Math.floor((remaining % 3600000) / 60000);
   const seconds = Math.floor((remaining % 60000) / 1000);
-  const isOverdue = remaining === 0;
+
+  // ⭐ Overdue cuma buat countdown order
+  const isOverdue = !isProgressOrder && remaining === 0;
+
+  // ⭐ Progress percentage
+  const progressPercent =
+    isProgressOrder && order.target_count
+      ? Math.min(100, ((order.progress_count ?? 0) / order.target_count) * 100)
+      : 0;
 
   return (
     <Link
@@ -412,7 +436,11 @@ function ProcessingCard({ order, now }: { order: QueueOrder; now: number }) {
       <div className="flex items-start justify-between mb-4">
         <div className="flex items-center gap-3 min-w-0 flex-1">
           <div className="w-10 h-10 rounded-xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center shrink-0">
-            <i className="fa-solid fa-fire text-amber-400 text-sm"></i>
+            <i
+              className={`fa-solid ${
+                isProgressOrder ? "fa-egg" : "fa-fire"
+              } text-amber-400 text-sm`}
+            ></i>
           </div>
           <div className="min-w-0">
             <h3 className="font-extrabold text-base truncate">
@@ -433,33 +461,60 @@ function ProcessingCard({ order, now }: { order: QueueOrder; now: number }) {
         <p className="text-xs text-slate-400 mb-3 truncate">{order.product}</p>
       )}
 
-      <div className="pt-4 border-t border-slate-800/80">
-        <div className="flex items-center justify-between mb-2">
-          <span className="text-[11px] text-slate-400 font-semibold uppercase tracking-wider flex items-center gap-1.5">
-            <i className="fa-regular fa-clock text-amber-400"></i>
-            Sisa Waktu
-          </span>
-          {order.estimated_end_at && (
-            <span className="text-[10px] text-slate-500 font-mono">
-              {new Date(order.estimated_end_at).toLocaleTimeString("id-ID", {
-                hour: "2-digit",
-                minute: "2-digit",
-              })}
+      {/* ⭐ PROGRESS ORDER — tampilkan progress bar, bukan countdown */}
+      {isProgressOrder ? (
+        <div className="pt-4 border-t border-slate-800/80">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-[11px] text-slate-400 font-semibold uppercase tracking-wider flex items-center gap-1.5">
+              <i className="fa-solid fa-egg text-violet-400"></i>
+              Progress {(order.progress_keyword || "Egg").toUpperCase()}
             </span>
-          )}
+            <span className="text-sm font-black text-violet-300 font-mono">
+              {order.progress_count ?? 0} / {order.target_count ?? 0}
+            </span>
+          </div>
+          <div className="w-full h-2 bg-slate-950 rounded-full overflow-hidden border border-slate-800">
+            <div
+              className="h-full bg-linear-to-r from-violet-500 to-indigo-500 transition-all duration-500"
+              style={{ width: `${progressPercent}%` }}
+            />
+          </div>
+          <p className="text-[11px] text-slate-500 mt-2">
+            {progressPercent === 100
+              ? "🎉 Selesai!"
+              : `${Math.round(progressPercent)}% selesai`}
+          </p>
         </div>
-        <p
-          className={`text-2xl md:text-3xl font-black font-mono tracking-tight ${
-            isOverdue ? "text-rose-400" : "text-amber-400"
-          }`}
-        >
-          {isOverdue
-            ? "SEGERA SELESAI"
-            : `${hours > 0 ? hours + ":" : ""}${minutes
-                .toString()
-                .padStart(2, "0")}:${seconds.toString().padStart(2, "0")}`}
-        </p>
-      </div>
+      ) : (
+        // ⭐ COUNTDOWN ORDER — tampilkan timer kayak biasa
+        <div className="pt-4 border-t border-slate-800/80">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-[11px] text-slate-400 font-semibold uppercase tracking-wider flex items-center gap-1.5">
+              <i className="fa-regular fa-clock text-amber-400"></i>
+              Sisa Waktu
+            </span>
+            {order.estimated_end_at && (
+              <span className="text-[10px] text-slate-500 font-mono">
+                {new Date(order.estimated_end_at).toLocaleTimeString("id-ID", {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                })}
+              </span>
+            )}
+          </div>
+          <p
+            className={`text-2xl md:text-3xl font-black font-mono tracking-tight ${
+              isOverdue ? "text-rose-400" : "text-amber-400"
+            }`}
+          >
+            {isOverdue
+              ? "SEGERA SELESAI"
+              : `${hours > 0 ? hours + ":" : ""}${minutes
+                  .toString()
+                  .padStart(2, "0")}:${seconds.toString().padStart(2, "0")}`}
+          </p>
+        </div>
+      )}
 
       <div className="mt-3 pt-3 border-t border-slate-800/80 flex items-center justify-between text-[11px] text-slate-500">
         <span className="flex items-center gap-1.5">
