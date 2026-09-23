@@ -279,6 +279,13 @@ useEffect(() => {
   const isProcessing = order.queue_status === "processing";
   const isWaiting = order.queue_status === "waiting_confirm";
   const isQueued = order.queue_status === "queued";
+    // ⭐ Detect progress order — bedain dari countdown
+  const isProgressOrder = 
+    (order as any).order_type === "progress" ||
+    (order.progress_keyword != null && (order.target_count ?? 0) > 0);
+  
+  // Progress order: nggak ada countdown, jadi force remaining = 0 tapi jangan trigger overdue
+  const effectiveEstimatedEnd = isProgressOrder ? null : order.estimated_end_at;
 
   // ✅ Order dianggap "selesai" kalau:
   // 1. queue_status = "completed" (dari API check-completed)
@@ -286,18 +293,18 @@ useEffect(() => {
   const isCompleted =
     order.queue_status === "completed" || order.completed_by_bot === true;
 
-  const endTime = order.estimated_end_at
-    ? new Date(order.estimated_end_at).getTime()
+    const endTime = effectiveEstimatedEnd
+    ? new Date(effectiveEstimatedEnd).getTime()
     : 0;
   const remaining = Math.max(0, endTime - now);
   const hours = Math.floor(remaining / 3600000);
   const minutes = Math.floor((remaining % 3600000) / 60000);
   const seconds = Math.floor((remaining % 60000) / 1000);
 
-  // ✅ Cek dulu countdown udah lewat atau belum
-  const isOverdue = isProcessing && remaining === 0;
+  // ✅ Overdue cuma berlaku buat countdown order
+  const isOverdue = !isProgressOrder && isProcessing && remaining === 0;
 
-  const statusConfig = isCompleted
+    const statusConfig = isCompleted
     ? {
         bg: "bg-emerald-500/10",
         border: "border-emerald-500/40",
@@ -308,6 +315,19 @@ useEffect(() => {
         title: "SELESAI",
         subtitle: "Jokian sudah selesai, terimakasih!",
       }
+    // ⭐ PROGRESS ORDER — ada section khusus, tampilin status "PROGRESS"
+    : isProgressOrder && isProcessing
+    ? {
+        bg: "bg-violet-500/10",
+        border: "border-violet-500/40",
+        text: "text-violet-300",
+        iconBg: "bg-violet-500/20",
+        iconColor: "text-violet-400",
+        icon: "fa-solid fa-egg",
+        title: "SEDANG DIPROSES",
+        subtitle: `Progress: ${order.progress_count ?? 0}/${order.target_count ?? 0} ${(order.progress_keyword || "egg").toUpperCase()}`,
+      }
+    // Countdown order (existing logic)
     : isProcessing && isOverdue
     ? {
         bg: "bg-emerald-500/10",
@@ -403,8 +423,8 @@ useEffect(() => {
             <p className="text-sm text-slate-400">{statusConfig.subtitle}</p>
           </div>
 
-          {isProcessing && !isOverdue && !isCompleted && (
-            <div className="mt-6 pt-6 border-t border-amber-500/20">
+          {isProcessing && !isOverdue && !isCompleted && !isProgressOrder && (
+  <div className="mt-6 pt-6 border-t border-amber-500/20">
               <p className="text-[11px] text-slate-400 mb-2 text-center uppercase tracking-wider font-bold flex items-center justify-center gap-1.5">
                 <i className="fa-regular fa-clock"></i>
                 Estimasi Selesai
@@ -442,8 +462,8 @@ useEffect(() => {
           )}
 
           {/* ✅ Countdown lewat tapi status masih processing → pesan kalem */}
-          {isProcessing && isOverdue && !isCompleted && (
-            <div className="mt-6 pt-6 border-t border-emerald-500/20">
+          {isProcessing && isOverdue && !isCompleted && !isProgressOrder && (
+  <div className="mt-6 pt-6 border-t border-emerald-500/20">
               <div className="text-center">
                 <i className="fa-solid fa-circle-check text-emerald-400 text-3xl mb-3"></i>
                 <p className="text-sm text-slate-300 font-medium">
@@ -654,19 +674,29 @@ useEffect(() => {
               label="Joki"
               value={order.joki_name || "Ellan"}
             />
-            <DetailRow
-              icon="fa-regular fa-calendar"
-              label="Jadwal"
-              value={
-                order.schedule_date && order.schedule_time
-                  ? `${new Date(order.schedule_date).toLocaleDateString("id-ID", {
-                      day: "numeric",
-                      month: "long",
-                      year: "numeric",
-                    })} • ${order.schedule_time.slice(0, 5)} WIB`
-                  : "Belum dijadwalkan"
-              }
-            />
+            {isProgressOrder ? (
+  <DetailRow
+    icon="fa-solid fa-egg"
+    label="Progress"
+    value={`${order.progress_count ?? 0} / ${order.target_count ?? 0} ${
+      (order.progress_keyword || "egg").toUpperCase()
+    }`}
+  />
+) : (
+  <DetailRow
+    icon="fa-regular fa-calendar"
+    label="Jadwal"
+    value={
+      order.schedule_date && order.schedule_time
+        ? `${new Date(order.schedule_date).toLocaleDateString("id-ID", {
+            day: "numeric",
+            month: "long",
+            year: "numeric",
+          })} • ${order.schedule_time.slice(0, 5)} WIB`
+        : "Belum dijadwalkan"
+    }
+  />
+)}
           </div>
         </div>
 
