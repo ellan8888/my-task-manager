@@ -31,6 +31,8 @@ const BYPASS_PATHS = [
 "/api/push",         // ← TAMBAH INI
 "/api/reminder",     // ← TAMBAH INI
 "/api/get-accounts",
+"/api/eternal",           // ← TAMBAH INI
+  "/api/progress-keywords",
 ];
 
 export function middleware(request: NextRequest) {
