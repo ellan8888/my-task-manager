@@ -30,21 +30,31 @@ function verifySession(
 }
 
 // ============================================================
-// GET — List stock (support filter ?username=, ?kategori=, ?used=)
+// GET — List stock
+// ⭐ Support 2 mode auth:
+//    1. User (cookie auth_session)
+//    2. Bot (header x-bot-api-key)
 // ============================================================
 export async function GET(req: NextRequest) {
   try {
-    // ⭐ 1. Ambil session user
-    const signedValue = req.cookies.get("auth_session")?.value;
-    const session = signedValue
-      ? verifySession(signedValue, process.env.AUTH_SECRET!)
-      : null;
+    // ⭐ 1. Cek dulu apakah request dari BOT
+    const botApiKey = req.headers.get("x-bot-api-key");
+    const isBot = botApiKey === process.env.BOT_API_KEY;
 
-    if (!session) {
-      return NextResponse.json(
-        { success: false, message: "Unauthorized" },
-        { status: 401 }
-      );
+    // ⭐ 2. Kalau bukan bot, cek session cookie
+    let session: Record<string, any> | null = null;
+    if (!isBot) {
+      const signedValue = req.cookies.get("auth_session")?.value;
+      session = signedValue
+        ? verifySession(signedValue, process.env.AUTH_SECRET!)
+        : null;
+
+      if (!session) {
+        return NextResponse.json(
+          { success: false, message: "Unauthorized" },
+          { status: 401 }
+        );
+      }
     }
 
     const { searchParams } = new URL(req.url);
@@ -55,17 +65,19 @@ export async function GET(req: NextRequest) {
     const status = searchParams.get("status");
     const switched = searchParams.get("switched");
 
-    // ⭐ 2. Build query
+    // ⭐ 3. Build query
     let query = supabase
       .from("accounts_stock")
       .select("*")
       .eq("deleted", false);
 
-    // ⭐ 3. FILTER UTAMA: cuma data added_by = user yang login
-    //    (termasuk superadmin — lu mau admin juga cuma liat punya sendiri)
-    query = query.eq("added_by", session.username);
+    // ⭐ 4. FILTER added_by — HANYA kalau user (bukan bot)
+    //    Bot harus bisa liat SEMUA akun (buat jual semua user)
+    if (!isBot && session) {
+      query = query.eq("added_by", session.username);
+    }
 
-    // ⭐ 4. Filter tambahan
+    // ⭐ 5. Filter tambahan
     if (username) query = query.eq("username", username);
     if (kategori) query = query.eq("kategori", kategori);
     if (used !== null) query = query.eq("used", used === "true");
