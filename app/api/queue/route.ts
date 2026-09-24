@@ -1,3 +1,4 @@
+// app/api/queue/route.ts
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
@@ -10,7 +11,8 @@ export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const status = searchParams.get("status");
-    const orderType = searchParams.get("order_type");   // ⭐ BARU
+    const orderType = searchParams.get("order_type");
+    const manualComplete = searchParams.get("manual_complete_triggered");  // ⭐ BARU
     let order_id = searchParams.get("order_id");
 
     // ✅ CLEAN ORDER ID
@@ -20,9 +22,22 @@ export async function GET(request: Request) {
 
     let query = supabaseAdmin
       .from("joki_orders")
-      .select("*")
-      .eq("completed", false);
+      .select("*");
 
+    // ═══════════════════════════════════════════════════════════
+    // ⭐ LOGIC FILTER "completed"
+    //    - Kalau fetch manual_complete_triggered=true → JANGAN filter completed
+    //      (karena order yang di-trigger manual udah di-set completed=true)
+    //    - Selain itu → filter completed=false (default)
+    // ═══════════════════════════════════════════════════════════
+    if (manualComplete === "true") {
+      query = query.eq("manual_complete_triggered", true);
+      // ⚠️ JANGAN filter completed di sini
+    } else {
+      query = query.eq("completed", false);
+    }
+
+    // Filter by order_id (spesifik)
     if (order_id) {
       query = query.eq("order_id", order_id);
     } else if (status) {
@@ -34,6 +49,7 @@ export async function GET(request: Request) {
       query = query.eq("order_type", orderType);
     }
 
+    // Order
     if (status === "queued") {
       query = query.order("queue_position", { ascending: true });
     } else if (status === "processing") {
@@ -44,11 +60,13 @@ export async function GET(request: Request) {
 
     const { data, error } = await query;
 
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
 
     return NextResponse.json({
       count: data?.length || 0,
-      data: data || [],   // ⭐ GANTI dari "orders" jadi "data"
+      data: data || [],
     });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });

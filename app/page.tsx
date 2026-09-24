@@ -585,61 +585,62 @@ const { error } = await supabase.from("tasks").insert([newTask]);
   // ══════════════════════════════════════════════════════════════
 
   const handleCompleteOrder = async (order: JokiOrder) => {
-    showConfirm(
-      order.completed_by_bot ? "Konfirmasi Jokian Selesai?" : "Selesaikan Jokian?",
-      order.completed_by_bot
-        ? `Order "${order.roblox_username || "Pembeli"}" sudah selesai. Hapus dari daftar?`
-        : `Tandai jokian "${order.roblox_username || "Pembeli"}" sebagai selesai?`,
-      "success",
-      order.completed_by_bot ? "Ya, Konfirmasi" : "Ya, Selesai",
-      async () => {
-        closeConfirm();
+  const isAlreadyCompleted = 
+    order.completed_by_bot === true || 
+    order.queue_status === "completed";
 
-        setProcessingOrders((prev) => new Set(prev).add(order.id));
-        await new Promise((resolve) => setTimeout(resolve, 50));
+  showConfirm(
+    isAlreadyCompleted ? "Hapus dari Daftar?" : "Selesaikan Jokian Manual?",
+    isAlreadyCompleted
+      ? `Order "${order.roblox_username || "Pembeli"}" sudah selesai. Hapus dari daftar?`
+      : `Selesaikan jokian "${order.roblox_username || "Pembeli"}" sekarang?\n\nBot akan kirim chat konfirmasi ke buyer & klik "Joki Selesai" otomatis. Card bakal langsung hilang dari list.`,
+    "success",
+    isAlreadyCompleted ? "Ya, Hapus" : "Ya, Selesaikan",
+    async () => {
+      closeConfirm();
+      setProcessingOrders((prev) => new Set(prev).add(order.id));
 
-        try {
-          const res = await fetch("/api/queue/complete-order", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ order_id: order.order_id }),
-          });
-          const data = await res.json();
+      try {
+        const res = await fetch("/api/queue/manual-complete", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ order_id: order.order_id }),
+        });
+        const data = await res.json();
 
-          if (!data.success) {
-            console.error(data);
-            alert(data.message || "Gagal menyelesaikan Jokian!");
-            setProcessingOrders((prev) => {
-              const next = new Set(prev);
-              next.delete(order.id);
-              return next;
-            });
-            return;
-          }
-
-          await new Promise((resolve) => setTimeout(resolve, 700));
-
-          setJokiOrders((current) =>
-            current.filter((item) => item.id !== order.id)
-          );
-
+        if (!data.success) {
+          alert(data.message || "Gagal menyelesaikan");
           setProcessingOrders((prev) => {
             const next = new Set(prev);
             next.delete(order.id);
             return next;
           });
-        } catch (err) {
-          console.error(err);
-          alert("Terjadi kesalahan");
-          setProcessingOrders((prev) => {
-            const next = new Set(prev);
-            next.delete(order.id);
-            return next;
-          });
+          return;
         }
+
+        // ⭐ LANGSUNG hapus dari list — biar card hilang instan
+        setJokiOrders((current) =>
+          current.filter((item) => item.id !== order.id)
+        );
+
+        // Reset processing state
+        setProcessingOrders((prev) => {
+          const next = new Set(prev);
+          next.delete(order.id);
+          return next;
+        });
+      } catch (err) {
+        console.error(err);
+        alert("Terjadi kesalahan");
+        setProcessingOrders((prev) => {
+          const next = new Set(prev);
+          next.delete(order.id);
+          return next;
+        });
       }
-    );
-  };
+    }
+  );
+};
 
   const isUsernameUsedInOtherCards = (username: string, currentOrderId: number) => {
     return jokiOrders.some(
