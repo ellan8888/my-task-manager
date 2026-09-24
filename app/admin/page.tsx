@@ -6,6 +6,8 @@ import TopCustomers from "../components/TopCustomers";
 import { useSidebar } from "./SidebarContext";
 import { SkeletonStatsCard } from "@/app/components/Skeleton";
 import { PushNotificationButton } from "../components/PushNotificationButton";
+import WithdrawFormModal from "../components/WithdrawFormModal";
+import ApproveModal from "../components/ApproveModal";
 
 type IncomeStats = {
   hariIni: number;
@@ -67,6 +69,92 @@ export default function AdminPage() {
 
   const maskedCount = (num: number) =>
     showIncome ? String(num) : "•••";
+
+  // ⭐ SEMUA STATE DULU DI ATAS
+const [currentUser, setCurrentUser] = useState<{
+  username: string;
+  role: string;
+  display_name: string;
+} | null>(null);
+
+const [myBalance, setMyBalance] = useState<{
+  totalIncome: number;
+  totalWithdrawn: number;
+  sisa: number;
+} | null>(null);
+
+const [withdrawals, setWithdrawals] = useState<any[]>([]);
+const [pendingRequests, setPendingRequests] = useState<any[]>([]);
+const [showWithdrawModal, setShowWithdrawModal] = useState(false);
+const [approveModal, setApproveModal] = useState<any>(null);
+
+// ⭐ BARU useEffect
+useEffect(() => {
+  fetch("/api/auth/me")
+    .then((r) => r.json())
+    .then((data) => {
+      if (data.success && data.user) setCurrentUser(data.user);
+    })
+    .catch(console.error);
+}, []);
+
+// Fetch saldo sendiri (buat user biasa)
+useEffect(() => {
+  if (!currentUser || currentUser.role === "superadmin") return;
+
+  const fetchBalance = async () => {
+    try {
+      const [incomeRes, withdrawRes] = await Promise.all([
+        fetch("/api/stats/income/me"),
+        fetch("/api/withdrawals"),
+      ]);
+
+      const incomeData = await incomeRes.json();
+      const withdrawData = await withdrawRes.json();
+
+      const totalIncome = incomeData.total || 0;
+      const totalWithdrawn =
+        (withdrawData.totals?.[currentUser.username] || 0) +
+        (withdrawData.pendingTotals?.[currentUser.username] || 0);
+
+      setMyBalance({
+        totalIncome,
+        totalWithdrawn,
+        sisa: totalIncome - totalWithdrawn,
+      });
+
+      setWithdrawals(withdrawData.data || []);
+    } catch (err) {
+      console.error("Error fetch balance:", err);
+    }
+  };
+
+  fetchBalance();
+  const interval = setInterval(fetchBalance, 30000);
+  return () => clearInterval(interval);
+}, [currentUser]);
+
+// Fetch pending requests (buat superadmin)
+useEffect(() => {
+  if (!currentUser || currentUser.role !== "superadmin") return;
+
+  const fetchPending = async () => {
+    try {
+      const res = await fetch("/api/withdrawals?status=pending");
+      const data = await res.json();
+      if (data.success) {
+        setPendingRequests(data.data || []);
+        setWithdrawals(data.data || []);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  fetchPending();
+  const interval = setInterval(fetchPending, 30000);
+  return () => clearInterval(interval);
+}, [currentUser]);
 
   return (
     <>
@@ -224,6 +312,155 @@ export default function AdminPage() {
           )}
         </div>
 
+        {/* ⭐ PENDAPATAN SAYA — cuma buat user biasa */}
+{myBalance && currentUser?.role !== "superadmin" && (
+  <div className="bg-linear-to-br from-emerald-500/10 to-violet-500/10 dark:from-emerald-500/5 dark:to-violet-500/5 backdrop-blur-xl border border-emerald-200 dark:border-emerald-500/30 rounded-2xl p-6">
+    <div className="flex items-start justify-between gap-4 mb-6">
+      <div>
+        <h3 className="font-extrabold text-xl text-slate-900 dark:text-white flex items-center gap-2">
+          <i className="fa-solid fa-wallet text-emerald-600 dark:text-emerald-400"></i>
+          Pendapatan Saya
+        </h3>
+        <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+          Ajukan penarikan — admin akan transfer setelah approve
+        </p>
+      </div>
+
+      <button
+        onClick={() => setShowWithdrawModal(true)}
+        disabled={myBalance.sisa <= 0}
+        className="px-5 py-3 rounded-xl bg-linear-to-r from-emerald-600 to-green-600 hover:from-emerald-500 hover:to-green-500 disabled:from-slate-400 disabled:to-slate-500 disabled:cursor-not-allowed text-white font-bold shadow-lg shadow-emerald-600/30 transition flex items-center gap-2 shrink-0"
+      >
+        <i className="fa-solid fa-money-bill-transfer"></i>
+        Tarik
+      </button>
+    </div>
+
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="bg-white dark:bg-slate-900/50 rounded-xl p-4 border border-slate-200 dark:border-slate-800">
+        <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+          Total Pendapatan
+        </p>
+        <p className="text-2xl font-black text-slate-900 dark:text-white mt-2">
+          {showIncome ? formatRupiah(myBalance.totalIncome) : "Rp ••••••"}
+        </p>
+      </div>
+
+      <div className="bg-white dark:bg-slate-900/50 rounded-xl p-4 border border-slate-200 dark:border-slate-800">
+        <p className="text-xs font-bold text-rose-600 dark:text-rose-400 uppercase tracking-wider">
+          Udah Ditarik
+        </p>
+        <p className="text-2xl font-black text-rose-600 dark:text-rose-400 mt-2">
+          {showIncome ? formatRupiah(myBalance.totalWithdrawn) : "Rp ••••••"}
+        </p>
+      </div>
+
+      <div className="bg-linear-to-br from-emerald-500 to-green-600 rounded-xl p-4 text-white shadow-lg shadow-emerald-600/30">
+        <p className="text-xs font-bold uppercase tracking-wider opacity-90">
+          💰 Sisa Saldo
+        </p>
+        <p className="text-2xl font-black mt-2">
+          {showIncome ? formatRupiah(myBalance.sisa) : "Rp ••••••"}
+        </p>
+      </div>
+    </div>
+  </div>
+)}
+
+{/* ⭐ REQUEST PENDING — cuma buat superadmin */}
+{currentUser?.role === "superadmin" && pendingRequests.length > 0 && (
+  <div className="bg-white dark:bg-slate-900/50 backdrop-blur-xl border border-amber-200 dark:border-amber-500/30 rounded-2xl p-5 shadow-sm">
+    <h3 className="font-extrabold text-slate-900 dark:text-white flex items-center gap-2 mb-4">
+      <i className="fa-solid fa-hourglass-half text-amber-600 dark:text-amber-400"></i>
+      <span>Request Tarik Pending</span>
+      <span className="ml-auto text-xs bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-300 px-2.5 py-1 rounded-full font-bold">
+        {pendingRequests.length}
+      </span>
+    </h3>
+
+    <div className="space-y-2">
+      {pendingRequests.map((w) => (
+        <div
+          key={w.id}
+          className="flex items-center justify-between p-3 rounded-xl bg-amber-50 dark:bg-amber-500/5 border border-amber-200 dark:border-amber-500/20"
+        >
+          <div className="min-w-0">
+            <p className="text-sm font-bold text-slate-900 dark:text-white capitalize">
+              {w.joki_name}
+            </p>
+            <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
+              {new Date(w.requested_at).toLocaleString("id-ID", {
+                day: "numeric", month: "short", hour: "2-digit", minute: "2-digit",
+              })}
+              {w.note && ` • ${w.note}`}
+            </p>
+          </div>
+
+          <div className="flex items-center gap-3 shrink-0 ml-3">
+            <p className="text-base font-black text-amber-700 dark:text-amber-400">
+              {formatRupiah(w.amount)}
+            </p>
+            <button
+              onClick={() => setApproveModal(w)}
+              className="px-4 py-2 rounded-lg text-xs font-bold bg-linear-to-r from-emerald-600 to-green-600 hover:from-emerald-500 hover:to-green-500 text-white shadow-md transition"
+            >
+              <i className="fa-solid fa-check mr-1"></i>
+              Review
+            </button>
+          </div>
+        </div>
+      ))}
+    </div>
+  </div>
+)}
+
+{withdrawals.length > 0 && currentUser?.role !== "superadmin" && (
+  <div className="bg-white dark:bg-slate-900/50 backdrop-blur-xl border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-sm">
+    <h3 className="font-extrabold text-slate-900 dark:text-white flex items-center gap-2 mb-4">
+      <i className="fa-solid fa-clock-rotate-left text-amber-600 dark:text-amber-400"></i>
+      <span>History Penarikan Saya</span>
+    </h3>
+
+    <div className="space-y-2 max-h-96 overflow-y-auto">
+      {withdrawals.map((w) => (
+        <div
+          key={w.id}
+          className="flex items-center justify-between p-3 rounded-xl bg-slate-50 dark:bg-slate-950/50 border border-slate-200 dark:border-slate-800"
+        >
+          <div className="min-w-0">
+            <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
+              {new Date(w.requested_at).toLocaleString("id-ID", {
+                day: "numeric", month: "short", year: "numeric",
+                hour: "2-digit", minute: "2-digit",
+              })}
+              {w.note && ` • ${w.note}`}
+            </p>
+            {/* Status badge */}
+            {w.status === "pending" && (
+              <span className="inline-block mt-1 text-[10px] font-bold bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-300 px-2 py-0.5 rounded">
+                ⏳ PENDING
+              </span>
+            )}
+            {w.status === "approved" && (
+              <span className="inline-block mt-1 text-[10px] font-bold bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 px-2 py-0.5 rounded">
+                ✅ APPROVED
+              </span>
+            )}
+            {w.status === "rejected" && (
+              <span className="inline-block mt-1 text-[10px] font-bold bg-rose-100 dark:bg-rose-500/20 text-rose-700 dark:text-rose-300 px-2 py-0.5 rounded">
+                ❌ REJECTED
+              </span>
+            )}
+          </div>
+          <p className="text-sm font-black text-rose-600 dark:text-rose-400 shrink-0 ml-3">
+            -{showIncome ? formatRupiah(w.amount) : "Rp ••••••"}
+          </p>
+        </div>
+      ))}
+    </div>
+  </div>
+)}
+
         {/* Grafik Pendapatan */}
         <IncomeChart />
 
@@ -272,6 +509,66 @@ export default function AdminPage() {
           </div>
         )}
       </div>
+      {/* Modal Tarik (user) */}
+{showWithdrawModal && myBalance && (
+  <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-md z-50 flex items-center justify-center p-4">
+    <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 max-w-md w-full p-6 shadow-2xl">
+      <div className="flex justify-between items-center mb-5">
+        <div>
+          <h3 className="font-extrabold text-lg text-slate-900 dark:text-white">
+            💰 Request Tarik
+          </h3>
+          <p className="text-sm text-slate-500 dark:text-slate-400">
+            Sisa: {formatRupiah(myBalance.sisa)}
+          </p>
+        </div>
+        <button
+          onClick={() => setShowWithdrawModal(false)}
+          className="text-slate-400 hover:text-slate-900 dark:hover:text-white p-2 rounded-lg"
+        >
+          <i className="fa-solid fa-xmark text-lg"></i>
+        </button>
+      </div>
+
+      <WithdrawFormModal
+        maxAmount={myBalance.sisa}
+        onClose={() => setShowWithdrawModal(false)}
+        onSuccess={() => {
+          setShowWithdrawModal(false);
+          window.location.reload();
+        }}
+      />
+    </div>
+  </div>
+)}
+
+{/* Modal Approve (superadmin) */}
+{approveModal && (
+  <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-md z-50 flex items-center justify-center p-4">
+    <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 max-w-md w-full p-6 shadow-2xl">
+      <div className="flex justify-between items-center mb-5">
+        <h3 className="font-extrabold text-lg text-slate-900 dark:text-white">
+          Review Request
+        </h3>
+        <button
+          onClick={() => setApproveModal(null)}
+          className="text-slate-400 hover:text-slate-900 dark:hover:text-white p-2 rounded-lg"
+        >
+          <i className="fa-solid fa-xmark text-lg"></i>
+        </button>
+      </div>
+
+      <ApproveModal
+        withdrawal={approveModal}
+        onClose={() => setApproveModal(null)}
+        onSuccess={() => {
+          setApproveModal(null);
+          window.location.reload();
+        }}
+      />
+    </div>
+  </div>
+)}
     </>
   );
 }
