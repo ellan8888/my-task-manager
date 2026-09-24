@@ -264,11 +264,24 @@ export async function GET() {
           icon: "/icon-192.png",
         });
 
-      console.log(
-        `🚨 Mengirim reminder: ${task.title}`
+            // ⭐ FILTER subscription milik user ini
+      const userSubscriptions = subscriptions.filter(
+        (sub) => sub.username === task.username
       );
 
-      for (const subscription of subscriptions) {
+      if (userSubscriptions.length === 0) {
+        console.log(
+          `⚠️ User ${task.username} nggak punya subscription — skip task "${task.title}"`
+        );
+        skipped++;
+        continue;
+      }
+
+      console.log(
+        `🚨 Mengirim reminder: ${task.title} → ${userSubscriptions.length} device (user: ${task.username})`
+      );
+
+      for (const subscription of userSubscriptions) {
         try {
           await webpush.sendNotification(
             {
@@ -385,13 +398,30 @@ export async function GET() {
         icon: "/icon-192.png",
       });
 
-      let orderNotificationSent = false;
+            let orderNotificationSent = false;
+
+      // ⭐ FILTER subscription milik joki ini
+      const jokiSubscriptions = subscriptions.filter(
+        (sub) => sub.username === order.joki_name
+      );
+
+      if (jokiSubscriptions.length === 0) {
+        console.log(
+          `⚠️ Joki ${order.joki_name} nggak punya subscription — skip order ${order.order_id}`
+        );
+        skipped++;
+        continue;
+      }
+
+      console.log(
+        `🚨 Mengirim reminder Jokian: ${order.order_id} → ${jokiSubscriptions.length} device (joki: ${order.joki_name})`
+      );
 
       // =========================
-      // KIRIM KE SEMUA SUBSCRIPTION
+      // KIRIM KE SUBSCRIPTION JOKI
       // =========================
 
-      for (const subscription of subscriptions) {
+      for (const subscription of jokiSubscriptions) {
         try {
           await webpush.sendNotification(
             {
