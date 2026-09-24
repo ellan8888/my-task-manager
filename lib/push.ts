@@ -1,6 +1,6 @@
 import { supabase } from "@/lib/supabase";
 
-export async function registerPushSubscription() {
+export async function registerPushSubscription(username?: string) {
   if (!("serviceWorker" in navigator)) {
     throw new Error(
       "Service Worker tidak didukung browser."
@@ -57,6 +57,7 @@ export async function registerPushSubscription() {
     );
   }
 
+  // ⭐ SIMPAN username BERSAMA subscription
   const { error } = await supabase
     .from("push_subscriptions")
     .upsert(
@@ -64,6 +65,7 @@ export async function registerPushSubscription() {
         endpoint: subscriptionJSON.endpoint,
         p256dh: subscriptionJSON.keys.p256dh,
         auth: subscriptionJSON.keys.auth,
+        username: username || null,   // ⭐ TAMBAH INI
       },
       {
         onConflict: "endpoint",
@@ -80,7 +82,7 @@ export async function registerPushSubscription() {
   }
 
   console.log(
-    "✅ Push Subscription tersimpan di Supabase"
+    `✅ Push Subscription tersimpan (user: ${username || "unknown"})`
   );
 
   return subscription;

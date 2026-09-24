@@ -743,28 +743,37 @@ const { error } = await supabase.from("tasks").insert([newTask]);
   };
 
   const enableNotifications = async () => {
-    if (!("Notification" in window)) {
-      alert("Browser kamu tidak mendukung notifikasi.");
+  if (!("Notification" in window)) {
+    alert("Browser kamu tidak mendukung notifikasi.");
+    return;
+  }
+
+  try {
+    const permission = await Notification.requestPermission();
+    setNotificationPermission(permission);
+
+    if (permission !== "granted") {
+      alert("Permission notifikasi ditolak.");
       return;
     }
 
-    try {
-      const permission = await Notification.requestPermission();
-      setNotificationPermission(permission);
-
-      if (permission !== "granted") {
-        alert("Permission notifikasi ditolak.");
-        return;
-      }
-
-      const subscription = await registerPushSubscription();
-      console.log("Subscription:", JSON.stringify(subscription));
-      alert("Push notification berhasil diaktifkan!");
-    } catch (error) {
-      console.error("Gagal mengaktifkan push notification:", error);
-      alert("Gagal mengaktifkan push notification. Cek Console.");
+    // ⭐ Validasi user udah ready
+    if (!currentUser?.username) {
+      alert("User belum siap. Coba refresh halaman.");
+      return;
     }
-  };
+
+    // ⭐ PASS USERNAME
+    const subscription = await registerPushSubscription(
+      currentUser.username
+    );
+    console.log("Subscription:", JSON.stringify(subscription));
+    alert("Push notification berhasil diaktifkan!");
+  } catch (error) {
+    console.error("Gagal mengaktifkan push notification:", error);
+    alert("Gagal mengaktifkan push notification. Cek Console.");
+  }
+};
 
   // ══════════════════════════════════════════════════════════════
   // HELPERS
