@@ -593,7 +593,7 @@ const { error } = await supabase.from("tasks").insert([newTask]);
     isAlreadyCompleted ? "Hapus dari Daftar?" : "Selesaikan Jokian Manual?",
     isAlreadyCompleted
       ? `Order "${order.roblox_username || "Pembeli"}" sudah selesai. Hapus dari daftar?`
-      : `Selesaikan jokian "${order.roblox_username || "Pembeli"}" sekarang?\n\nBot akan kirim chat konfirmasi ke buyer & klik "Joki Selesai" otomatis. Card bakal langsung hilang dari list.`,
+      : `Selesaikan jokian "${order.roblox_username || "Pembeli"}" sekarang?\n\nAkun akan dihapus dari RAM & bot akan kirim chat konfirmasi ke buyer.`,
     "success",
     isAlreadyCompleted ? "Ya, Hapus" : "Ya, Selesaikan",
     async () => {
@@ -601,15 +601,38 @@ const { error } = await supabase.from("tasks").insert([newTask]);
       setProcessingOrders((prev) => new Set(prev).add(order.id));
 
       try {
-        const res = await fetch("/api/queue/manual-complete", {
+        // ⭐ STEP 1: Set flag manual_complete_triggered (buat bot progress)
+        const resManual = await fetch("/api/queue/manual-complete", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ order_id: order.order_id }),
         });
-        const data = await res.json();
+        const dataManual = await resManual.json().catch(() => null);
+        console.log("[handleCompleteOrder] manual-complete:", dataManual);
 
-        if (!data.success) {
-          alert(data.message || "Gagal menyelesaikan");
+        // ⭐ STEP 2: Jeda 500ms biar bot sempet baca flag
+        await new Promise((r) => setTimeout(r, 500));
+
+        // ⭐ STEP 3: Hapus RAM + delete row (sistem lama)
+        const resComplete = await fetch("/api/queue/complete-order", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ order_id: order.order_id }),
+        });
+        const dataComplete = await resComplete.json().catch(() => null);
+        console.log("[handleCompleteOrder] complete-order:", dataComplete);
+
+        // Sukses kalau salah satu berhasil
+        const anySuccess =
+          (dataManual && dataManual.success) ||
+          (dataComplete && dataComplete.success);
+
+        if (!anySuccess) {
+          alert(
+            dataManual?.message ||
+            dataComplete?.message ||
+            "Gagal menyelesaikan order"
+          );
           setProcessingOrders((prev) => {
             const next = new Set(prev);
             next.delete(order.id);
@@ -618,12 +641,11 @@ const { error } = await supabase.from("tasks").insert([newTask]);
           return;
         }
 
-        // ⭐ LANGSUNG hapus dari list — biar card hilang instan
+        // Hapus card dari list lokal (instan)
         setJokiOrders((current) =>
           current.filter((item) => item.id !== order.id)
         );
 
-        // Reset processing state
         setProcessingOrders((prev) => {
           const next = new Set(prev);
           next.delete(order.id);
