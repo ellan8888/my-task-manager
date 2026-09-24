@@ -1,21 +1,12 @@
-// app/api/queue/start-progress/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import fs from "fs";
-import path from "path";
 
-// ⭐ Path file — HARUS SAMA dengan yang dibaca bot Python
-const START_PROGRESS_FILE = path.join(
-  process.cwd(),
-  "start_progress_from_dashboard.json"
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,       // ⭐ GANTI ENV VAR
+  process.env.SUPABASE_SERVICE_ROLE_KEY!       // ⭐ GANTI ENV VAR
 );
 
 export async function POST(req: NextRequest) {
-  const supabase = createClient(
-    process.env.SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_KEY!
-  );
-
   try {
     const { order_id } = await req.json();
 
@@ -26,11 +17,14 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Clean order_id
+    const cleanedOrderId = order_id.replace(/\s*\([A-Z]{2}\)\s*$/, "").trim();
+
     // 1. Ambil order
     const { data: order, error: fetchErr } = await supabase
       .from("joki_orders")
       .select("*")
-      .eq("order_id", order_id)
+      .eq("order_id", cleanedOrderId)
       .single();
 
     if (fetchErr || !order) {
@@ -40,7 +34,6 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 2. Cek order progress
     if (order.order_type !== "progress") {
       return NextResponse.json(
         { success: false, message: "Bukan order progress" },
@@ -48,14 +41,16 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 3. Update status ke processing
+    // ⭐ 2. Update DB: queue_status = "processing" + RESET start_chat_sent = false
+    // ⭐ INI YANG BIKIN BOT DETECT & KIRIM CHAT
     const { error: updateErr } = await supabase
       .from("joki_orders")
       .update({
         queue_status: "processing",
         processing_started_at: new Date().toISOString(),
+        start_chat_sent: false,   // ⭐ RESET — biar bot kirim chat
       })
-      .eq("order_id", order_id);
+      .eq("order_id", cleanedOrderId);
 
     if (updateErr) {
       return NextResponse.json(
@@ -64,58 +59,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // ═══════════════════════════════════════════════════════════
-    // ⭐ 4. TULIS FILE — INI YANG BOT PYTHON BACA
-    // ═══════════════════════════════════════════════════════════
-    try {
-      let existing: any[] = [];
-
-      if (fs.existsSync(START_PROGRESS_FILE)) {
-        try {
-          const raw = fs.readFileSync(START_PROGRESS_FILE, "utf-8");
-          existing = JSON.parse(raw);
-          if (!Array.isArray(existing)) existing = [];
-        } catch {
-          existing = [];
-        }
-      }
-
-      // Cek duplikat
-      const alreadyExists = existing.some(
-        (e: any) => e.order_id === order_id
-      );
-
-      if (!alreadyExists) {
-        existing.push({
-          order_id: order_id,
-          label: order.progress_keyword
-            ? order.progress_keyword.charAt(0).toUpperCase() +
-              order.progress_keyword.slice(1) +
-              " Egg"
-            : "Eternal Egg",
-          target_count: order.target_count ?? 10,
-          requested_at: new Date().toISOString(),
-        });
-
-        fs.writeFileSync(
-          START_PROGRESS_FILE,
-          JSON.stringify(existing, null, 2),
-          "utf-8"
-        );
-
-        console.log(
-          `[start-progress] ✅ File ditulis: ${START_PROGRESS_FILE}`
-        );
-      } else {
-        console.log(
-          `[start-progress] ⏭️ Order ${order_id} udah ada di file — skip`
-        );
-      }
-    } catch (fileErr: any) {
-      console.error("[start-progress] ❌ Gagal tulis file:", fileErr);
-    }
-
-    // 5. Kirim webhook ke Discord (opsional)
+    // 3. Kirim webhook Discord (opsional)
     const webhookUrl = process.env.START_QUEUE_WEBHOOK_URL;
     if (webhookUrl) {
       try {
@@ -129,22 +73,10 @@ export async function POST(req: NextRequest) {
                 title: "🚀 Order Progress Di-Start",
                 color: 0x9b59b6,
                 fields: [
-                  { name: "🆔 Order ID", value: order_id, inline: false },
-                  {
-                    name: "👤 Username",
-                    value: order.roblox_username || "-",
-                    inline: true,
-                  },
-                  {
-                    name: "🎯 Rarity",
-                    value: order.progress_keyword || "-",
-                    inline: true,
-                  },
-                  {
-                    name: "📦 Target",
-                    value: `${order.progress_count || 0}/${order.target_count || 0}`,
-                    inline: true,
-                  },
+                  { name: "🆔 Order ID", value: cleanedOrderId, inline: false },
+                  { name: "👤 Username", value: order.roblox_username || "-", inline: true },
+                  { name: "🎯 Rarity", value: order.progress_keyword || "-", inline: true },
+                  { name: "📦 Target", value: `${order.progress_count || 0}/${order.target_count || 0}`, inline: true },
                 ],
                 footer: { text: "Task Manager → Start Progress" },
                 timestamp: new Date().toISOString(),
@@ -159,7 +91,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      order_id,
+      order_id: cleanedOrderId,
       queue_status: "processing",
       message: "Order berhasil dimulai",
     });
