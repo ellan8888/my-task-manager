@@ -1414,19 +1414,30 @@ const { error } = await supabase.from("tasks").insert([newTask]);
                         </span>
                       </div>
                       <div>
-                        <label className="mb-1.5 block text-sm font-medium text-slate-700 dark:text-slate-300">
-                          Default Daily Reminder
-                        </label>
-                        <input
-                          type="time"
-                          value={defaultReminder}
-                          onChange={(e) => updateDefaultReminder(e.target.value)}
-                          className="w-full rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 px-4 py-3 text-sm text-slate-900 dark:text-slate-200 outline-none transition focus:border-violet-500"
-                        />
-                        <p className="mt-1 text-xs text-slate-500">
-                          Waktu ini akan menjadi default saat membuat task baru.
-                        </p>
-                      </div>
+  <label className="mb-1.5 block text-sm font-medium text-slate-700 dark:text-slate-300">
+    Default Daily Reminder
+  </label>
+  <div className="relative">
+    <input
+      type="text"
+      value={defaultReminder}
+      onChange={(e) => {
+        let val = e.target.value.replace(/[^0-9:]/g, "");
+        if (val.length === 2 && !val.includes(":")) {
+          val = val + ":";
+        }
+        updateDefaultReminder(val.slice(0, 5));
+      }}
+      placeholder="20:00"
+      maxLength={5}
+      className="w-full rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 px-4 py-3 pr-11 text-sm text-slate-900 dark:text-slate-200 outline-none transition focus:border-violet-500 font-mono"
+    />
+    <i className="fa-regular fa-clock absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 text-sm pointer-events-none"></i>
+  </div>
+  <p className="mt-1 text-xs text-slate-500">
+    Format 24 jam (HH:MM), contoh: <span className="font-mono">20:00</span>
+  </p>
+</div>
                       {notificationPermission !== "granted" && (
                         <button
                           onClick={enableNotifications}
