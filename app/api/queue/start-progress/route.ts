@@ -1,6 +1,14 @@
 // app/api/queue/start-progress/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import fs from "fs";
+import path from "path";
+
+// ⭐ Path file — HARUS SAMA dengan yang dibaca bot Python
+const START_PROGRESS_FILE = path.join(
+  process.cwd(),
+  "start_progress_from_dashboard.json"
+);
 
 export async function POST(req: NextRequest) {
   const supabase = createClient(
@@ -56,7 +64,58 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 4. Kirim webhook ke Discord → bot.py bakal baca & bikin file
+    // ═══════════════════════════════════════════════════════════
+    // ⭐ 4. TULIS FILE — INI YANG BOT PYTHON BACA
+    // ═══════════════════════════════════════════════════════════
+    try {
+      let existing: any[] = [];
+
+      if (fs.existsSync(START_PROGRESS_FILE)) {
+        try {
+          const raw = fs.readFileSync(START_PROGRESS_FILE, "utf-8");
+          existing = JSON.parse(raw);
+          if (!Array.isArray(existing)) existing = [];
+        } catch {
+          existing = [];
+        }
+      }
+
+      // Cek duplikat
+      const alreadyExists = existing.some(
+        (e: any) => e.order_id === order_id
+      );
+
+      if (!alreadyExists) {
+        existing.push({
+          order_id: order_id,
+          label: order.progress_keyword
+            ? order.progress_keyword.charAt(0).toUpperCase() +
+              order.progress_keyword.slice(1) +
+              " Egg"
+            : "Eternal Egg",
+          target_count: order.target_count ?? 10,
+          requested_at: new Date().toISOString(),
+        });
+
+        fs.writeFileSync(
+          START_PROGRESS_FILE,
+          JSON.stringify(existing, null, 2),
+          "utf-8"
+        );
+
+        console.log(
+          `[start-progress] ✅ File ditulis: ${START_PROGRESS_FILE}`
+        );
+      } else {
+        console.log(
+          `[start-progress] ⏭️ Order ${order_id} udah ada di file — skip`
+        );
+      }
+    } catch (fileErr: any) {
+      console.error("[start-progress] ❌ Gagal tulis file:", fileErr);
+    }
+
+    // 5. Kirim webhook ke Discord (opsional)
     const webhookUrl = process.env.START_QUEUE_WEBHOOK_URL;
     if (webhookUrl) {
       try {
@@ -71,10 +130,21 @@ export async function POST(req: NextRequest) {
                 color: 0x9b59b6,
                 fields: [
                   { name: "🆔 Order ID", value: order_id, inline: false },
-                  { name: "👤 Username", value: order.roblox_username || "-", inline: true },
-                  { name: "🎯 Rarity", value: order.progress_keyword || "-", inline: true },
-                  { name: "📦 Target", value: `${order.progress_count || 0}/${order.target_count || 0}`, inline: true },
-                  { name: "📝 Produk", value: order.product || "-", inline: false },
+                  {
+                    name: "👤 Username",
+                    value: order.roblox_username || "-",
+                    inline: true,
+                  },
+                  {
+                    name: "🎯 Rarity",
+                    value: order.progress_keyword || "-",
+                    inline: true,
+                  },
+                  {
+                    name: "📦 Target",
+                    value: `${order.progress_count || 0}/${order.target_count || 0}`,
+                    inline: true,
+                  },
                 ],
                 footer: { text: "Task Manager → Start Progress" },
                 timestamp: new Date().toISOString(),
@@ -84,7 +154,6 @@ export async function POST(req: NextRequest) {
         });
       } catch (err) {
         console.error("[start-progress] Gagal kirim webhook:", err);
-        // Lanjut aja — jangan fail karena webhook error
       }
     }
 
