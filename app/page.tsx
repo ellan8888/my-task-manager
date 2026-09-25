@@ -904,7 +904,7 @@ const { error } = await supabase.from("tasks").insert([newTask]);
     return false;
   });
 
-    const progressJokiOrders = filteredJokiOrders
+  const progressJokiOrders = filteredJokiOrders
     .filter((o) => {
       const isProgressOrder =
         o.order_type === "progress" ||
@@ -912,17 +912,13 @@ const { error } = await supabase.from("tasks").insert([newTask]);
       return isProgressOrder;
     })
     .sort((a, b) => {
-      // ⭐ Card yang masih "waiting_confirm" (belum di-start) → paling bawah
       const aWaiting = a.queue_status === "waiting_confirm" ? 1 : 0;
       const bWaiting = b.queue_status === "waiting_confirm" ? 1 : 0;
 
-      // Yang waiting_confirm (1) turun ke bawah, yang processing (0) naik ke atas
       if (aWaiting !== bWaiting) {
         return aWaiting - bWaiting;
       }
 
-      // Kalau sama-sama processing atau sama-sama waiting:
-      // yang lebih baru (created_at) muncul di atas
       return (
         new Date(b.created_at).getTime() -
         new Date(a.created_at).getTime()
