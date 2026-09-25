@@ -1,7 +1,31 @@
-// app/api/queue/settings/route.ts
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
+import crypto from "crypto";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
+
+// ⭐ Helper verify session — SAMA kayak auth/check
+function verifySession(
+  signedValue: string,
+  secret: string
+): Record<string, any> | null {
+  const parts = signedValue.split(".");
+  if (parts.length < 2) return null;
+
+  const signature = parts[parts.length - 1];
+  const value = parts.slice(0, -1).join(".");
+
+  const hmac = crypto.createHmac("sha256", secret);
+  hmac.update(value);
+  const expectedSig = hmac.digest("hex");
+
+  if (signature !== expectedSig) return null;
+
+  try {
+    return JSON.parse(value);
+  } catch {
+    return null;
+  }
+}
 
 // GET — ambil setting (publik, siapa saja boleh baca)
 export async function GET() {
@@ -35,12 +59,23 @@ export async function GET() {
 // POST — update setting (HANYA ADMIN)
 export async function POST(request: Request) {
   try {
-    // 1. Cek auth
+    // ⭐ 1. Cek auth — pakai verifySession (SAMA kayak auth/check)
     const cookieStore = await cookies();
-    const session = cookieStore.get("auth_session")?.value;
+    const signedValue = cookieStore.get("auth_session")?.value;
 
-    if (session !== process.env.AUTH_SECRET) {
+    if (!signedValue) {
       return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+    }
+
+    const session = verifySession(signedValue, process.env.AUTH_SECRET!);
+
+    if (!session) {
+      return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+    }
+
+    // ⭐ Cuma superadmin yang boleh update
+    if (session.role !== "superadmin") {
+      return NextResponse.json({ message: "Forbidden" }, { status: 403 });
     }
 
     // 2. Ambil body

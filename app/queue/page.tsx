@@ -111,10 +111,19 @@ const updateMaxParallel = async (newValue: number) => {
   }
 };
 
-  const processing = orders.filter((o) => o.queue_status === "processing");
+  // ⭐ Helper: cek progress order
+  const isProgressOrder = (o: QueueOrder) =>
+    o.order_type === "progress" ||
+    (o.progress_keyword != null && (o.target_count ?? 0) > 0);
+
+  // ⭐ Processing — split jadi countdown & progress
+  const processingAll = orders.filter((o) => o.queue_status === "processing");
+  const processingCountdown = processingAll.filter((o) => !isProgressOrder(o));
+  const processingProgress = processingAll.filter((o) => isProgressOrder(o));
+
   const waiting = orders.filter((o) => o.queue_status === "waiting_confirm");
   const queued = orders.filter((o) => o.queue_status === "queued");
-  const totalActive = processing.length + waiting.length;
+  const totalActive = processingAll.length + waiting.length;
 
   return (
     <>
@@ -249,25 +258,69 @@ body::-webkit-scrollbar {
 
           {!loading && (
             <>
-              {/* PROCESSING */}
+                            {/* PROCESSING */}
               <section>
                 <SectionHeader
                   icon="fa-fire"
                   title="Sedang Diproses"
-                  count={processing.length}
+                  count={processingAll.length}
                   color="amber"
                 />
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {processing.length === 0 ? (
-                    <EmptyState
-                      icon="fa-circle-notch"
-                      text="Tidak ada jokian yang sedang diproses"
-                    />
-                  ) : (
-                    processing.map((order) => (
-                      <ProcessingCard key={order.id} order={order} now={now} />
-                    ))
-                  )}
+
+                {/* ⭐ SUB-SECTION: COUNTDOWN */}
+                <div className="mb-6">
+                  <div className="flex items-center gap-2 mb-3 pl-2 border-l-2 border-amber-500/50">
+                    <div className="w-7 h-7 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center">
+                      <i className="fa-solid fa-hourglass-half text-amber-400 text-xs"></i>
+                    </div>
+                    <h3 className="text-sm font-bold text-slate-300">
+                      Countdown
+                    </h3>
+                    <span className="text-[10px] font-bold text-amber-300 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-full">
+                      {processingCountdown.length}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {processingCountdown.length === 0 ? (
+                      <EmptyState
+                        icon="fa-circle-notch"
+                        text="Tidak ada jokian countdown"
+                      />
+                    ) : (
+                      processingCountdown.map((order) => (
+                        <ProcessingCard key={order.id} order={order} now={now} />
+                      ))
+                    )}
+                  </div>
+                </div>
+
+                {/* ⭐ SUB-SECTION: PROGRESS */}
+                <div>
+                  <div className="flex items-center gap-2 mb-3 pl-2 border-l-2 border-violet-500/50">
+                    <div className="w-7 h-7 rounded-lg bg-violet-500/10 border border-violet-500/20 flex items-center justify-center">
+                      <i className="fa-solid fa-egg text-violet-400 text-xs"></i>
+                    </div>
+                    <h3 className="text-sm font-bold text-slate-300">
+                      Progress
+                    </h3>
+                    <span className="text-[10px] font-bold text-violet-300 bg-violet-500/10 border border-violet-500/20 px-2 py-0.5 rounded-full">
+                      {processingProgress.length}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {processingProgress.length === 0 ? (
+                      <EmptyState
+                        icon="fa-circle-notch"
+                        text="Tidak ada jokian progress"
+                      />
+                    ) : (
+                      processingProgress.map((order) => (
+                        <ProcessingCard key={order.id} order={order} now={now} />
+                      ))
+                    )}
+                  </div>
                 </div>
               </section>
 

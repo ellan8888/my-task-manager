@@ -892,15 +892,42 @@ const { error } = await supabase.from("tasks").insert([newTask]);
   });
 
   // ⭐ Split jadi 2 — sudah dijadwalkan vs belum dijadwalkan
-  const scheduledJokiOrders = filteredJokiOrders.filter((o) => {
+    // ⭐ Split jadi 3 — countdown, progress, belum dijadwalkan
+  const countdownJokiOrders = filteredJokiOrders.filter((o) => {
     const isProgressOrder =
       o.order_type === "progress" ||
       (o.progress_keyword != null && (o.target_count ?? 0) > 0);
-    if (isProgressOrder) return true;
+    if (isProgressOrder) return false;   // progress → ke section lain
+    // Countdown: punya estimated_end_at ATAU sudah selesai
     if (o.estimated_end_at) return true;
     if (o.completed_by_bot || o.queue_status === "completed") return true;
     return false;
   });
+
+    const progressJokiOrders = filteredJokiOrders
+    .filter((o) => {
+      const isProgressOrder =
+        o.order_type === "progress" ||
+        (o.progress_keyword != null && (o.target_count ?? 0) > 0);
+      return isProgressOrder;
+    })
+    .sort((a, b) => {
+      // ⭐ Card yang masih "waiting_confirm" (belum di-start) → paling bawah
+      const aWaiting = a.queue_status === "waiting_confirm" ? 1 : 0;
+      const bWaiting = b.queue_status === "waiting_confirm" ? 1 : 0;
+
+      // Yang waiting_confirm (1) turun ke bawah, yang processing (0) naik ke atas
+      if (aWaiting !== bWaiting) {
+        return aWaiting - bWaiting;
+      }
+
+      // Kalau sama-sama processing atau sama-sama waiting:
+      // yang lebih baru (created_at) muncul di atas
+      return (
+        new Date(b.created_at).getTime() -
+        new Date(a.created_at).getTime()
+      );
+    });
 
   const unscheduledJokiOrders = filteredJokiOrders.filter((o) => {
     const isProgressOrder =
@@ -1725,35 +1752,86 @@ const { error } = await supabase.from("tasks").insert([newTask]);
                     </section>
                   )}
 
-                  {/* ══════════════════════════════════════════════════════ */}
-                  {/* SECTION 1: JADWAL JOKIAN (yang udah dijadwalkan)      */}
+                                    {/* ══════════════════════════════════════════════════════ */}
+                  {/* SECTION 1A: JADWAL JOKIAN — COUNTDOWN                  */}
                   {/* ══════════════════════════════════════════════════════ */}
                   <section className="px-4 md:px-8">
                     <div className="sticky top-0 z-20 -mx-4 md:-mx-8 px-4 md:px-8 py-3 bg-slate-100 dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800/60">
                       <h3 className="text-sm font-bold text-slate-700 dark:text-slate-300 flex items-center gap-2">
-                        <i className="fa-solid fa-gamepad text-violet-600 dark:text-violet-400"></i>
-                        <span>Jadwal Jokian</span>
+                        <i className="fa-solid fa-hourglass-half text-violet-600 dark:text-violet-400"></i>
+                        <span>Jadwal Jokian (Countdown)</span>
                         <span className="text-xs font-bold bg-violet-100 dark:bg-violet-500/20 text-violet-700 dark:text-violet-300 px-2 py-0.5 rounded-full">
-                          {scheduledJokiOrders.length}
+                          {countdownJokiOrders.length}
                         </span>
                       </h3>
                     </div>
 
                     <div className="pt-4 pb-6 space-y-3.5">
-                      {scheduledJokiOrders.length === 0 ? (
+                      {countdownJokiOrders.length === 0 ? (
                         <div className="bg-white dark:bg-slate-900/50 backdrop-blur-xl border border-slate-200 dark:border-slate-800 rounded-3xl p-12 text-center">
-                          <div className="w-16 h-16 rounded-2xl bg-violet-100 dark:bg-violet-600/10 text-violet-600 dark:text-violet-400 flex items-center justify-center mx-auto mb-4 border border-violet-200 dark:border-violet-500/20">
-                            <i className="fa-solid fa-folder-open text-2xl"></i>
+                          <div className="w-16 h-16 rounded-2xl bg-amber-100 dark:bg-amber-600/10 text-amber-600 dark:text-amber-400 flex items-center justify-center mx-auto mb-4 border border-amber-200 dark:border-amber-500/20">
+                            <i className="fa-solid fa-hourglass-half text-2xl"></i>
                           </div>
                           <h4 className="font-bold text-slate-700 dark:text-slate-200 text-base">
-                            Tidak ada jadwal jokian aktif
+                            Tidak ada jadwal countdown aktif
                           </h4>
                           <p className="text-xs text-slate-500 mt-1">
-                            Order yang sudah dijadwalkan akan muncul di sini.
+                            Order joki dengan countdown akan muncul di sini.
                           </p>
                         </div>
                       ) : (
-                        scheduledJokiOrders.map((order) => (
+                        countdownJokiOrders.map((order) => (
+                          <JokiOrderCard
+                            key={order.id}
+                            order={order}
+                            now={now}
+                            isProcessing={processingOrders.has(order.id)}
+                            isStarting={startingOrders.has(order.id)}
+                            isAdmin={true}
+                            editingUsername={editingUsername}
+                            ramAccounts={ramAccounts}
+                            loadingAccounts={loadingAccounts}
+                            setEditingUsername={setEditingUsername}
+                            fetchRamAccounts={fetchRamAccounts}
+                            updateOrderUsername={updateOrderUsername}
+                            handleCompleteOrder={handleCompleteOrder}
+                            handleStartProgressOrder={handleStartProgressOrder}
+                            isUsernameUsedInOtherCards={isUsernameUsedInOtherCards}
+                          />
+                        ))
+                      )}
+                    </div>
+                  </section>
+
+                  {/* ══════════════════════════════════════════════════════ */}
+                  {/* SECTION 1B: PROGRESS ORDER                             */}
+                  {/* ══════════════════════════════════════════════════════ */}
+                  <section className="px-4 md:px-8">
+                    <div className="sticky top-0 z-20 -mx-4 md:-mx-8 px-4 md:px-8 py-3 bg-slate-100 dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800/60">
+                      <h3 className="text-sm font-bold text-slate-700 dark:text-slate-300 flex items-center gap-2">
+                        <i className="fa-solid fa-egg text-violet-600 dark:text-violet-400"></i>
+                        <span>Progress Order</span>
+                        <span className="text-xs font-bold bg-violet-100 dark:bg-violet-500/20 text-violet-700 dark:text-violet-300 px-2 py-0.5 rounded-full">
+                          {progressJokiOrders.length}
+                        </span>
+                      </h3>
+                    </div>
+
+                    <div className="pt-4 pb-6 space-y-3.5">
+                      {progressJokiOrders.length === 0 ? (
+                        <div className="bg-white dark:bg-slate-900/50 backdrop-blur-xl border border-slate-200 dark:border-slate-800 rounded-3xl p-12 text-center">
+                          <div className="w-16 h-16 rounded-2xl bg-violet-100 dark:bg-violet-600/10 text-violet-600 dark:text-violet-400 flex items-center justify-center mx-auto mb-4 border border-violet-200 dark:border-violet-500/20">
+                            <i className="fa-solid fa-egg text-2xl"></i>
+                          </div>
+                          <h4 className="font-bold text-slate-700 dark:text-slate-200 text-base">
+                            Tidak ada progress order aktif
+                          </h4>
+                          <p className="text-xs text-slate-500 mt-1">
+                            Order progress (egg/eternal) akan muncul di sini.
+                          </p>
+                        </div>
+                      ) : (
+                        progressJokiOrders.map((order) => (
                           <JokiOrderCard
                             key={order.id}
                             order={order}
