@@ -51,8 +51,8 @@ export async function POST(req: NextRequest) {
       .update({
         manual_complete_triggered: true,
         manual_complete_at: new Date().toISOString(),
-        completed: true,                     // ⭐ INI YANG BIKIN CARD HILANG
-        completed_at: new Date().toISOString(),
+        // completed: true,                     // ⭐ INI YANG BIKIN CARD HILANG
+        // completed_at: new Date().toISOString(),
       })
       .eq("order_id", order_id);
 

@@ -593,15 +593,45 @@ const { error } = await supabase.from("tasks").insert([newTask]);
     isAlreadyCompleted ? "Hapus dari Daftar?" : "Selesaikan Jokian Manual?",
     isAlreadyCompleted
       ? `Order "${order.roblox_username || "Pembeli"}" sudah selesai. Hapus dari daftar?`
-      : `Selesaikan jokian "${order.roblox_username || "Pembeli"}" sekarang?\n\nAkun akan dihapus dari RAM & bot akan kirim chat konfirmasi ke buyer.`,
+      : `Selesaikan jokian "${order.roblox_username || "Pembeli"}" sekarang?\n\nBot akan proses selesai & kirim chat konfirmasi ke buyer.`,
     "success",
     isAlreadyCompleted ? "Ya, Hapus" : "Ya, Selesaikan",
     async () => {
       closeConfirm();
-      setProcessingOrders((prev) => new Set(prev).add(order.id));
+
+      // ═══════════════════════════════════════════════════════
+      // ⭐ OPTIMISTIC UPDATE — hapus card dari UI DULUAN
+      // ═══════════════════════════════════════════════════════
+      setJokiOrders((current) =>
+        current.filter((item) => item.id !== order.id)
+      );
 
       try {
-        // ⭐ STEP 1: Set flag manual_complete_triggered (buat bot progress)
+        if (isAlreadyCompleted) {
+          // === CARD BURAM: bot udah selesai ===
+          // Cuma hapus row — nggak perlu trigger bot
+          console.log("[handleCompleteOrder] Card udah selesai bot, hapus aja");
+
+          const resComplete = await fetch("/api/queue/complete-order", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ order_id: order.order_id }),
+          });
+          const dataComplete = await resComplete.json().catch(() => null);
+          console.log("[handleCompleteOrder] complete-order:", dataComplete);
+
+          if (!dataComplete?.success) {
+            // ⭐ Rollback — card muncul lagi
+            alert(dataComplete?.message || "Gagal hapus order");
+            await loadJokiOrders();   // reload dari DB
+            return;
+          }
+
+          return;
+        }
+
+        // === CARD NORMAL: belum selesai ===
+        // Cuma trigger bot via manual-complete
         const resManual = await fetch("/api/queue/manual-complete", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -610,55 +640,27 @@ const { error } = await supabase.from("tasks").insert([newTask]);
         const dataManual = await resManual.json().catch(() => null);
         console.log("[handleCompleteOrder] manual-complete:", dataManual);
 
-        // ⭐ STEP 2: Jeda 500ms biar bot sempet baca flag
-        await new Promise((r) => setTimeout(r, 500));
-
-        // ⭐ STEP 3: Hapus RAM + delete row (sistem lama)
-        const resComplete = await fetch("/api/queue/complete-order", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ order_id: order.order_id }),
-        });
-        const dataComplete = await resComplete.json().catch(() => null);
-        console.log("[handleCompleteOrder] complete-order:", dataComplete);
-
-        // Sukses kalau salah satu berhasil
-        const anySuccess =
-          (dataManual && dataManual.success) ||
-          (dataComplete && dataComplete.success);
-
-        if (!anySuccess) {
-          alert(
-            dataManual?.message ||
-            dataComplete?.message ||
-            "Gagal menyelesaikan order"
-          );
-          setProcessingOrders((prev) => {
-            const next = new Set(prev);
-            next.delete(order.id);
-            return next;
-          });
+        if (!dataManual?.success) {
+          // ⭐ Rollback — card muncul lagi
+          alert(dataManual?.message || "Gagal trigger bot");
+          await loadJokiOrders();   // reload dari DB
           return;
         }
 
-        // Hapus card dari list lokal (instan)
-        setJokiOrders((current) =>
-          current.filter((item) => item.id !== order.id)
+        // ⭐ Flag udah di-set. Card udah dihapus dari UI.
+        // Bot bakal proses di background:
+        //   1. Chat "Joki Selesai" + link konfirmasi
+        //   2. Klik "Joki Selesai" → "Mengerti" → "OK"
+        //   3. Hapus row joki_orders
+        console.log(
+          "[handleCompleteOrder] ✅ Flag set — bot bakal proses di background"
         );
 
-        setProcessingOrders((prev) => {
-          const next = new Set(prev);
-          next.delete(order.id);
-          return next;
-        });
       } catch (err) {
         console.error(err);
         alert("Terjadi kesalahan");
-        setProcessingOrders((prev) => {
-          const next = new Set(prev);
-          next.delete(order.id);
-          return next;
-        });
+        // ⭐ Rollback — reload dari DB
+        await loadJokiOrders();
       }
     }
   );
