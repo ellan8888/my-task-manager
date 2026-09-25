@@ -3,13 +3,8 @@ import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
 export const runtime = "nodejs";
 
-// ⭐ Threshold: bot dianggap offline kalau heartbeat > 5 menit
 const OFFLINE_THRESHOLD_SECONDS = 300;
-
-// ⭐ Throttle: cuma kirim notif tiap 30 menit
 const NOTIF_THROTTLE_MINUTES = 30;
-
-// ⭐ Username yang dapet notif (superadmin)
 const NOTIF_TARGET = "ellan";
 
 export async function GET(req: Request) {
@@ -29,7 +24,7 @@ export async function GET(req: Request) {
   if (error || !data) {
     console.error("[Check Bot] Heartbeat nggak ketemu:", error);
     return NextResponse.json(
-      { error: "Heartbeat nggak ketemu" },
+      { success: false, error: "Heartbeat nggak ketemu" },
       { status: 404 }
     );
   }
@@ -63,14 +58,9 @@ export async function GET(req: Request) {
 
   if (lastNotif) {
     const lastNotifTime = new Date(lastNotif.sent_at).getTime();
-    const notifDiffMinutes = Math.floor(
-      (Date.now() - lastNotifTime) / 60000
-    );
+    const notifDiffMinutes = Math.floor((Date.now() - lastNotifTime) / 60000);
 
     if (notifDiffMinutes < NOTIF_THROTTLE_MINUTES) {
-      console.log(
-        `[Check Bot] Skip notif — udah dikirim ${notifDiffMinutes} menit lalu`
-      );
       return NextResponse.json({
         success: true,
         isOnline: false,
@@ -80,7 +70,7 @@ export async function GET(req: Request) {
     }
   }
 
-  // === 5. Kirim push notif ke superadmin ===
+  // === 5. Kirim push notif ===
   const baseUrl =
     process.env.NEXT_PUBLIC_SITE_URL ||
     "https://my-task-manager-self.vercel.app";
@@ -94,15 +84,13 @@ export async function GET(req: Request) {
       body: JSON.stringify({
         username: NOTIF_TARGET,
         title: "🔴 Bot Offline!",
-        body: `Bot itemku berhenti ${diffMinutes} menit lalu. Klik buat restart.`,
+        body: `Bot itemku berhenti ${diffMinutes} menit lalu.`,
         url: "/",
       }),
     });
 
-    const pushData = await pushRes.json();
-    console.log(`[Check Bot] Push response:`, pushData);
+    await pushRes.json();
 
-    // === 6. Catat notif udah dikirim ===
     await supabaseAdmin
       .from("bot_offline_notifications")
       .insert({
@@ -115,7 +103,7 @@ export async function GET(req: Request) {
   } catch (err) {
     console.error("[Check Bot] Gagal kirim push:", err);
     return NextResponse.json(
-      { error: "Gagal kirim push notif" },
+      { success: false, error: "Gagal kirim push notif" },
       { status: 500 }
     );
   }
