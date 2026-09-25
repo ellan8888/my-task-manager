@@ -692,29 +692,61 @@ const { error } = await supabase.from("tasks").insert([newTask]);
     }
   };
 
-  const updateOrderUsername = async (orderId: number, newUsername: string) => {
+   const updateOrderUsername = async (orderId: number, newUsername: string) => {
     if (!newUsername.trim()) {
       alert("Username tidak boleh kosong!");
       return;
     }
 
     try {
-      const { error } = await supabase
-        .from("joki_orders")
-        .update({ roblox_username: newUsername.trim() })
-        .eq("id", orderId);
+      // ⭐ Ambil username lama & order_id dulu
+      const oldOrder = jokiOrders.find((o) => o.id === orderId);
+      const oldUsername = oldOrder?.roblox_username || "";
+      const orderIdStr = oldOrder?.order_id;
 
-      if (error) {
-        console.error(error);
-        alert("Gagal mengupdate username!");
+      if (!orderIdStr) {
+        alert("Order ID nggak ketemu!");
         return;
       }
 
+      // ⭐ Panggil API baru yang handle update + reclaim
+      const res = await fetch("/api/queue/update-username", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          order_id: orderIdStr,
+          old_username: oldUsername,
+          new_username: newUsername.trim(),
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!data.success) {
+        alert(data.message || "Gagal mengupdate username!");
+        return;
+      }
+
+      // ⭐ Update state lokal (username + progress_count)
       setJokiOrders((current) =>
         current.map((item) =>
-          item.id === orderId ? { ...item, roblox_username: newUsername.trim() } : item
+          item.id === orderId
+            ? {
+                ...item,
+                roblox_username: newUsername.trim(),
+                progress_count: data.progress_count ?? item.progress_count,
+              }
+            : item
         )
       );
+
+      // Info kalau ada egg yang ke-reclaim
+      if (data.reclaimed_eggs > 0) {
+        console.log(
+          `✅ ${data.reclaimed_eggs} egg lama berhasil di-reclaim. ` +
+          `Progress sekarang: ${data.progress_count}`
+        );
+      }
 
       setEditingUsername(null);
     } catch (err) {

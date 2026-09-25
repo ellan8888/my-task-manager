@@ -29,6 +29,7 @@ const BYPASS_PATHS = [
   "/api/progress-keywords",
   "/api/manual-complete",
   "/admin/withdrawals",
+  "/api/cron",
 ];
 
 // ⭐ Pakai Web Crypto API (bisa jalan di Edge Runtime)
