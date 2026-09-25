@@ -14,7 +14,7 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  // === 2. Cek heartbeat terakhir ===
+  // === 2. Cek heartbeat ===
   const { data, error } = await supabaseAdmin
     .from("bot_heartbeats")
     .select("bot_name, last_seen, status")
@@ -37,7 +37,7 @@ export async function GET(req: Request) {
     `[Check Bot] Last seen ${diffSeconds}s ago — isOffline=${isOffline}`
   );
 
-  // === 3. Kalau online → return early ===
+  // === 3. Online → return early ===
   if (!isOffline) {
     return NextResponse.json({
       success: true,
