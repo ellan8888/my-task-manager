@@ -27,18 +27,37 @@ export default function TopCustomers() {
   const [limit, setLimit] = useState(5);
   const [expandedCustomer, setExpandedCustomer] = useState<string | null>(null);
 
-  useEffect(() => {
-    setLoading(true);
-    fetch(`/api/stats/customers?period=${period}&limit=${limit}`)
-      .then((r) => r.json())
-      .then((res) => {
-        if (res.success) {
-          setCustomers(res.customers);
-          setStats(res.stats);
+    useEffect(() => {
+    let isCancelled = false;
+
+    const fetchCustomers = async () => {
+      try {
+        const res = await fetch(
+          `/api/stats/customers?period=${period}&limit=${limit}`
+        );
+        const data = await res.json();
+        if (!isCancelled && data.success) {
+          setCustomers(data.customers);
+          setStats(data.stats);
         }
-      })
-      .catch((err) => console.error("Error fetch customers:", err))
-      .finally(() => setLoading(false));
+      } catch (err) {
+        console.error("Error fetch customers:", err);
+      } finally {
+        if (!isCancelled) setLoading(false);
+      }
+    };
+
+    // ⭐ Fetch langsung saat mount / ganti filter
+    setLoading(true);
+    fetchCustomers();
+
+    // ⭐ Auto-refresh tiap 30 detik
+    const interval = setInterval(fetchCustomers, 30000);
+
+    return () => {
+      isCancelled = true;
+      clearInterval(interval);
+    };
   }, [period, limit]);
 
   const formatRupiah = (num: number) => {
