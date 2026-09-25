@@ -10,6 +10,7 @@ const supabaseAdmin = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
+
 function verifySession(signedValue: string, secret: string) {
   const parts = signedValue.split(".");
   if (parts.length < 2) return null;
@@ -25,8 +26,13 @@ function verifySession(signedValue: string, secret: string) {
   }
 }
 
-// ⭐ Helper: push notif ke user
-async function sendPush(username: string, title: string, body: string, url: string) {
+// ⭐ Helper: push notif
+async function sendPush(
+  username: string,
+  title: string,
+  body: string,
+  url: string
+) {
   try {
     const baseUrl =
       process.env.NEXT_PUBLIC_SITE_URL ||
@@ -90,8 +96,8 @@ export async function GET(req: NextRequest) {
     }
 
     // Totals per joki
-    const totals: Record<string, number> = {};          // approved
-    const pendingTotals: Record<string, number> = {};   // pending
+    const totals: Record<string, number> = {};
+    const pendingTotals: Record<string, number> = {};
 
     for (const w of data || []) {
       if (w.status === "approved") {
@@ -121,6 +127,7 @@ export async function GET(req: NextRequest) {
 // ══════════════════════════════════════════════════════
 export async function POST(req: NextRequest) {
   try {
+    // 1️⃣ Auth
     const cookieStore = await cookies();
     const session = cookieStore.get("auth_session")?.value;
     const parsed = session
@@ -134,15 +141,17 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // 2️⃣ Parse body
     const body = await req.json();
-    const { amount, note, joki_name } = body;
+    const { amount, note, joki_name, bank_account_id } = body;
 
-    // User biasa → cuma bisa request untuk dirinya sendiri
+    // 3️⃣ Tentukan target joki
     const targetJoki =
       parsed.role === "superadmin"
-        ? (joki_name || parsed.username)
+        ? joki_name || parsed.username
         : parsed.username;
 
+    // 4️⃣ Validasi input
     if (!amount || amount <= 0) {
       return NextResponse.json(
         { success: false, message: "Jumlah harus > 0" },
@@ -150,7 +159,29 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // ⭐ Validasi saldo cukup
+    if (!bank_account_id) {
+      return NextResponse.json(
+        { success: false, message: "Rekening wajib dipilih" },
+        { status: 400 }
+      );
+    }
+
+    // 5️⃣ Fetch bank account
+    const { data: bank, error: bankError } = await supabaseAdmin
+      .from("user_bank_accounts")
+      .select("*")
+      .eq("id", bank_account_id)
+      .eq("username", targetJoki)
+      .single();
+
+    if (bankError || !bank) {
+      return NextResponse.json(
+        { success: false, message: "Rekening nggak ketemu" },
+        { status: 400 }
+      );
+    }
+
+    // 6️⃣ Validasi saldo cukup
     const { data: incomeData } = await supabaseAdmin
       .from("income_log")
       .select("amount")
@@ -166,7 +197,6 @@ export async function POST(req: NextRequest) {
       .select("amount, status")
       .eq("joki_name", targetJoki);
 
-    // Cuma approved & pending yang ngurangin saldo
     const totalWithdrawn = (withdrawalData || [])
       .filter((w) => w.status === "approved" || w.status === "pending")
       .reduce((sum, r) => sum + (r.amount || 0), 0);
@@ -183,7 +213,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // ⭐ Insert request
+    // 7️⃣ Insert request
     const { data, error } = await supabaseAdmin
       .from("withdrawals")
       .insert([
@@ -193,6 +223,10 @@ export async function POST(req: NextRequest) {
           note: note || null,
           status: "pending",
           requested_by: parsed.username,
+          bank_account_id: bank.id,
+          bank_name: bank.bank_name,
+          account_number: bank.account_number,
+          account_holder: bank.account_holder,
         },
       ])
       .select()
@@ -205,12 +239,12 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // ⭐ Push notif ke superadmin (ellan)
+    // 8️⃣ Push notif ke superadmin (ellan)
     await sendPush(
-    "ellan",
-    `💰 ${targetJoki} Request Tarik`,
-    `Rp ${amount.toLocaleString("id-ID")}${note ? ` • ${note}` : ""}`,
-    "/admin"
+      "ellan",
+      `💰 ${targetJoki} Request Tarik`,
+      `Rp ${amount.toLocaleString("id-ID")} → ${bank.bank_name} ${bank.account_number}`,
+      "/admin/withdrawals"
     );
 
     return NextResponse.json({ success: true, data });
@@ -233,7 +267,7 @@ export async function PATCH(req: NextRequest) {
       ? verifySession(session, process.env.AUTH_SECRET!)
       : null;
 
-    // ⭐ Cuma superadmin
+    // Cuma superadmin
     if (!parsed || parsed.role !== "superadmin") {
       return NextResponse.json(
         { success: false, message: "Cuma superadmin yang bisa approve" },
@@ -285,20 +319,24 @@ export async function PATCH(req: NextRequest) {
       );
     }
 
-    // ⭐ Push notif ke user
+    // Push notif ke user
     if (data && data.joki_name) {
       if (action === "approve") {
         await sendPush(
           data.joki_name,
           "✅ Tarik Disetujui!",
-          `Rp ${data.amount.toLocaleString("id-ID")} udah ditransfer${transfer_note ? ` • ${transfer_note}` : ""}`,
+          `Rp ${data.amount.toLocaleString("id-ID")} udah ditransfer${
+            transfer_note ? ` • ${transfer_note}` : ""
+          }`,
           "/admin"
         );
       } else {
         await sendPush(
           data.joki_name,
           "❌ Tarik Ditolak",
-          `Rp ${data.amount.toLocaleString("id-ID")} • Alasan: ${reject_reason || "-"}`,
+          `Rp ${data.amount.toLocaleString("id-ID")} • Alasan: ${
+            reject_reason || "-"
+          }`,
           "/admin"
         );
       }

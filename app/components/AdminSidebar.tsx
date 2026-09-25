@@ -108,20 +108,26 @@ export default function AdminSidebar({ sidebarOpen, setSidebarOpen }: Props) {
   // MENU ITEMS — bawah (setelah dropdown "Akun")
   // ══════════════════════════════════════════════════════
   const menuItemsBelow = [
-    {
-      href: "/admin/kategori",
-      icon: "fa-folder-tree",
-      label: "Kategori Link",
-      active: pathname === "/admin/kategori",
-    },
-    {
-      href: "/queue",
-      icon: "fa-list-ol",
-      label: "Queue Jokian",
-      active: pathname === "/queue",
-      badge: "Live",
-    },
-  ];
+  {
+    href: "/admin/withdrawals",
+    icon: "fa-wallet",
+    label: "Penarikan",
+    active: pathname === "/admin/withdrawals",
+  },
+  {
+    href: "/admin/kategori",
+    icon: "fa-folder-tree",
+    label: "Kategori Link",
+    active: pathname === "/admin/kategori",
+  },
+  {
+    href: "/queue",
+    icon: "fa-list-ol",
+    label: "Queue Jokian",
+    active: pathname === "/queue",
+    badge: "Live",
+  },
+];
 
   return (
     <>

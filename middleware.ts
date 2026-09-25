@@ -28,6 +28,7 @@ const BYPASS_PATHS = [
   "/api/eternal",
   "/api/progress-keywords",
   "/api/manual-complete",
+  "/admin/withdrawals",
 ];
 
 // ⭐ Pakai Web Crypto API (bisa jalan di Edge Runtime)

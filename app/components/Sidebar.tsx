@@ -60,6 +60,12 @@ export default function Sidebar({ sidebarOpen, setSidebarOpen }: Props) {
       active: pathname === "/admin",
     },
     {
+      href: "/admin/withdrawals",
+      icon: "fa-wallet",
+      label: "Penarikan",
+      active: pathname === "/admin/withdrawals",
+    },
+    {
       href: "/admin/stock",
       icon: "fa-boxes-stacked",
       label: "Stock Akun",
