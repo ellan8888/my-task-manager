@@ -44,8 +44,7 @@ export async function POST(request: Request) {
     // === AUTH: Admin (session valid) ATAU Buyer dengan token ===
     const cookieStore = await cookies();
     const session = cookieStore.get("auth_session")?.value;
-    
-    // ⭐ FIX: verify signed cookie
+
     const parsedSession = session
       ? verifySession(session, process.env.AUTH_SECRET!)
       : null;
@@ -62,7 +61,7 @@ export async function POST(request: Request) {
       .eq("order_id", order_id)
       .maybeSingle();
 
-    // Kalau order nggak ketemu → mungkin udah dihapus → return success (idempotent)
+    // Kalau order nggak ketemu → idempotent
     if (fetchError || !order) {
       console.log(`[CompleteOrder] Order ${order_id} udah nggak ada (idempotent)`);
       return NextResponse.json({
@@ -104,6 +103,10 @@ export async function POST(request: Request) {
       }
     }
 
+    
+
+    // === 2. HAPUS ETERNAL_EGG_LOGS — biar DB bersih ===
+    // ⭐ Egg udah dikirim ke chat buyer, jadi aman dihapus sekarang
     try {
       const { error: eggDeleteError, count: eggCount } = await supabaseAdmin
         .from("eternal_egg_logs")
@@ -115,6 +118,7 @@ export async function POST(request: Request) {
           `[CompleteOrder] Gagal hapus eternal_egg_logs untuk ${order_id}:`,
           eggDeleteError
         );
+        // ⚠️ Jangan gagalin order — log aja
       } else {
         console.log(
           `[CompleteOrder] ✅ ${eggCount} eternal_egg_logs dihapus untuk ${order_id}`
@@ -125,9 +129,10 @@ export async function POST(request: Request) {
         `[CompleteOrder] Error hapus eternal_egg_logs untuk ${order_id}:`,
         err
       );
+      // Tetap lanjut — jangan gagalin order
     }
 
-    // === 2. DELETE CARD ===
+    // === 3. DELETE CARD ===
     const { error: deleteError, count } = await supabaseAdmin
       .from("joki_orders")
       .delete({ count: "exact" })
@@ -153,7 +158,7 @@ export async function POST(request: Request) {
       `[CompleteOrder] ✅ ${order_id} dihapus oleh ${isAdmin ? "Admin" : "Buyer (auto)"}`
     );
 
-    // === 3. NOTIF DISCORD (opsional) ===
+    // === 4. NOTIF DISCORD (opsional) ===
     const webhookUrl = process.env.DISCORD_WEBHOOK_ORDER || "";
     if (webhookUrl) {
       fetch(webhookUrl, {
