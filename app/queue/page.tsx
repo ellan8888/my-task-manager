@@ -269,14 +269,14 @@ body::-webkit-scrollbar {
 
                 {/* ⭐ SUB-SECTION: COUNTDOWN */}
                 <div className="mb-6">
-                  <div className="flex items-center gap-2 mb-3 pl-2 border-l-2 border-amber-500/50">
-                    <div className="w-7 h-7 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center">
-                      <i className="fa-solid fa-hourglass-half text-amber-400 text-xs"></i>
+                  <div className="flex items-center gap-2 mb-3 pl-2 border-l-2 border-violet-500/50">
+                    <div className="w-7 h-7 rounded-lg bg-violet-500/10 border border-violet-500/20 flex items-center justify-center">
+                      <i className="fa-solid fa-hourglass-half text-violet-400 text-xs"></i>
                     </div>
                     <h3 className="text-sm font-bold text-slate-300">
                       Countdown
                     </h3>
-                    <span className="text-[10px] font-bold text-amber-300 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-full">
+                    <span className="text-[10px] font-bold text-violet-300 bg-violet-500/10 border border-violet-500/20 px-2 py-0.5 rounded-full">
                       {processingCountdown.length}
                     </span>
                   </div>
