@@ -2,19 +2,62 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { createClient } from "@supabase/supabase-js";
+import crypto from "crypto";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-export async function POST(request: Request) {
-  // 1. Cek auth
-  const cookieStore = await cookies();
-  const session = cookieStore.get("auth_session")?.value;
+// ⭐ Verify HMAC signed cookie — format: <payload_json>.<hmac_signature>
+function verifySession(
+  signedValue: string,
+  secret: string
+): Record<string, any> | null {
+  const parts = signedValue.split(".");
+  if (parts.length < 2) return null;
 
-  if (session !== process.env.AUTH_SECRET) {
+  const signature = parts[parts.length - 1];
+  const value = parts.slice(0, -1).join(".");
+
+  const hmac = crypto.createHmac("sha256", secret);
+  hmac.update(value);
+  const expectedSig = hmac.digest("hex");
+
+  // Pakai timingSafeEqual biar aman dari timing attack
+  const sigBuf = Buffer.from(signature);
+  const expBuf = Buffer.from(expectedSig);
+
+  if (sigBuf.length !== expBuf.length) return null;
+  if (!crypto.timingSafeEqual(sigBuf, expBuf)) return null;
+
+  try {
+    return JSON.parse(value);
+  } catch {
+    return null;
+  }
+}
+
+export async function POST(request: Request) {
+  // 1. Cek auth — verify HMAC signed cookie
+  const cookieStore = await cookies();
+  const signedValue = cookieStore.get("auth_session")?.value;
+
+  if (!signedValue) {
     return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+  }
+
+  const session = verifySession(signedValue, process.env.AUTH_SECRET!);
+  if (!session) {
+    return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+  }
+
+  // ⭐ Cek role — cuma superadmin yang boleh nambah waktu
+  if (session.role !== "superadmin") {
+    return NextResponse.json(
+      { message: "Forbidden — cuma admin yang bisa" },
+      { status: 403 }
+    );
   }
 
   // 2. Ambil body
