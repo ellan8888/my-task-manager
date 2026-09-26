@@ -5,6 +5,7 @@ import { supabase } from "@/lib/supabase";
 import { registerPushSubscription } from "@/lib/push";
 import Link from "next/link";
 
+
 // ══════════════════════════════════════════════════════════════
 // TYPES
 // ══════════════════════════════════════════════════════════════
@@ -61,6 +62,7 @@ export default function Home() {
   const [startingOrders, setStartingOrders] = useState<Set<number>>(new Set());
   const [checkedOrders, setCheckedOrders] = useState<Set<number>>(new Set()); 
   const [checkedAt, setCheckedAt] = useState<Map<number, number>>(new Map());
+  const [deletingOrders, setDeletingOrders] = useState<Set<number>>(new Set());
 
   const [editingUsername, setEditingUsername] = useState<{
     orderId: number;
@@ -688,31 +690,13 @@ const { error } = await supabase.from("tasks").insert([newTask]);
         if (isAlreadyCompleted) {
           console.log("[handleCompleteOrder] Card udah selesai bot, hapus aja");
 
-          const resComplete = await fetch("/api/queue/complete-order", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ order_id: order.order_id }),
-          });
-          const dataComplete = await resComplete.json().catch(() => null);
+          // ⭐ 1. Trigger animasi fade out
+          setDeletingOrders((prev) => new Set(prev).add(order.id));
 
-          if (!dataComplete?.success) {
-            alert(dataComplete?.message || "Gagal hapus order");
-            await loadJokiOrders();
-            // ⭐ Rollback checkedOrders
-            setCheckedOrders((prev) => {
-              const next = new Set(prev);
-              next.delete(order.id);
-              return next;
-            });
+          // ⭐ 2. Tunggu animasi (300ms) sebelum hapus dari UI
+          await new Promise((resolve) => setTimeout(resolve, 300));
 
-            setCheckedAt((prev) => {
-              const next = new Map(prev);
-              next.delete(order.id);
-              return next;
-            });
-            return;
-          }
-
+          // ⭐ 3. Hapus dari UI (optimistic)
           setJokiOrders((current) =>
             current.filter((item) => item.id !== order.id)
           );
@@ -721,12 +705,41 @@ const { error } = await supabase.from("tasks").insert([newTask]);
             next.delete(order.id);
             return next;
           });
-          // ⭐ TAMBAH INI
           setCheckedAt((prev) => {
             const next = new Map(prev);
             next.delete(order.id);
             return next;
           });
+
+          // ⭐ 4. Hapus dari deletingOrders setelah animasi selesai
+          setDeletingOrders((prev) => {
+            const next = new Set(prev);
+            next.delete(order.id);
+            return next;
+          });
+
+          // ⭐ 5. Baru hit API di background
+          try {
+            const resComplete = await fetch("/api/queue/complete-order", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ order_id: order.order_id }),
+            });
+            const dataComplete = await resComplete.json().catch(() => null);
+
+            if (!dataComplete?.success) {
+              alert(dataComplete?.message || "Gagal hapus order");
+              // ⭐ Rollback — reload dari DB
+              await loadJokiOrders();
+              return;
+            }
+
+            console.log("[handleCompleteOrder] ✅ Card buram dihapus + API sukses");
+          } catch (err) {
+            console.error(err);
+            alert("Terjadi kesalahan");
+            await loadJokiOrders();
+          }
           return;
         }
 
@@ -1969,7 +1982,7 @@ const { error } = await supabase.from("tasks").insert([newTask]);
                             handleForceDelete={handleForceDelete} 
                             isChecked={checkedOrders.has(order.id)}
                             checkedAt={checkedAt.get(order.id) ?? null}
-                            
+                            isDeleting={deletingOrders.has(order.id)}
                           />
                         ))
                       )}
@@ -2024,6 +2037,7 @@ const { error } = await supabase.from("tasks").insert([newTask]);
                             handleForceDelete={handleForceDelete} 
                             isChecked={checkedOrders.has(order.id)}
                             checkedAt={checkedAt.get(order.id) ?? null}
+                            isDeleting={deletingOrders.has(order.id)}
                           />
                         ))
                       )}
@@ -2066,6 +2080,7 @@ const { error } = await supabase.from("tasks").insert([newTask]);
                             handleForceDelete={handleForceDelete}
                             isChecked={checkedOrders.has(order.id)}
                             checkedAt={checkedAt.get(order.id) ?? null}
+                            isDeleting={deletingOrders.has(order.id)}
                           />
                         ))}
                       </div>
@@ -2322,6 +2337,7 @@ function JokiOrderCard({
   isStarting,
   isChecked,
   checkedAt,
+  isDeleting,
   isAdmin,
   editingUsername,
   ramAccounts,
@@ -2340,6 +2356,7 @@ function JokiOrderCard({
   isStarting: boolean;
   isChecked: boolean;
   checkedAt: number | null;
+  isDeleting: boolean;
   isAdmin: boolean;
   editingUsername: { orderId: number; value: string } | null;
   ramAccounts: { Username: string; UserID: number; Alias: string; Group: string }[];
@@ -2393,16 +2410,18 @@ const checkedProgress = (() => {
 
   return (
     <div
-      className={`bg-white dark:bg-slate-900/50 backdrop-blur-xl border rounded-2xl p-4 md:p-5 transition-all duration-500 ease-out ${
-        isProcessing
-          ? "opacity-0 scale-95 blur-sm pointer-events-none"
-          : isCompletedByBot
-          ? "border-emerald-300 dark:border-emerald-500/40 opacity-60"
-          : isToday
-          ? "border-amber-300 dark:border-amber-500/30 shadow-[0_0_15px_rgba(245,158,11,0.15)]"
-          : "border-slate-200 dark:border-slate-800 hover:border-violet-300 dark:hover:border-violet-500/40"
-      }`}
-    >
+  className={`bg-white dark:bg-slate-900/50 backdrop-blur-xl border rounded-2xl p-4 md:p-5 transition-all duration-300 ease-out ${
+    isDeleting
+      ? "opacity-0 scale-90 -translate-x-8 blur-sm"   // ⭐ Fade out animation
+      : isProcessing
+      ? "opacity-0 scale-95 blur-sm pointer-events-none"
+      : isCompletedByBot
+      ? "border-emerald-300 dark:border-emerald-500/40 opacity-60"
+      : isToday
+      ? "border-amber-300 dark:border-amber-500/30 shadow-[0_0_15px_rgba(245,158,11,0.15)]"
+      : "border-slate-200 dark:border-slate-800 hover:border-violet-300 dark:hover:border-violet-500/40"
+  }`}
+>
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="flex items-start space-x-3.5 flex-1 min-w-0">
           <button
