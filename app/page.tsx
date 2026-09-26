@@ -45,6 +45,9 @@ type JokiOrder = {
   progress_keyword: string | null;
   progress_count: number | null;
   target_count: number | null;
+  bot_process_failed: boolean | null;
+  bot_failed_reason: string | null;
+  bot_failed_at: string | null;
 };
 
 // ══════════════════════════════════════════════════════════════
@@ -56,6 +59,7 @@ export default function Home() {
   const [processingOrders, setProcessingOrders] = useState<Set<number>>(new Set());
   const [jokiOrders, setJokiOrders] = useState<JokiOrder[]>([]);
   const [startingOrders, setStartingOrders] = useState<Set<number>>(new Set());
+  const [checkedOrders, setCheckedOrders] = useState<Set<number>>(new Set()); 
 
   const [editingUsername, setEditingUsername] = useState<{
     orderId: number;
@@ -231,6 +235,58 @@ const [authLoading, setAuthLoading] = useState(true);
     setConfirmDialog((prev) => ({ ...prev, open: false }));
   };
 
+   const handleForceDelete = async (order: JokiOrder) => {
+    showConfirm(
+      "Hapus Paksa?",
+      `Order "${order.roblox_username || "Pembeli"}" bakal dihapus dari card + database.\n\nGunakan ini kalau bot gagal proses dan order udah nggak ada di Itemku.`,
+      "danger",
+      "Ya, Hapus Paksa",
+      async () => {
+        closeConfirm();
+        setProcessingOrders((prev) => new Set(prev).add(order.id));
+
+        try {
+          const res = await fetch("/api/queue/complete-order", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ order_id: order.order_id }),
+          });
+          const data = await res.json().catch(() => null);
+
+          if (!data?.success) {
+            alert(data?.message || "Gagal hapus paksa");
+            setProcessingOrders((prev) => {
+              const next = new Set(prev);
+              next.delete(order.id);
+              return next;
+            });
+            return;
+          }
+
+          setJokiOrders((current) =>
+            current.filter((item) => item.id !== order.id)
+          );
+
+          setProcessingOrders((prev) => {
+            const next = new Set(prev);
+            next.delete(order.id);
+            return next;
+          });
+
+          console.log("[handleForceDelete] ✅ Order dihapus paksa:", order.order_id);
+        } catch (err) {
+          console.error(err);
+          alert("Terjadi kesalahan");
+          setProcessingOrders((prev) => {
+            const next = new Set(prev);
+            next.delete(order.id);
+            return next;
+          });
+        }
+      }
+    );
+  };
+
   const updateDefaultReminder = (value: string) => {
     setDefaultReminder(value);
     localStorage.setItem("defaultReminder", value);
@@ -346,9 +402,8 @@ useEffect(() => {
   useEffect(() => {
   loadTasks();
 
-  if (!currentUser) return;  // ⭐ tunggu user ready
+  if (!currentUser) return;
 
-  // Realtime subscription
   const channel = supabase
     .channel("joki_orders_realtime")
     .on(
@@ -356,7 +411,18 @@ useEffect(() => {
       { event: "*", schema: "public", table: "joki_orders" },
       (payload) => {
         console.log("[Home] Joki order changed:", payload);
-        loadJokiOrders();  // function udah filter otomatis
+        loadJokiOrders();
+
+        // ⭐ Bersihin checkedOrders untuk order yang udah berubah
+        // (bot udah selesai proses / gagal)
+        const changedOrderId = (payload.new as any)?.id;
+        if (changedOrderId) {
+          setCheckedOrders((prev) => {
+            const next = new Set(prev);
+            next.delete(changedOrderId);
+            return next;
+          });
+        }
       }
     )
     .subscribe();
@@ -364,7 +430,7 @@ useEffect(() => {
   return () => {
     supabase.removeChannel(channel);
   };
-}, [currentUser]);  // ⭐ Depend on currentUser
+}, [currentUser]);
 
   useEffect(() => {
     const savedTheme = localStorage.getItem("theme");
@@ -585,6 +651,11 @@ const { error } = await supabase.from("tasks").insert([newTask]);
   // ══════════════════════════════════════════════════════════════
 
   const handleCompleteOrder = async (order: JokiOrder) => {
+  if (order.bot_process_failed) {
+    alert("Bot gagal proses order ini. Gunakan tombol 'Hapus Paksa' di card.");
+    return;
+  }
+
   const isAlreadyCompleted = 
     order.completed_by_bot === true || 
     order.queue_status === "completed";
@@ -599,17 +670,11 @@ const { error } = await supabase.from("tasks").insert([newTask]);
     async () => {
       closeConfirm();
 
-      // ═══════════════════════════════════════════════════════
-      // ⭐ OPTIMISTIC UPDATE — hapus card dari UI DULUAN
-      // ═══════════════════════════════════════════════════════
-      setJokiOrders((current) =>
-        current.filter((item) => item.id !== order.id)
-      );
+      // ⭐ TAMBAH: tandai checklist udah diklik
+      setCheckedOrders((prev) => new Set(prev).add(order.id));
 
       try {
         if (isAlreadyCompleted) {
-          // === CARD BURAM: bot udah selesai ===
-          // Cuma hapus row — nggak perlu trigger bot
           console.log("[handleCompleteOrder] Card udah selesai bot, hapus aja");
 
           const resComplete = await fetch("/api/queue/complete-order", {
@@ -618,49 +683,68 @@ const { error } = await supabase.from("tasks").insert([newTask]);
             body: JSON.stringify({ order_id: order.order_id }),
           });
           const dataComplete = await resComplete.json().catch(() => null);
-          console.log("[handleCompleteOrder] complete-order:", dataComplete);
 
           if (!dataComplete?.success) {
-            // ⭐ Rollback — card muncul lagi
             alert(dataComplete?.message || "Gagal hapus order");
-            await loadJokiOrders();   // reload dari DB
+            await loadJokiOrders();
+            // ⭐ Rollback checkedOrders
+            setCheckedOrders((prev) => {
+              const next = new Set(prev);
+              next.delete(order.id);
+              return next;
+            });
             return;
           }
 
+          setJokiOrders((current) =>
+            current.filter((item) => item.id !== order.id)
+          );
+          setCheckedOrders((prev) => {
+            const next = new Set(prev);
+            next.delete(order.id);
+            return next;
+          });
           return;
         }
 
-        // === CARD NORMAL: belum selesai ===
-        // Cuma trigger bot via manual-complete
         const resManual = await fetch("/api/queue/manual-complete", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ order_id: order.order_id }),
         });
         const dataManual = await resManual.json().catch(() => null);
-        console.log("[handleCompleteOrder] manual-complete:", dataManual);
 
         if (!dataManual?.success) {
-          // ⭐ Rollback — card muncul lagi
           alert(dataManual?.message || "Gagal trigger bot");
-          await loadJokiOrders();   // reload dari DB
+          await loadJokiOrders();
+          // ⭐ Rollback checkedOrders
+          setCheckedOrders((prev) => {
+            const next = new Set(prev);
+            next.delete(order.id);
+            return next;
+          });
           return;
         }
 
-        // ⭐ Flag udah di-set. Card udah dihapus dari UI.
-        // Bot bakal proses di background:
-        //   1. Chat "Joki Selesai" + link konfirmasi
-        //   2. Klik "Joki Selesai" → "Mengerti" → "OK"
-        //   3. Hapus row joki_orders
         console.log(
           "[handleCompleteOrder] ✅ Flag set — bot bakal proses di background"
         );
 
+        // ⭐ checkedOrders TETAP ada — centang persisten
+        // Realtime subscription bakal refetch card:
+        //   - Kalau bot sukses → card hilang
+        //   - Kalau bot gagal → card muncul tombol "Hapus Paksa"
+        //   - Kalau bot gagal → checkedOrders dibersihin di useEffect realtime
+
       } catch (err) {
         console.error(err);
         alert("Terjadi kesalahan");
-        // ⭐ Rollback — reload dari DB
         await loadJokiOrders();
+        setCheckedOrders((prev) => {
+          const next = new Set(prev);
+          next.delete(order.id);
+          return next;
+        });
       }
     }
   );
@@ -927,15 +1011,35 @@ const { error } = await supabase.from("tasks").insert([newTask]);
 
   // ⭐ Split jadi 2 — sudah dijadwalkan vs belum dijadwalkan
     // ⭐ Split jadi 3 — countdown, progress, belum dijadwalkan
-  const countdownJokiOrders = filteredJokiOrders.filter((o) => {
+  const countdownJokiOrders = filteredJokiOrders
+  .filter((o) => {
     const isProgressOrder =
       o.order_type === "progress" ||
       (o.progress_keyword != null && (o.target_count ?? 0) > 0);
-    if (isProgressOrder) return false;   // progress → ke section lain
-    // Countdown: punya estimated_end_at ATAU sudah selesai
+    if (isProgressOrder) return false;
     if (o.estimated_end_at) return true;
     if (o.completed_by_bot || o.queue_status === "completed") return true;
     return false;
+  })
+  .sort((a, b) => {
+    // ⭐ 1. Card BURAM (selesai bot) → paling atas
+    const aCompleted = a.completed_by_bot === true || a.queue_status === "completed";
+    const bCompleted = b.completed_by_bot === true || b.queue_status === "completed";
+
+    if (aCompleted && !bCompleted) return -1;   // a di atas
+    if (!aCompleted && bCompleted) return 1;    // b di atas
+    // Kalau dua-duanya completed, sort by estimated_end_at
+    // Kalau dua-duanya belum completed, sort by estimated_end_at juga
+
+    // ⭐ 2. Sort by estimated_end_at ASC (yang paling deket selesai duluan)
+    const aTime = a.estimated_end_at
+      ? new Date(a.estimated_end_at).getTime()
+      : Number.MAX_SAFE_INTEGER;   // nggak punya → paling bawah
+    const bTime = b.estimated_end_at
+      ? new Date(b.estimated_end_at).getTime()
+      : Number.MAX_SAFE_INTEGER;
+
+    return aTime - bTime;
   });
 
   const progressJokiOrders = filteredJokiOrders
@@ -1827,6 +1931,8 @@ const { error } = await supabase.from("tasks").insert([newTask]);
                             handleCompleteOrder={handleCompleteOrder}
                             handleStartProgressOrder={handleStartProgressOrder}
                             isUsernameUsedInOtherCards={isUsernameUsedInOtherCards}
+                            handleForceDelete={handleForceDelete} 
+                            isChecked={checkedOrders.has(order.id)}
                           />
                         ))
                       )}
@@ -1878,6 +1984,8 @@ const { error } = await supabase.from("tasks").insert([newTask]);
                             handleCompleteOrder={handleCompleteOrder}
                             handleStartProgressOrder={handleStartProgressOrder}
                             isUsernameUsedInOtherCards={isUsernameUsedInOtherCards}
+                            handleForceDelete={handleForceDelete} 
+                            isChecked={checkedOrders.has(order.id)}
                           />
                         ))
                       )}
@@ -1917,6 +2025,8 @@ const { error } = await supabase.from("tasks").insert([newTask]);
                             handleCompleteOrder={handleCompleteOrder}
                             handleStartProgressOrder={handleStartProgressOrder}
                             isUsernameUsedInOtherCards={isUsernameUsedInOtherCards}
+                            handleForceDelete={handleForceDelete}
+                            isChecked={checkedOrders.has(order.id)}
                           />
                         ))}
                       </div>
@@ -2171,6 +2281,7 @@ function JokiOrderCard({
   now,
   isProcessing,
   isStarting,
+  isChecked,
   isAdmin,
   editingUsername,
   ramAccounts,
@@ -2180,12 +2291,14 @@ function JokiOrderCard({
   updateOrderUsername,
   handleCompleteOrder,
   handleStartProgressOrder,
+  handleForceDelete,
   isUsernameUsedInOtherCards,
 }: {
   order: JokiOrder;
   now: number;
   isProcessing: boolean;
   isStarting: boolean;
+  isChecked: boolean; 
   isAdmin: boolean;
   editingUsername: { orderId: number; value: string } | null;
   ramAccounts: { Username: string; UserID: number; Alias: string; Group: string }[];
@@ -2195,6 +2308,7 @@ function JokiOrderCard({
   updateOrderUsername: (orderId: number, username: string) => void;
   handleCompleteOrder: (order: JokiOrder) => void;
   handleStartProgressOrder: (order: JokiOrder) => void;
+  handleForceDelete: (order: JokiOrder) => void
   isUsernameUsedInOtherCards: (username: string, currentOrderId: number) => boolean;
 }) {
   const isCompletedByBot =
@@ -2240,15 +2354,27 @@ function JokiOrderCard({
         <div className="flex items-start space-x-3.5 flex-1 min-w-0">
           <button
             onClick={() => handleCompleteOrder(order)}
-            disabled={isProcessing}
+            disabled={isProcessing || isChecked || order.bot_process_failed === true}
             className={`mt-1 w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all shrink-0 ${
               isProcessing
                 ? "border-emerald-500 bg-emerald-500 text-white cursor-wait"
+                : isChecked
+                ? "bg-emerald-500 border-emerald-500 text-white"   // ⭐ centang persisten
+                : order.bot_process_failed
+                ? "border-slate-300 dark:border-slate-700 opacity-40 cursor-not-allowed"
                 : isCompletedByBot
                 ? "bg-emerald-500 border-emerald-500 text-white hover:bg-emerald-600"
                 : "border-slate-300 dark:border-slate-600 hover:border-violet-500 text-transparent"
             }`}
-            title={isCompletedByBot ? "Konfirmasi Selesai" : "Selesaikan"}
+            title={
+              order.bot_process_failed
+                ? "Bot gagal proses — pakai tombol Hapus Paksa di bawah"
+                : isChecked
+                ? "Menunggu bot proses..."
+                : isCompletedByBot
+                ? "Konfirmasi Selesai"
+                : "Selesaikan"
+            }
           >
             {isProcessing ? (
               <i className="fa-solid fa-spinner fa-spin text-xs"></i>
@@ -2585,6 +2711,31 @@ function JokiOrderCard({
             </>
           )}
         </button>
+      )}
+            {/* ⭐ Tombol Hapus Paksa — kalau bot gagal proses */}
+      {order.bot_process_failed && (
+        <div className="mt-3 pt-3 border-t border-rose-200 dark:border-rose-500/20">
+          <div className="flex items-start gap-2 p-2.5 rounded-lg bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/20">
+            <i className="fa-solid fa-triangle-exclamation text-rose-600 dark:text-rose-400 text-xs mt-0.5 shrink-0"></i>
+            <div className="flex-1 min-w-0">
+              <p className="text-[11px] font-bold text-rose-700 dark:text-rose-300">
+                Bot gagal proses order ini
+              </p>
+              <p className="text-[10px] text-rose-600 dark:text-rose-400 mt-0.5 leading-relaxed">
+                {order.bot_failed_reason || "Order nggak ketemu di Itemku"}
+              </p>
+            </div>
+          </div>
+
+          <button
+            onClick={() => handleForceDelete(order)}
+            disabled={isProcessing}
+            className="w-full mt-2 bg-linear-to-r from-rose-600 to-red-600 hover:from-rose-500 hover:to-red-500 disabled:opacity-50 text-white font-bold py-2.5 rounded-xl transition shadow-lg shadow-rose-600/30 flex items-center justify-center gap-2 text-sm"
+          >
+            <i className="fa-solid fa-trash-can"></i>
+            Hapus Paksa (Card + DB)
+          </button>
+        </div>
       )}
     </div>
   );
