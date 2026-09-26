@@ -130,3 +130,8 @@ body::-webkit-scrollbar {
 .animate-toast-out {
   animation: toast-out 0.25s cubic-bezier(0.22, 1, 0.36, 1) forwards;
 }
+
+@keyframes shimmer {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(400%); }
+}

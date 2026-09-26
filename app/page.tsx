@@ -60,6 +60,7 @@ export default function Home() {
   const [jokiOrders, setJokiOrders] = useState<JokiOrder[]>([]);
   const [startingOrders, setStartingOrders] = useState<Set<number>>(new Set());
   const [checkedOrders, setCheckedOrders] = useState<Set<number>>(new Set()); 
+  const [checkedAt, setCheckedAt] = useState<Map<number, number>>(new Map());
 
   const [editingUsername, setEditingUsername] = useState<{
     orderId: number;
@@ -422,6 +423,11 @@ useEffect(() => {
             next.delete(changedOrderId);
             return next;
           });
+          setCheckedAt((prev) => {
+            const next = new Map(prev);
+            next.delete(changedOrderId);
+            return next;
+             });
         }
       }
     )
@@ -672,6 +678,11 @@ const { error } = await supabase.from("tasks").insert([newTask]);
 
       // ⭐ TAMBAH: tandai checklist udah diklik
       setCheckedOrders((prev) => new Set(prev).add(order.id));
+      setCheckedAt((prev) => {
+        const next = new Map(prev);
+        next.set(order.id, Date.now());
+        return next;
+      });
 
       try {
         if (isAlreadyCompleted) {
@@ -693,6 +704,12 @@ const { error } = await supabase.from("tasks").insert([newTask]);
               next.delete(order.id);
               return next;
             });
+
+            setCheckedAt((prev) => {
+              const next = new Map(prev);
+              next.delete(order.id);
+              return next;
+            });
             return;
           }
 
@@ -701,6 +718,12 @@ const { error } = await supabase.from("tasks").insert([newTask]);
           );
           setCheckedOrders((prev) => {
             const next = new Set(prev);
+            next.delete(order.id);
+            return next;
+          });
+          // ⭐ TAMBAH INI
+          setCheckedAt((prev) => {
+            const next = new Map(prev);
             next.delete(order.id);
             return next;
           });
@@ -723,6 +746,12 @@ const { error } = await supabase.from("tasks").insert([newTask]);
             next.delete(order.id);
             return next;
           });
+          // ⭐ TAMBAH INI
+          setCheckedAt((prev) => {
+            const next = new Map(prev);
+            next.delete(order.id);
+            return next;
+          });
           return;
         }
 
@@ -742,6 +771,12 @@ const { error } = await supabase.from("tasks").insert([newTask]);
         await loadJokiOrders();
         setCheckedOrders((prev) => {
           const next = new Set(prev);
+          next.delete(order.id);
+          return next;
+        });
+        // ⭐ TAMBAH INI
+        setCheckedAt((prev) => {
+          const next = new Map(prev);
           next.delete(order.id);
           return next;
         });
@@ -1933,6 +1968,8 @@ const { error } = await supabase.from("tasks").insert([newTask]);
                             isUsernameUsedInOtherCards={isUsernameUsedInOtherCards}
                             handleForceDelete={handleForceDelete} 
                             isChecked={checkedOrders.has(order.id)}
+                            checkedAt={checkedAt.get(order.id) ?? null}
+                            
                           />
                         ))
                       )}
@@ -1986,6 +2023,7 @@ const { error } = await supabase.from("tasks").insert([newTask]);
                             isUsernameUsedInOtherCards={isUsernameUsedInOtherCards}
                             handleForceDelete={handleForceDelete} 
                             isChecked={checkedOrders.has(order.id)}
+                            checkedAt={checkedAt.get(order.id) ?? null}
                           />
                         ))
                       )}
@@ -2027,6 +2065,7 @@ const { error } = await supabase.from("tasks").insert([newTask]);
                             isUsernameUsedInOtherCards={isUsernameUsedInOtherCards}
                             handleForceDelete={handleForceDelete}
                             isChecked={checkedOrders.has(order.id)}
+                            checkedAt={checkedAt.get(order.id) ?? null}
                           />
                         ))}
                       </div>
@@ -2282,6 +2321,7 @@ function JokiOrderCard({
   isProcessing,
   isStarting,
   isChecked,
+  checkedAt,
   isAdmin,
   editingUsername,
   ramAccounts,
@@ -2298,7 +2338,8 @@ function JokiOrderCard({
   now: number;
   isProcessing: boolean;
   isStarting: boolean;
-  isChecked: boolean; 
+  isChecked: boolean;
+  checkedAt: number | null;
   isAdmin: boolean;
   editingUsername: { orderId: number; value: string } | null;
   ramAccounts: { Username: string; UserID: number; Alias: string; Group: string }[];
@@ -2326,17 +2367,29 @@ function JokiOrderCard({
   todayMidnight.setHours(0, 0, 0, 0);
 
   let daysLeft: number | null = null;
-  let isToday = false;
-  let isOverdue = false;
+let isToday = false;
+let isOverdue = false;
 
-  if (endDate) {
-    const endDateMidnight = new Date(endDate);
-    endDateMidnight.setHours(0, 0, 0, 0);
-    const diffMs = endDateMidnight.getTime() - todayMidnight.getTime();
-    daysLeft = Math.round(diffMs / (1000 * 60 * 60 * 24));
-    isToday = daysLeft === 0;
-    isOverdue = daysLeft < 0;
-  }
+if (endDate) {
+  const endDateMidnight = new Date(endDate);
+  endDateMidnight.setHours(0, 0, 0, 0);
+  const diffMs = endDateMidnight.getTime() - todayMidnight.getTime();
+  daysLeft = Math.round(diffMs / (1000 * 60 * 60 * 24));
+  isToday = daysLeft === 0;
+  isOverdue = daysLeft < 0;
+}
+
+// ⭐ Progress untuk checked card — DI LUAR if (endDate)
+const BOT_ESTIMATE_MS = 15000;   // 15 detik estimasi
+const checkedProgress = (() => {
+  if (!isChecked || !checkedAt) return null;
+  
+  const elapsed = now - checkedAt;
+  const progress = Math.min(100, (elapsed / BOT_ESTIMATE_MS) * 100);
+  const isStuck = elapsed > BOT_ESTIMATE_MS;
+  
+  return { progress, isStuck, elapsed };
+})();
 
   return (
     <div
@@ -2711,6 +2764,62 @@ function JokiOrderCard({
             </>
           )}
         </button>
+      )}
+
+      {/* ⭐ Progress Bar — kalau card lagi di-check */}
+      {isChecked && checkedProgress && (
+        <div className="mt-3 pt-3 border-t border-violet-200 dark:border-violet-500/20">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-[10px] font-bold text-violet-600 dark:text-violet-400 uppercase tracking-wider flex items-center gap-1.5">
+              {checkedProgress.isStuck ? (
+                <>
+                  <i className="fa-solid fa-rotate fa-spin text-[10px]"></i>
+                  Masih diproses bot...
+                </>
+              ) : (
+                <>
+                  <i className="fa-solid fa-robot text-[10px]"></i>
+                  Bot memproses order
+                </>
+              )}
+            </span>
+            <span className="text-[10px] font-mono font-bold text-violet-600 dark:text-violet-400">
+              {checkedProgress.isStuck
+                ? ">100%"
+                : `${Math.round(checkedProgress.progress)}%`}
+            </span>
+          </div>
+
+          <div className="w-full h-2 bg-slate-100 dark:bg-slate-950 rounded-full overflow-hidden border border-slate-200 dark:border-slate-800 relative">
+            {/* Fill */}
+            <div
+              className={`h-full transition-all duration-1000 ease-linear ${
+                checkedProgress.isStuck
+                  ? "bg-linear-to-r from-violet-500 via-indigo-500 to-violet-500 animate-pulse"
+                  : "bg-linear-to-r from-violet-500 to-indigo-500"
+              }`}
+              style={{
+                width: `${checkedProgress.isStuck ? 100 : checkedProgress.progress}%`,
+              }}
+            />
+
+            {/* Shimmer effect */}
+            {!checkedProgress.isStuck && (
+              <div
+                className="absolute inset-y-0 w-1/3 bg-linear-to-r from-transparent via-white/30 to-transparent"
+                style={{
+                  animation: "shimmer 1.5s infinite",
+                }}
+              />
+            )}
+          </div>
+
+          <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-2 leading-relaxed">
+            {checkedProgress.isStuck
+              ? "Bot butuh waktu lebih lama. Mohon tunggu, card akan otomatis hilang kalau selesai."
+              : "Bot sedang memproses order di background. Card akan hilang otomatis setelah selesai."}
+          </p>
+        </div>
       )}
             {/* ⭐ Tombol Hapus Paksa — kalau bot gagal proses */}
       {order.bot_process_failed && (
