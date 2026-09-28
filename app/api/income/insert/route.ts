@@ -15,8 +15,8 @@ export async function POST(request: Request) {
       product_title,
       amount,
       completed_at,
-      buyer_name,          // ⭐ TAMBAH
-      roblox_username,     // ⭐ TAMBAH
+      buyer_name,
+      roblox_username,
     } = body;
 
     if (!order_id || typeof amount !== "number") {
@@ -26,7 +26,8 @@ export async function POST(request: Request) {
       );
     }
 
-    // Upsert — biar nggak double insert
+    // ⭐ Upsert dengan composite unique (order_id + roblox_username)
+    // Biar 1 order bisa punya BANYAK row (multi akun)
     const { error } = await supabaseAdmin
       .from("income_log")
       .upsert(
@@ -36,10 +37,10 @@ export async function POST(request: Request) {
           product_title: product_title || "",
           amount,
           completed_at: completed_at || new Date().toISOString(),
-          buyer_name: buyer_name || null,                 // ⭐ TAMBAH
-          roblox_username: roblox_username || null,       // ⭐ TAMBAH
+          buyer_name: buyer_name || null,
+          roblox_username: roblox_username || null,
         },
-        { onConflict: "order_id" }
+        { onConflict: "order_id,roblox_username" }  // ⭐ UBAH INI
       );
 
     if (error) {
