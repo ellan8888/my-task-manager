@@ -9,7 +9,15 @@ const supabaseAdmin = createClient(
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { order_id, joki_name, product_title, amount, completed_at } = body;
+    const {
+      order_id,
+      joki_name,
+      product_title,
+      amount,
+      completed_at,
+      buyer_name,          // ⭐ TAMBAH
+      roblox_username,     // ⭐ TAMBAH
+    } = body;
 
     if (!order_id || typeof amount !== "number") {
       return NextResponse.json(
@@ -28,6 +36,8 @@ export async function POST(request: Request) {
           product_title: product_title || "",
           amount,
           completed_at: completed_at || new Date().toISOString(),
+          buyer_name: buyer_name || null,                 // ⭐ TAMBAH
+          roblox_username: roblox_username || null,       // ⭐ TAMBAH
         },
         { onConflict: "order_id" }
       );
