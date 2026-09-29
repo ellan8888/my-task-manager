@@ -40,7 +40,10 @@ export async function POST(request: Request) {
           buyer_name: buyer_name || null,
           roblox_username: roblox_username || null,
         },
-        { onConflict: "order_id,roblox_username" }  // ⭐ UBAH INI
+        { 
+          onConflict: "order_id,roblox_username",
+          ignoreDuplicates: true,   // ⭐ INI YANG BARU
+        }
       );
 
     if (error) {
