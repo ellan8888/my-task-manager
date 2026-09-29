@@ -72,7 +72,6 @@ export async function GET(req: NextRequest) {
       .eq("deleted", false);
 
     // ⭐ 4. FILTER added_by — HANYA kalau user (bukan bot)
-    //    Bot harus bisa liat SEMUA akun (buat jual semua user)
     if (!isBot && session) {
       query = query.eq("added_by", session.username);
     }
@@ -94,6 +93,60 @@ export async function GET(req: NextRequest) {
         { success: false, message: error.message },
         { status: 500 }
       );
+    }
+
+    // ═══════════════════════════════════════════════════════
+    // ⭐ 6. KALAU logged_out=true → JOIN income_log
+    //    (buat halaman Akun Laku, biar nampilin income per akun)
+    // ═══════════════════════════════════════════════════════
+    if (loggedOut === "true" && data && data.length > 0) {
+      try {
+        // Ambil semua username dari data
+        const usernames = data.map((a) => a.username);
+
+        // Fetch income_log untuk semua username sekaligus
+        const { data: incomes, error: incomeErr } = await supabase
+          .from("income_log")
+          .select("order_id, roblox_username, amount, joki_name, completed_at")
+          .in("roblox_username", usernames);
+
+        if (incomeErr) {
+          console.error("[stock GET] income_log error:", incomeErr.message);
+          // Kalau join gagal, tetap return data tanpa income
+          return NextResponse.json({ success: true, data });
+        }
+
+        // Build map: { "Yuro76511": [{ amount, order_id, ... }] }
+        const incomeMap: Record<string, any[]> = {};
+        (incomes || []).forEach((inc) => {
+          if (!inc.roblox_username) return;
+          if (!incomeMap[inc.roblox_username]) {
+            incomeMap[inc.roblox_username] = [];
+          }
+          incomeMap[inc.roblox_username].push(inc);
+        });
+
+        // Inject income ke tiap akun
+        const dataWithIncome = data.map((acc) => {
+          const accIncomes = incomeMap[acc.username] || [];
+          const totalIncome = accIncomes.reduce(
+            (sum, inc) => sum + (inc.amount || 0),
+            0
+          );
+
+          return {
+            ...acc,
+            income_amount: totalIncome || null,
+            income_details: accIncomes,
+          };
+        });
+
+        return NextResponse.json({ success: true, data: dataWithIncome });
+      } catch (joinErr: any) {
+        console.error("[stock GET] Gagal join income_log:", joinErr);
+        // Fallback: return data tanpa income
+        return NextResponse.json({ success: true, data });
+      }
     }
 
     return NextResponse.json({ success: true, data: data || [] });
