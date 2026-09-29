@@ -279,7 +279,7 @@ export default function AkunLakuPage() {
                               {/* ⭐ KOLOM INCOME */}
                               <td className="px-3 py-2.5 w-[15%] text-right">
                                 {acc.income_amount ? (
-                                  <span className="text-sm font-bold text-emerald-600 dark:text-emerald-400 font-mono">
+                                  <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 font-mono">
                                     Rp{" "}
                                     {acc.income_amount.toLocaleString("id-ID")}
                                   </span>
