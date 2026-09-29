@@ -218,27 +218,22 @@ export default function AkunLakuPage() {
                         {group.accounts.length} SOLD
                       </span>
                     </div>
-
-                    {/* Table */}
+                      {/* Table */}
                     <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800">
-                      <table className="w-full text-sm table-fixed">
+                      <table className="w-full text-sm min-w-[520px]">
                         <thead className="bg-slate-50 dark:bg-slate-950/50">
                           <tr className="text-left text-[10px] uppercase text-slate-500 dark:text-slate-400 font-bold">
-                            <th className="px-3 py-2.5 w-[4%] text-center">#</th>
-                            <th className="px-3 py-2.5 w-[22%]">Username</th>
-                            <th className="px-3 py-2.5 w-[12%] hidden md:table-cell">
+                            <th className="px-2 py-2.5 w-8 text-center">#</th>
+                            <th className="px-2 py-2.5">Username</th>
+                            <th className="px-2 py-2.5 hidden md:table-cell">
                               Added By
                             </th>
-                            <th className="px-3 py-2.5 w-[15%] hidden lg:table-cell">
+                            <th className="px-2 py-2.5 hidden lg:table-cell">
                               Created
                             </th>
-                            <th className="px-3 py-2.5 w-[22%]">Tanggal Laku</th>
-                            <th className="px-3 py-2.5 w-[15%] text-right">
-                              Income
-                            </th>
-                            <th className="px-3 py-2.5 w-[10%] text-right">
-                              Status
-                            </th>
+                            <th className="px-2 py-2.5">Tanggal Laku</th>
+                            <th className="px-2 py-2.5 text-right">Income</th>
+                            <th className="px-2 py-2.5 text-right">Status</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -247,51 +242,48 @@ export default function AkunLakuPage() {
                               key={acc.id}
                               className="border-t border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-900/40 transition"
                             >
-                              <td className="px-3 py-2.5 w-[4%] text-xs text-slate-400 font-mono text-center">
+                              <td className="px-2 py-2.5 text-xs text-slate-400 font-mono text-center">
                                 {idx + 1}
                               </td>
-                              <td className="px-3 py-2.5 w-[22%]">
+                              <td className="px-2 py-2.5">
                                 <span
-                                  className="font-mono font-bold text-xs text-slate-900 dark:text-white truncate block"
+                                  className="font-mono font-bold text-xs text-slate-900 dark:text-white truncate block max-w-[120px]"
                                   title={acc.username}
                                 >
                                   {acc.username}
                                 </span>
                               </td>
-                              <td className="px-3 py-2.5 w-[12%] hidden md:table-cell">
+                              <td className="px-2 py-2.5 hidden md:table-cell">
                                 <span className="text-xs text-slate-600 dark:text-slate-300 truncate block">
                                   {acc.added_by || "—"}
                                 </span>
                               </td>
-                              <td className="px-3 py-2.5 w-[15%] hidden lg:table-cell">
+                              <td className="px-2 py-2.5 hidden lg:table-cell">
                                 <span className="text-[10px] text-slate-400 whitespace-nowrap">
                                   {formatDate(acc.created_at)}
                                 </span>
                               </td>
-                              <td className="px-3 py-2.5 w-[22%]">
-                                <div className="flex items-center gap-1.5">
-                                  <i className="fa-solid fa-calendar-check text-emerald-500 text-[10px]"></i>
-                                  <span className="text-[11px] text-slate-600 dark:text-slate-300 whitespace-nowrap">
+                              <td className="px-2 py-2.5">
+                                <div className="flex items-center gap-1">
+                                  <i className="fa-solid fa-calendar-check text-emerald-500 text-[10px] shrink-0"></i>
+                                  <span className="text-[10px] text-slate-600 dark:text-slate-300 whitespace-nowrap">
                                     {formatDateTime(acc.logged_out_at)}
                                   </span>
                                 </div>
                               </td>
-                              {/* ⭐ KOLOM INCOME */}
-                              <td className="px-3 py-2.5 w-[15%] text-right">
+                              {/* ⭐ KOLOM INCOME — FIX: nowrap + font kecil */}
+                              <td className="px-2 py-2.5 text-right">
                                 {acc.income_amount ? (
-                                  <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 font-mono">
-                                    Rp{" "}
-                                    {acc.income_amount.toLocaleString("id-ID")}
+                                  <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 font-mono whitespace-nowrap inline-block">
+                                    Rp {acc.income_amount.toLocaleString("id-ID")}
                                   </span>
                                 ) : (
-                                  <span className="text-[10px] text-slate-400">
-                                    —
-                                  </span>
+                                  <span className="text-[10px] text-slate-400">—</span>
                                 )}
                               </td>
-                              <td className="px-3 py-2.5 w-[10%] text-right">
-                                <span className="px-2 py-0.5 bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 text-[10px] font-bold rounded-md inline-flex items-center gap-1 whitespace-nowrap">
-                                  <i className="fa-solid fa-check text-[9px]"></i>
+                              <td className="px-2 py-2.5 text-right">
+                                <span className="px-1.5 py-0.5 bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 text-[9px] font-bold rounded-md inline-flex items-center gap-0.5 whitespace-nowrap">
+                                  <i className="fa-solid fa-check text-[8px]"></i>
                                   SOLD
                                 </span>
                               </td>
