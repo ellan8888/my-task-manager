@@ -29,6 +29,7 @@ export default function WithdrawalsPage() {
 
   const [bankAccounts, setBankAccounts] = useState<any[]>([]);
   const [showBankModal, setShowBankModal] = useState(false);
+  const [proofModal, setProofModal] = useState<string | null>(null);
 
   useEffect(() => {
     fetch("/api/auth/me")
@@ -316,6 +317,17 @@ export default function WithdrawalsPage() {
                                     minute: "2-digit",
                                   })}
                                 </p>
+
+                                {/* ⭐ BUKTI PEMBAYARAN — cuma muncul kalau approved & ada URL */}
+                                {w.status === "approved" && w.payment_proof_url && (
+                                  <button
+                                    onClick={() => setProofModal(w.payment_proof_url)}
+                                    className="mt-1.5 inline-flex items-center gap-1 text-[10px] font-bold text-emerald-600 dark:text-emerald-400 hover:underline"
+                                  >
+                                    <i className="fa-solid fa-receipt"></i>
+                                    Lihat Bukti Pembayaran
+                                  </button>
+                                )}
                               </div>
                             </div>
 
@@ -621,6 +633,17 @@ export default function WithdrawalsPage() {
                                 })}
                                 {w.approved_by && ` • by ${w.approved_by}`}
                               </p>
+
+                              {/* ⭐ BUKTI PEMBAYARAN — buat superadmin juga */}
+                              {w.status === "approved" && w.payment_proof_url && (
+                                <button
+                                  onClick={() => setProofModal(w.payment_proof_url)}
+                                  className="mt-1 inline-flex items-center gap-1 text-[10px] font-bold text-emerald-600 dark:text-emerald-400 hover:underline"
+                                >
+                                  <i className="fa-solid fa-receipt"></i>
+                                  Lihat Bukti
+                                </button>
+                              )}
                             </div>
                           </div>
 
@@ -724,6 +747,41 @@ export default function WithdrawalsPage() {
           }}
         />
       )}
+{/* ⭐ Modal Bukti Pembayaran */}
+{proofModal && (
+  <div
+    className="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-50 flex items-center justify-center p-4"
+    onClick={() => setProofModal(null)}
+  >
+    <div
+      className="relative max-w-2xl w-full"
+      onClick={(e) => e.stopPropagation()}
+    >
+      <button
+        onClick={() => setProofModal(null)}
+        className="absolute -top-12 right-0 w-10 h-10 rounded-xl bg-white/10 hover:bg-white/20 text-white flex items-center justify-center backdrop-blur-md transition"
+      >
+        <i className="fa-solid fa-xmark text-lg"></i>
+      </button>
+
+      <div className="bg-white dark:bg-slate-900 rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-800">
+        <div className="px-4 py-3 border-b border-slate-200 dark:border-slate-800 flex items-center gap-2">
+          <div className="w-7 h-7 rounded-lg bg-emerald-100 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
+            <i className="fa-solid fa-receipt text-xs"></i>
+          </div>
+          <h3 className="font-bold text-sm text-slate-900 dark:text-white">
+            Bukti Pembayaran
+          </h3>
+        </div>
+        <img
+          src={proofModal}
+          alt="Bukti Pembayaran"
+          className="w-full h-auto max-h-[80vh] object-contain"
+        />
+      </div>
+    </div>
+  </div>
+)}
     </>
   );
 }

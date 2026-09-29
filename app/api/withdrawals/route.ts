@@ -276,7 +276,7 @@ export async function PATCH(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { id, action, reject_reason, transfer_note } = body;
+const { id, action, reject_reason, transfer_note, payment_proof_url } = body;
 
     if (!id || !action) {
       return NextResponse.json(
@@ -303,6 +303,9 @@ export async function PATCH(req: NextRequest) {
     }
     if (action === "approve" && transfer_note) {
       updateData.transfer_note = transfer_note;
+    }
+    if (action === "approve" && payment_proof_url) {
+      updateData.payment_proof_url = payment_proof_url;
     }
 
     const { data, error } = await supabaseAdmin

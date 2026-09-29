@@ -8,7 +8,6 @@ type Props = {
     joki_name: string;
     amount: number;
     note: string | null;
-    // ⭐ BANK INFO
     bank_name?: string | null;
     account_number?: string | null;
     account_holder?: string | null;
@@ -21,21 +20,72 @@ export default function ApproveModal({ withdrawal, onClose, onSuccess }: Props) 
   const [action, setAction] = useState<"approve" | "reject">("approve");
   const [rejectReason, setRejectReason] = useState("");
   const [transferNote, setTransferNote] = useState("");
+  const [file, setFile] = useState<File | null>(null);
+  const [preview, setPreview] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
   const formatRupiah = (n: number) => "Rp " + n.toLocaleString("id-ID");
 
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0];
+    if (!f) return;
+
+    if (!f.type.startsWith("image/")) {
+      setError("File harus gambar (JPG/PNG)");
+      return;
+    }
+    if (f.size > 5 * 1024 * 1024) {
+      setError("Max 5MB");
+      return;
+    }
+
+    setError("");
+    setFile(f);
+    setPreview(URL.createObjectURL(f));
+  };
+
   const handleSubmit = async () => {
     setError("");
 
+    // ⭐ Validasi
     if (action === "reject" && !rejectReason.trim()) {
       setError("Alasan reject wajib diisi");
       return;
     }
 
+    // ⭐ APPROVE: wajib upload bukti
+    if (action === "approve" && !file) {
+      setError("Upload bukti pembayaran dulu ya");
+      return;
+    }
+
     setLoading(true);
     try {
+      let paymentProofUrl: string | null = null;
+
+      // 1️⃣ Kalau approve → upload foto dulu
+      if (action === "approve" && file) {
+        const formData = new FormData();
+        formData.append("file", file);
+        formData.append("withdrawalId", String(withdrawal.id));
+
+        const uploadRes = await fetch("/api/upload/payment-proof", {
+          method: "POST",
+          body: formData,
+        });
+        const uploadData = await uploadRes.json();
+
+        if (!uploadData.success) {
+          setError(uploadData.message || uploadData.error || "Gagal upload bukti");
+          setLoading(false);
+          return;
+        }
+
+        paymentProofUrl = uploadData.url;
+      }
+
+      // 2️⃣ Kirim PATCH ke /api/withdrawals
       const res = await fetch("/api/withdrawals", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -44,6 +94,7 @@ export default function ApproveModal({ withdrawal, onClose, onSuccess }: Props) 
           action,
           reject_reason: action === "reject" ? rejectReason : undefined,
           transfer_note: action === "approve" ? transferNote : undefined,
+          payment_proof_url: paymentProofUrl, // ⭐ baru
         }),
       });
       const data = await res.json();
@@ -180,18 +231,67 @@ export default function ApproveModal({ withdrawal, onClose, onSuccess }: Props) 
 
       {/* ⭐ FORM INPUT */}
       {action === "approve" ? (
-        <div>
-          <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1.5">
-            Catatan Transfer <span className="text-slate-400 font-normal normal-case">(opsional)</span>
-          </label>
-          <input
-            type="text"
-            value={transferNote}
-            onChange={(e) => setTransferNote(e.target.value)}
-            placeholder="Contoh: BCA 123456 a/n Ridho"
-            className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2.5 text-sm text-slate-900 dark:text-white focus:outline-none focus:border-emerald-500 transition"
-          />
-        </div>
+        <>
+          {/* ⭐ UPLOAD BUKTI PEMBAYARAN */}
+          <div>
+            <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1.5">
+              Bukti Pembayaran <span className="text-rose-500">*</span>
+            </label>
+
+            {preview ? (
+              <div className="relative rounded-xl overflow-hidden border-2 border-emerald-500">
+                <img
+                  src={preview}
+                  alt="Preview"
+                  className="w-full h-44 object-cover"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFile(null);
+                    setPreview(null);
+                  }}
+                  className="absolute top-2 right-2 w-8 h-8 rounded-lg bg-rose-600 hover:bg-rose-500 text-white flex items-center justify-center shadow-lg transition"
+                >
+                  <i className="fa-solid fa-xmark"></i>
+                </button>
+                <div className="absolute bottom-2 left-2 bg-emerald-600 text-white text-[10px] font-bold px-2 py-1 rounded truncate max-w-[80%]">
+                  ✅ {file?.name}
+                </div>
+              </div>
+            ) : (
+              <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-xl cursor-pointer hover:border-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-500/5 transition">
+                <i className="fa-solid fa-cloud-arrow-up text-2xl text-slate-400 mb-2"></i>
+                <p className="text-xs font-bold text-slate-600 dark:text-slate-400">
+                  Klik untuk upload foto
+                </p>
+                <p className="text-[10px] text-slate-400 mt-1">
+                  JPG/PNG, max 5MB
+                </p>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleFileChange}
+                  className="hidden"
+                />
+              </label>
+            )}
+          </div>
+
+          {/* Catatan Transfer */}
+          <div>
+            <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1.5">
+              Catatan Transfer <span className="text-slate-400 font-normal normal-case">(opsional)</span>
+            </label>
+            <input
+              type="text"
+              value={transferNote}
+              onChange={(e) => setTransferNote(e.target.value)}
+              placeholder="Contoh: BCA 123456 a/n Ridho"
+              className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2.5 text-sm text-slate-900 dark:text-white focus:outline-none focus:border-emerald-500 transition"
+            />
+          </div>
+        </>
       ) : (
         <div>
           <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1.5">
@@ -226,8 +326,8 @@ export default function ApproveModal({ withdrawal, onClose, onSuccess }: Props) 
         </button>
         <button
           onClick={handleSubmit}
-          disabled={loading}
-          className={`flex-1 px-4 py-2.5 rounded-xl text-sm font-extrabold text-white shadow-lg transition disabled:opacity-50 flex items-center justify-center gap-2 ${
+          disabled={loading || (action === "approve" && !file)}
+          className={`flex-1 px-4 py-2.5 rounded-xl text-sm font-extrabold text-white shadow-lg transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 ${
             action === "approve"
               ? "bg-linear-to-r from-emerald-600 to-green-600 shadow-emerald-600/30"
               : "bg-linear-to-r from-rose-600 to-red-600 shadow-rose-600/30"
@@ -236,7 +336,7 @@ export default function ApproveModal({ withdrawal, onClose, onSuccess }: Props) 
           {loading ? (
             <>
               <i className="fa-solid fa-spinner fa-spin"></i>
-              Memproses...
+              {action === "approve" && file ? "Mengupload..." : "Memproses..."}
             </>
           ) : (
             <>
