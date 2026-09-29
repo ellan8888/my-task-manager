@@ -19,6 +19,14 @@ type StockAccount = {
   created_at: string;
   used_at: string | null;
   listed_at: string | null;
+  // ⭐ Data income dari join income_log
+  income_amount: number | null;
+  income_details: Array<{
+    order_id: string;
+    amount: number;
+    joki_name: string | null;
+    completed_at: string;
+  }> | null;
 };
 
 export default function AkunLakuPage() {
@@ -75,32 +83,29 @@ export default function AkunLakuPage() {
   // GROUP ACCOUNTS BY KATEGORI + FILTER SEARCH
   // ══════════════════════════════════════════════════════
   const groupedAccounts = (() => {
-  const filtered = accounts.filter((acc) =>
-    acc.username.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+    const filtered = accounts.filter((acc) =>
+      acc.username.toLowerCase().includes(searchQuery.toLowerCase())
+    );
 
-  const groups: Record<string, StockAccount[]> = {};
-  filtered.forEach((acc) => {
-    const kat = acc.kategori || "tanpa-kategori";
-    if (!groups[kat]) groups[kat] = [];
-    groups[kat].push(acc);
-  });
-
-  // ★ Sort NUMERIK: ambil angka awal dari nama kategori
-  return Object.entries(groups)
-    .map(([kategori, accounts]) => ({ kategori, accounts }))
-    .sort((a, b) => {
-      // Ambil angka awal: "10b-15b/s" → 10, "1b-5b/s" → 1
-      const numA = parseInt(a.kategori.match(/^\d+/)?.[0] || "999999", 10);
-      const numB = parseInt(b.kategori.match(/^\d+/)?.[0] || "999999", 10);
-
-      // Kalau angka beda → sort by angka
-      if (numA !== numB) return numA - numB;
-
-      // Kalau angka sama → sort alfabetis (fallback)
-      return a.kategori.localeCompare(b.kategori);
+    const groups: Record<string, StockAccount[]> = {};
+    filtered.forEach((acc) => {
+      const kat = acc.kategori || "tanpa-kategori";
+      if (!groups[kat]) groups[kat] = [];
+      groups[kat].push(acc);
     });
-})();
+
+    // ★ Sort NUMERIK: ambil angka awal dari nama kategori
+    return Object.entries(groups)
+      .map(([kategori, accounts]) => ({ kategori, accounts }))
+      .sort((a, b) => {
+        const numA = parseInt(a.kategori.match(/^\d+/)?.[0] || "999999", 10);
+        const numB = parseInt(b.kategori.match(/^\d+/)?.[0] || "999999", 10);
+
+        if (numA !== numB) return numA - numB;
+
+        return a.kategori.localeCompare(b.kategori);
+      });
+  })();
 
   return (
     <>
@@ -219,12 +224,21 @@ export default function AkunLakuPage() {
                       <table className="w-full text-sm table-fixed">
                         <thead className="bg-slate-50 dark:bg-slate-950/50">
                           <tr className="text-left text-[10px] uppercase text-slate-500 dark:text-slate-400 font-bold">
-                            <th className="px-3 py-2.5 w-[5%] text-center">#</th>
-                            <th className="px-3 py-2.5 w-[28%]">Username</th>
-                            <th className="px-3 py-2.5 w-[15%] hidden md:table-cell">Added By</th>
-                            <th className="px-3 py-2.5 w-[18%] hidden lg:table-cell">Created</th>
-                            <th className="px-3 py-2.5 w-[24%]">Tanggal Laku</th>
-                            <th className="px-3 py-2.5 w-[10%] text-right">Status</th>
+                            <th className="px-3 py-2.5 w-[4%] text-center">#</th>
+                            <th className="px-3 py-2.5 w-[22%]">Username</th>
+                            <th className="px-3 py-2.5 w-[12%] hidden md:table-cell">
+                              Added By
+                            </th>
+                            <th className="px-3 py-2.5 w-[15%] hidden lg:table-cell">
+                              Created
+                            </th>
+                            <th className="px-3 py-2.5 w-[22%]">Tanggal Laku</th>
+                            <th className="px-3 py-2.5 w-[15%] text-right">
+                              Income
+                            </th>
+                            <th className="px-3 py-2.5 w-[10%] text-right">
+                              Status
+                            </th>
                           </tr>
                         </thead>
                         <tbody>
@@ -233,10 +247,10 @@ export default function AkunLakuPage() {
                               key={acc.id}
                               className="border-t border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-900/40 transition"
                             >
-                              <td className="px-3 py-2.5 w-[5%] text-xs text-slate-400 font-mono text-center">
+                              <td className="px-3 py-2.5 w-[4%] text-xs text-slate-400 font-mono text-center">
                                 {idx + 1}
                               </td>
-                              <td className="px-3 py-2.5 w-[28%]">
+                              <td className="px-3 py-2.5 w-[22%]">
                                 <span
                                   className="font-mono font-bold text-xs text-slate-900 dark:text-white truncate block"
                                   title={acc.username}
@@ -244,23 +258,36 @@ export default function AkunLakuPage() {
                                   {acc.username}
                                 </span>
                               </td>
-                              <td className="px-3 py-2.5 w-[15%] hidden md:table-cell">
+                              <td className="px-3 py-2.5 w-[12%] hidden md:table-cell">
                                 <span className="text-xs text-slate-600 dark:text-slate-300 truncate block">
                                   {acc.added_by || "—"}
                                 </span>
                               </td>
-                              <td className="px-3 py-2.5 w-[18%] hidden lg:table-cell">
+                              <td className="px-3 py-2.5 w-[15%] hidden lg:table-cell">
                                 <span className="text-[10px] text-slate-400 whitespace-nowrap">
                                   {formatDate(acc.created_at)}
                                 </span>
                               </td>
-                              <td className="px-3 py-2.5 w-[24%]">
+                              <td className="px-3 py-2.5 w-[22%]">
                                 <div className="flex items-center gap-1.5">
                                   <i className="fa-solid fa-calendar-check text-emerald-500 text-[10px]"></i>
                                   <span className="text-[11px] text-slate-600 dark:text-slate-300 whitespace-nowrap">
                                     {formatDateTime(acc.logged_out_at)}
                                   </span>
                                 </div>
+                              </td>
+                              {/* ⭐ KOLOM INCOME */}
+                              <td className="px-3 py-2.5 w-[15%] text-right">
+                                {acc.income_amount ? (
+                                  <span className="text-sm font-bold text-emerald-600 dark:text-emerald-400 font-mono">
+                                    Rp{" "}
+                                    {acc.income_amount.toLocaleString("id-ID")}
+                                  </span>
+                                ) : (
+                                  <span className="text-[10px] text-slate-400">
+                                    —
+                                  </span>
+                                )}
                               </td>
                               <td className="px-3 py-2.5 w-[10%] text-right">
                                 <span className="px-2 py-0.5 bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 text-[10px] font-bold rounded-md inline-flex items-center gap-1 whitespace-nowrap">
