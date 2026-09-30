@@ -12,7 +12,8 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const status = searchParams.get("status");
     const orderType = searchParams.get("order_type");
-    const manualComplete = searchParams.get("manual_complete_triggered");  // ⭐ BARU
+    const manualComplete = searchParams.get("manual_complete_triggered");
+    const botRetryRequested = searchParams.get("bot_retry_requested"); // ⭐ BARU
     let order_id = searchParams.get("order_id");
 
     // ✅ CLEAN ORDER ID
@@ -26,13 +27,17 @@ export async function GET(request: Request) {
 
     // ═══════════════════════════════════════════════════════════
     // ⭐ LOGIC FILTER "completed"
-    //    - Kalau fetch manual_complete_triggered=true → JANGAN filter completed
-    //      (karena order yang di-trigger manual udah di-set completed=true)
-    //    - Selain itu → filter completed=false (default)
+    //    - manual_complete_triggered=true → JANGAN filter completed
+    //    - bot_retry_requested=true → JANGAN filter completed
+    //      (karena order retry bisa punya status completed atau belum)
+    //    - Selain itu → filter completed=false
     // ═══════════════════════════════════════════════════════════
     if (manualComplete === "true") {
       query = query.eq("manual_complete_triggered", true);
-      // ⚠️ JANGAN filter completed di sini
+      // ⚠️ JANGAN filter completed
+    } else if (botRetryRequested === "true") {
+      query = query.eq("bot_retry_requested", true); // ⭐ FIX
+      // ⚠️ JANGAN filter completed (order retry bisa ada yang completed)
     } else {
       query = query.eq("completed", false);
     }
