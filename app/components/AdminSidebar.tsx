@@ -9,12 +9,32 @@ type Props = {
   setSidebarOpen: (open: boolean) => void;
 };
 
+type MenuItemBelow = {
+  href: string;
+  icon: string;
+  label: string;
+  active: boolean;
+  badge?: string;
+  badgeColor?: "red" | "emerald";
+  superadminOnly?: boolean;   // ⭐ NEW
+};
+
 export default function AdminSidebar({ sidebarOpen, setSidebarOpen }: Props) {
   const [isDark, setIsDark] = useState(true);
   const pathname = usePathname();
 
   // ★ State untuk dropdown menu
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
+
+  // ★ State buat count order gagal
+  const [failedCount, setFailedCount] = useState(0);
+
+  // ⭐ State user yang login
+  const [currentUser, setCurrentUser] = useState<{
+    username: string;
+    role: string;
+    display_name: string;
+  } | null>(null);
 
   // ══════════════════════════════════════════════════════
   // THEME STATE
@@ -32,6 +52,21 @@ export default function AdminSidebar({ sidebarOpen, setSidebarOpen }: Props) {
     }
   }, []);
 
+  // ⭐ Fetch user yang login
+  useEffect(() => {
+    fetch("/api/auth/me")
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.success && data.user) setCurrentUser(data.user);
+      })
+      .catch(console.error);
+  }, []);
+
+  // ⭐ Cek apakah user ini superadmin
+  const isSuperadmin =
+    currentUser?.role === "superadmin" ||
+    currentUser?.username?.toLowerCase() === "ellan";
+
   // ★ Auto-open dropdown kalau salah satu sub-menu aktif
   useEffect(() => {
     if (
@@ -42,6 +77,27 @@ export default function AdminSidebar({ sidebarOpen, setSidebarOpen }: Props) {
       setOpenDropdown("akun");
     }
   }, [pathname]);
+
+  // ⭐ Fetch count order gagal — cuma kalau superadmin
+  useEffect(() => {
+    if (!isSuperadmin) return;
+
+    const fetchFailedCount = async () => {
+      try {
+        const res = await fetch("/api/queue/failed");
+        const data = await res.json();
+        if (data.success && Array.isArray(data.data)) {
+          setFailedCount(data.data.length);
+        }
+      } catch {
+        // silent fail
+      }
+    };
+
+    fetchFailedCount();
+    const interval = setInterval(fetchFailedCount, 30000);
+    return () => clearInterval(interval);
+  }, [isSuperadmin]);
 
   const toggleTheme = () => {
     const newMode = !isDark;
@@ -83,11 +139,10 @@ export default function AdminSidebar({ sidebarOpen, setSidebarOpen }: Props) {
     },
   ];
 
-  // ★ Cek apakah salah satu sub-menu "Akun" sedang aktif
   const isAkunActive = akunSubMenu.some((item) => item.active);
 
   // ══════════════════════════════════════════════════════
-  // MENU ITEMS — menu utama (tanpa sub-menu)
+  // MENU ITEMS — menu utama
   // ══════════════════════════════════════════════════════
   const menuItems = [
     {
@@ -105,29 +160,44 @@ export default function AdminSidebar({ sidebarOpen, setSidebarOpen }: Props) {
   ];
 
   // ══════════════════════════════════════════════════════
-  // MENU ITEMS — bawah (setelah dropdown "Akun")
+  // MENU ITEMS BAWAH
   // ══════════════════════════════════════════════════════
-  const menuItemsBelow = [
-  {
-    href: "/admin/withdrawals",
-    icon: "fa-wallet",
-    label: "Penarikan",
-    active: pathname === "/admin/withdrawals",
-  },
-  {
-    href: "/admin/kategori",
-    icon: "fa-folder-tree",
-    label: "Kategori Link",
-    active: pathname === "/admin/kategori",
-  },
-  {
-    href: "/queue",
-    icon: "fa-list-ol",
-    label: "Queue Jokian",
-    active: pathname === "/queue",
-    badge: "Live",
-  },
-];
+  const allMenuItemsBelow: MenuItemBelow[] = [
+    {
+      href: "/admin/withdrawals",
+      icon: "fa-wallet",
+      label: "Penarikan",
+      active: pathname === "/admin/withdrawals",
+    },
+    {
+      href: "/admin/kategori",
+      icon: "fa-folder-tree",
+      label: "Kategori Link",
+      active: pathname === "/admin/kategori",
+    },
+    {
+      href: "/admin/order-gagal",
+      icon: "fa-triangle-exclamation",
+      label: "Order Gagal",
+      active: pathname === "/admin/order-gagal",
+      badge: failedCount > 0 ? String(failedCount) : undefined,
+      badgeColor: "red",
+      superadminOnly: true,   // ⭐ Cuma superadmin
+    },
+    {
+      href: "/queue",
+      icon: "fa-list-ol",
+      label: "Queue Jokian",
+      active: pathname === "/queue",
+      badge: "Live",
+    },
+  ];
+
+  // ⭐ Filter menu berdasarkan role
+  const menuItemsBelow = allMenuItemsBelow.filter((item) => {
+    if (item.superadminOnly) return isSuperadmin;
+    return true;
+  });
 
   return (
     <>
@@ -166,7 +236,7 @@ export default function AdminSidebar({ sidebarOpen, setSidebarOpen }: Props) {
 
           {/* Menu */}
           <nav className="mt-6 space-y-2">
-            {/* ★ MENU ATAS — Task Manager, Dashboard Admin */}
+            {/* MENU ATAS */}
             {menuItems.map((item) => (
               <Link
                 key={item.href}
@@ -191,9 +261,8 @@ export default function AdminSidebar({ sidebarOpen, setSidebarOpen }: Props) {
               </Link>
             ))}
 
-            {/* ★ DROPDOWN "AKUN" */}
+            {/* DROPDOWN "AKUN" */}
             <div>
-              {/* Trigger */}
               <button
                 onClick={() => toggleDropdown("akun")}
                 className={`w-full flex items-center space-x-3.5 px-4 py-3 rounded-2xl text-sm font-semibold transition-all group ${
@@ -210,8 +279,6 @@ export default function AdminSidebar({ sidebarOpen, setSidebarOpen }: Props) {
                   } transition`}
                 ></i>
                 <span>Akun</span>
-
-                {/* Chevron indicator */}
                 <i
                   className={`fa-solid fa-chevron-down ml-auto text-xs transition-transform duration-200 ${
                     openDropdown === "akun" ? "rotate-180" : ""
@@ -219,7 +286,6 @@ export default function AdminSidebar({ sidebarOpen, setSidebarOpen }: Props) {
                 ></i>
               </button>
 
-              {/* Sub-menu */}
               {openDropdown === "akun" && (
                 <div className="mt-1 ml-4 pl-4 border-l-2 border-slate-200 dark:border-slate-800 space-y-1">
                   {akunSubMenu.map((item) => (
@@ -249,7 +315,7 @@ export default function AdminSidebar({ sidebarOpen, setSidebarOpen }: Props) {
               )}
             </div>
 
-            {/* ★ MENU BAWAH — Kategori Link, Queue Jokian */}
+            {/* MENU BAWAH */}
             {menuItemsBelow.map((item) => (
               <Link
                 key={item.href}
@@ -268,11 +334,20 @@ export default function AdminSidebar({ sidebarOpen, setSidebarOpen }: Props) {
                   } transition`}
                 ></i>
                 <span>{item.label}</span>
+
+                {/* Badge — warna beda kalau badgeColor === "red" */}
                 {item.badge && (
-                  <span className="ml-auto text-[10px] bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 px-2 py-0.5 rounded font-mono">
+                  <span
+                    className={`ml-auto text-[10px] px-2 py-0.5 rounded font-mono ${
+                      item.badgeColor === "red"
+                        ? "bg-red-100 dark:bg-red-500/20 text-red-700 dark:text-red-300"
+                        : "bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300"
+                    }`}
+                  >
                     {item.badge}
                   </span>
                 )}
+
                 {item.active && !item.badge && (
                   <span className="ml-auto w-2 h-2 rounded-full bg-violet-500"></span>
                 )}
@@ -290,17 +365,21 @@ export default function AdminSidebar({ sidebarOpen, setSidebarOpen }: Props) {
             <div className="flex items-center space-x-3">
               <div className="relative">
                 <div className="w-9 h-9 rounded-xl bg-violet-100 dark:bg-violet-600/20 text-violet-600 dark:text-violet-400 border border-violet-200 dark:border-violet-500/30 flex items-center justify-center font-bold group-hover:scale-110 transition-transform">
-                  E
+                  {currentUser?.display_name?.[0]?.toUpperCase() ||
+                    currentUser?.username?.[0]?.toUpperCase() ||
+                    "E"}
                 </div>
                 <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-emerald-500 border-2 border-white dark:border-slate-900 rounded-full"></span>
               </div>
               <div>
-                <p className="text-sm font-bold text-slate-800 dark:text-slate-200 group-hover:text-violet-700 dark:group-hover:text-violet-300 transition">
-                  Ellan Worker
+                <p className="text-sm font-bold text-slate-800 dark:text-slate-200 group-hover:text-violet-700 dark:group-hover:text-violet-300 transition capitalize">
+                  {currentUser?.display_name || currentUser?.username || "Admin"}
                 </p>
                 <p className="text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-1">
                   <i className="fa-solid fa-shield-halved text-[9px]"></i>
-                  Administrator
+                  {currentUser?.role === "superadmin"
+                    ? "Superadmin"
+                    : currentUser?.role || "Administrator"}
                 </p>
               </div>
             </div>

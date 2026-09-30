@@ -220,7 +220,7 @@ export default function AkunLakuPage() {
                     </div>
                       {/* Table */}
                     <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800">
-                      <table className="w-full text-sm min-w-[520px]">
+                      <table className="w-full text-sm min-w-130">
                         <thead className="bg-slate-50 dark:bg-slate-950/50">
                           <tr className="text-left text-[10px] uppercase text-slate-500 dark:text-slate-400 font-bold">
                             <th className="px-2 py-2.5 w-8 text-center">#</th>
@@ -247,7 +247,7 @@ export default function AkunLakuPage() {
                               </td>
                               <td className="px-2 py-2.5">
                                 <span
-                                  className="font-mono font-bold text-xs text-slate-900 dark:text-white truncate block max-w-[120px]"
+                                  className="font-mono font-bold text-xs text-slate-900 dark:text-white truncate block max-w-30"
                                   title={acc.username}
                                 >
                                   {acc.username}
