@@ -2825,7 +2825,7 @@ const isProcessingCard = isChecked;
   </div>
 )}
             {/* ⭐ Tombol Hapus Paksa — kalau bot gagal proses */}
-      {order.bot_process_failed && (
+      {order.bot_process_failed && !isCompletedByBot && (
         <div className="mt-3 pt-3 border-t border-rose-200 dark:border-rose-500/20">
           <div className="flex items-start gap-2 p-2.5 rounded-lg bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/20">
             <i className="fa-solid fa-triangle-exclamation text-rose-600 dark:text-rose-400 text-xs mt-0.5 shrink-0"></i>

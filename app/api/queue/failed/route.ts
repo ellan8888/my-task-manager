@@ -1,3 +1,4 @@
+// app/api/queue/failed/route.ts
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
@@ -7,7 +8,9 @@ export async function GET() {
       .from("joki_orders")
       .select("*")
       .eq("bot_process_failed", true)
-      .eq("joki_name", "ellan") 
+      .eq("joki_name", "ellan")
+      // ⭐ FIX: Jangan tampilin order yang udah completed/processing
+      .not("queue_status", "in", "(completed,processing)")
       .order("bot_failed_at", { ascending: false });
 
     if (error) {
