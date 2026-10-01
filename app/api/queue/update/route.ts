@@ -7,8 +7,10 @@ const supabaseAdmin = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-// ⭐ LIST FIELD YANG BOLEH DI-UPDATE
+// ══════════════════════════════════════════════════════════════
+// ⭐ WHITELIST FIELD — cuma field ini yang boleh di-update
 // Cegah update field random yang bisa ngerusak data
+// ══════════════════════════════════════════════════════════════
 const ALLOWED_FIELDS = [
   "queue_status",
   "queue_position",
@@ -30,6 +32,18 @@ const ALLOWED_FIELDS = [
   "bot_retry_requested",
 ] as const;
 
+// ══════════════════════════════════════════════════════════════
+// ⭐ FIELD YANG WAJIB DI-RESET KALAU queue_status = completed
+// Biar nggak ada state kontradiktif: completed + failed
+// ══════════════════════════════════════════════════════════════
+const FAILED_FLAGS = [
+  "bot_process_failed",
+  "bot_failed_reason",
+  "bot_failed_at",
+  "bot_failed_source",
+  "bot_failed_context",
+] as const;
+
 export async function POST(request: Request) {
   try {
     const body = await request.json();
@@ -42,14 +56,16 @@ export async function POST(request: Request) {
       );
     }
 
-    // ✅ CLEAN ORDER ID
+    // ✅ CLEAN ORDER ID — hapus suffix (ID), (MY), (SG), dll
     const cleanedOrderId = order_id.replace(/\s*\([A-Z]{2}\)\s*$/, "").trim();
 
-    // ⭐ FILTER — cuma field yang di-allow
+    // ══════════════════════════════════════════════════════════
+    // ⭐ STEP 1: FILTER FIELD — cuma yang di-whitelist
+    // Pakai `in` biar `false`, `null`, `0` tetap di-copy
+    // ══════════════════════════════════════════════════════════
     const updates: Record<string, any> = {};
     for (const key of ALLOWED_FIELDS) {
       if (key in rawUpdates) {
-        // ⭐ PAKAI `in` — jadi `false`, `null`, `0` tetap di-copy
         updates[key] = rawUpdates[key];
       }
     }
@@ -64,20 +80,48 @@ export async function POST(request: Request) {
     console.log(`[Queue Update] ${order_id} → ${cleanedOrderId}`);
     console.log(`[Queue Update] Fields:`, updates);
 
-    // ⭐⭐ GUARD: Kalau queue_status = "completed", force reset semua flag gagal
+    // ══════════════════════════════════════════════════════════
+    // ⭐ STEP 2: GUARD COMPLETED
+    // Kalau queue_status = "completed", force reset semua flag gagal
     // Biar nggak ada state kontradiktif
+    // ══════════════════════════════════════════════════════════
     if (updates.queue_status === "completed") {
-      updates.bot_process_failed = false;
-      updates.bot_failed_reason = null;
-      updates.bot_failed_at = null;
-      updates.bot_failed_source = null;
-      updates.bot_failed_context = null;
+      for (const flag of FAILED_FLAGS) {
+        // `bot_process_failed` di-set false, sisanya null
+        if (flag === "bot_process_failed") {
+          updates[flag] = false;
+        } else {
+          updates[flag] = null;
+        }
+      }
       console.log(
         `[Queue Update] ⚠️ Force reset flag gagal (queue_status = completed)`
       );
     }
 
-    // ✅ UPDATE
+    // ══════════════════════════════════════════════════════════
+    // ⭐ STEP 3: GUARD PROCESSING
+    // Kalau queue_status = "processing", pastiin nggak ada flag gagal
+    // (order yang lagi processing nggak mungkin gagal)
+    // ══════════════════════════════════════════════════════════
+    if (updates.queue_status === "processing") {
+      // Cuma reset kalau bot_process_failed dikirim true
+      // (biar nggak nimpa kalau cuma update processing_started_at)
+      if (updates.bot_process_failed === true) {
+        console.log(
+          `[Queue Update] ⚠️ Order processing kok di-set failed? — skip flag gagal`
+        );
+        delete updates.bot_process_failed;
+        delete updates.bot_failed_reason;
+        delete updates.bot_failed_at;
+        delete updates.bot_failed_source;
+        delete updates.bot_failed_context;
+      }
+    }
+
+    // ══════════════════════════════════════════════════════════
+    // ⭐ STEP 4: UPDATE DB
+    // ══════════════════════════════════════════════════════════
     const { data, error } = await supabaseAdmin
       .from("joki_orders")
       .update(updates)
@@ -108,7 +152,9 @@ export async function POST(request: Request) {
 
     console.log(`✅ Updated ${data.length} row:`, data[0]);
 
-    // Promote antrian kalau completed
+    // ══════════════════════════════════════════════════════════
+    // ⭐ STEP 5: PROMOTE ANTRIAN (kalau completed)
+    // ══════════════════════════════════════════════════════════
     if (updates.queue_status === "completed" || updates.completed === true) {
       const baseUrl =
         process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
