@@ -2,7 +2,7 @@
 const bcrypt = require('bcryptjs');
 
 const USERS = [
-  { username: 'ellan', password: '88888888', display_name: 'Ellan', role: 'superadmin' },
+  { username: 'ellan', password: '88888888ellan', display_name: 'Ellan', role: 'superadmin' },
   { username: 'ridho', password: '88888888', display_name: 'Ridho', role: 'user' },
   { username: 'rizki', password: '88888888', display_name: 'Rizki', role: 'user' },
 ];

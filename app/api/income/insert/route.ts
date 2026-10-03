@@ -39,7 +39,7 @@ export async function POST(request: Request) {
     }
 
     // ══════════════════════════════════════════════════════════
-    // APPLY FEE — potong Rp 500 kalau bukan ellan
+    // APPLY FEE
     // ══════════════════════════════════════════════════════════
     const finalJokiName = joki_name || "ellan";
     const { grossAmount, fee, netAmount } = await applyFee(
@@ -47,7 +47,6 @@ export async function POST(request: Request) {
       amount
     );
 
-    // ⭐ LOG internal — cuma keliatan di Vercel log (owner-only)
     console.log(
       `💰 [Income Insert] order=${order_id} joki=${finalJokiName} ` +
       `gross=Rp ${grossAmount.toLocaleString("id-ID")} ` +
@@ -56,7 +55,7 @@ export async function POST(request: Request) {
     );
 
     // ══════════════════════════════════════════════════════════
-    // INSERT KE income_log — amount = NET aja (yang mereka liat)
+    // INSERT KE income_log — amount = NET aja
     // ══════════════════════════════════════════════════════════
     const { data: incomeData, error: incomeError } = await supabaseAdmin
       .from("income_log")
@@ -65,7 +64,7 @@ export async function POST(request: Request) {
           order_id,
           joki_name: finalJokiName,
           product_title: product_title || "",
-          amount: netAmount,              // ← NET aja
+          amount: netAmount,
           completed_at: completed_at || new Date().toISOString(),
           buyer_name: buyer_name || null,
           roblox_username: roblox_username || null,
@@ -87,7 +86,7 @@ export async function POST(request: Request) {
     }
 
     // ══════════════════════════════════════════════════════════
-    // INSERT KE income_fee_log — KHUSUS ellan (kalau ada fee)
+    // INSERT KE income_fee_log (kalau ada fee)
     // ══════════════════════════════════════════════════════════
     if (fee > 0 && incomeData?.id) {
       const { error: feeError } = await supabaseAdmin
@@ -102,13 +101,12 @@ export async function POST(request: Request) {
         });
 
       if (feeError) {
-        // ⚠️ Jangan fail — cuma log. Fee log optional.
         console.error("[Income Insert] Fee log error:", feeError);
       }
     }
 
     // ══════════════════════════════════════════════════════════
-    // RESPONSE — TANPA INFO FEE (biar nggak bocor)
+    // RESPONSE — TANPA info fee
     // ══════════════════════════════════════════════════════════
     return NextResponse.json({ success: true });
   } catch (err: any) {

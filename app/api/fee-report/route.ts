@@ -1,34 +1,18 @@
 // app/api/fee-report/route.ts
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { cookies } from "next/headers";
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-// ⭐ Konstanta — username yang boleh akses
-const OWNER_USERNAMES = ["ellan"];   // ← tambahin kalau ada co-owner
+const OWNER_USERNAMES = ["ellan"];
 
 export async function GET(request: Request) {
   try {
-    // ══════════════════════════════════════════════════════════
-    // ⭐ CEK AUTH — cuma owner yang boleh akses
-    // Sesuaikan dengan sistem auth lo
-    // ══════════════════════════════════════════════════════════
-    
-    // Opsi 1: Kalau pakai cookie session
-    // const cookieStore = cookies();
-    // const session = cookieStore.get("session")?.value;
-    // ... validasi session, dapetin username ...
-    
-    // Opsi 2: Kalau ada header custom
-    // const username = request.headers.get("x-username");
-    
-    // Sementara — gue kasih placeholder. Ganti sesuai auth lo.
     const { searchParams } = new URL(request.url);
-    const username = searchParams.get("username");   // ⚠️ INSECURE — cuma buat testing
+    const username = searchParams.get("username");
 
     if (!username || !OWNER_USERNAMES.includes(username.toLowerCase())) {
       return NextResponse.json(
@@ -37,14 +21,12 @@ export async function GET(request: Request) {
       );
     }
 
-    // ══════════════════════════════════════════════════════════
-    // QUERY FEE LOG
-    // ══════════════════════════════════════════════════════════
+    // ⭐ Ambil detail (buat ditampilin di tabel)
     const { data, error } = await supabaseAdmin
       .from("income_fee_log")
       .select("*")
       .order("created_at", { ascending: false })
-      .limit(500);
+      .limit(1000);
 
     if (error) {
       return NextResponse.json(
@@ -53,17 +35,8 @@ export async function GET(request: Request) {
       );
     }
 
-    // ══════════════════════════════════════════════════════════
-    // AGGREGATE per joki
-    // ══════════════════════════════════════════════════════════
-    const grouped: Record<string, {
-      joki_name: string;
-      total_gross: number;
-      total_fee: number;
-      total_net: number;
-      total_orders: number;
-    }> = {};
-
+    // ⭐ Aggregate summary per joki
+    const grouped: Record<string, any> = {};
     for (const row of data || []) {
       const key = row.joki_name.toLowerCase();
       if (!grouped[key]) {
@@ -84,7 +57,7 @@ export async function GET(request: Request) {
     return NextResponse.json({
       success: true,
       summary: Object.values(grouped),
-      detail: data || [],
+      detail: data || [],       // ⭐ INI YANG KIRIM DETAIL
     });
   } catch (err: any) {
     return NextResponse.json(
