@@ -20,6 +20,8 @@ type StockAccount = {
   created_at: string;
   used_at: string | null;
   listed_at: string | null;
+  idle: boolean | null;              // ⭐ NEW
+  idle_marked_at: string | null;
 };
 
 export default function StokPribadiPage() {
@@ -30,6 +32,9 @@ export default function StokPribadiPage() {
   const [selling, setSelling] = useState<Set<number>>(new Set());
   const { sidebarOpen, toggleSidebar } = useSidebar();
   const [searchQuery, setSearchQuery] = useState("");
+  // ⭐ Filter idle
+const [filterIdle, setFilterIdle] = useState<"all" | "idle" | "active">("all");
+const [idleLoading, setIdleLoading] = useState<Set<number>>(new Set());
 
 // Form tambah
 const [username, setUsername] = useState("");
@@ -240,6 +245,51 @@ useEffect(() => {
     );
   };
 
+  // ⭐ Toggle idle akun
+const handleToggleIdle = async (acc: StockAccount) => {
+  const newIdle = !acc.idle;
+
+  setIdleLoading((prev) => new Set(prev).add(acc.id));
+
+  try {
+    const res = await fetch("/api/accounts/stock/toggle-idle", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        username: acc.username,
+        idle: newIdle,
+      }),
+    });
+
+    const data = await res.json();
+
+    if (data.success) {
+      toast.success(data.message);
+      setAccounts((prev) =>
+        prev.map((a) =>
+          a.id === acc.id
+            ? {
+                ...a,
+                idle: newIdle,
+                idle_marked_at: newIdle ? new Date().toISOString() : null,
+              }
+            : a
+        )
+      );
+    } else {
+      toast.error(data.message);
+    }
+  } catch {
+    toast.error("Gagal toggle idle");
+  } finally {
+    setIdleLoading((prev) => {
+      const next = new Set(prev);
+      next.delete(acc.id);
+      return next;
+    });
+  }
+};
+
   // ★ Buka modal edit
   const handleEditClick = (acc: StockAccount) => {
     setEditingAccount(acc);
@@ -308,27 +358,36 @@ useEffect(() => {
   // GROUP ACCOUNTS BY KATEGORI + FILTER SEARCH
   // ══════════════════════════════════════════════════════
   const groupedAccounts = (() => {
-    const filtered = accounts.filter((acc) => {
-      if (acc.logged_out) return false;
-      return acc.username.toLowerCase().includes(searchQuery.toLowerCase());
-    });
+  const filtered = accounts.filter((acc) => {
+    if (acc.logged_out) return false;
+    if (!acc.username.toLowerCase().includes(searchQuery.toLowerCase())) return false;
 
-    const groups: Record<string, StockAccount[]> = {};
-    filtered.forEach((acc) => {
-      const kat = acc.kategori || "tanpa-kategori";
-      if (!groups[kat]) groups[kat] = [];
-      groups[kat].push(acc);
-    });
+    // ⭐ Filter idle
+    if (filterIdle === "idle" && !acc.idle) return false;
+    if (filterIdle === "active" && acc.idle) return false;
 
-return Object.entries(groups)
-  .map(([kategori, accounts]) => ({ kategori, accounts }))
-  .sort((a, b) => {
-    const numA = parseInt(a.kategori.match(/^\d+/)?.[0] || "999999", 10);
-    const numB = parseInt(b.kategori.match(/^\d+/)?.[0] || "999999", 10);
-    if (numA !== numB) return numA - numB;
-    return a.kategori.localeCompare(b.kategori);
+    return true;
   });
-  })();
+
+  const groups: Record<string, StockAccount[]> = {};
+  filtered.forEach((acc) => {
+    const kat = acc.kategori || "tanpa-kategori";
+    if (!groups[kat]) groups[kat] = [];
+    groups[kat].push(acc);
+  });
+
+  return Object.entries(groups)
+    .map(([kategori, accounts]) => ({ kategori, accounts }))
+    .sort((a, b) => {
+      const numA = parseInt(a.kategori.match(/^\d+/)?.[0] || "999999", 10);
+      const numB = parseInt(b.kategori.match(/^\d+/)?.[0] || "999999", 10);
+      if (numA !== numB) return numA - numB;
+      return a.kategori.localeCompare(b.kategori);
+    });
+})();
+
+// ⭐ Counter idle
+const idleCount = accounts.filter((a) => a.idle && !a.logged_out).length;
 
   return (
     <>
@@ -470,22 +529,66 @@ return Object.entries(groups)
           <div className="bg-white dark:bg-slate-900/60 rounded-2xl p-6 border border-slate-200 dark:border-slate-800 shadow-sm">
             {/* Header + Search */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-6">
-              <h2 className="font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                <i className="fa-solid fa-table text-blue-600 dark:text-blue-400"></i>
-                <span>Akun Tersimpan ({accounts.length})</span>
-              </h2>
-              <div className="relative">
-                <i className="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Cari username..."
-                  className="w-full md:w-56 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl pl-9 pr-3 py-2 text-sm text-slate-900 dark:text-white focus:outline-none focus:border-blue-500"
-                />
-              </div>
-            </div>
+  <h2 className="font-bold text-slate-900 dark:text-white flex items-center gap-2">
+    <i className="fa-solid fa-table text-blue-600 dark:text-blue-400"></i>
+    <span>Akun Tersimpan ({accounts.length})</span>
+    {idleCount > 0 && (
+      <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-300 font-bold">
+        {idleCount} idle
+      </span>
+    )}
+  </h2>
 
+  <div className="flex items-center gap-2">
+    {/* ⭐ Filter Idle */}
+    <div className="flex items-center bg-slate-100 dark:bg-slate-950 p-1 rounded-xl border border-slate-200 dark:border-slate-800">
+      <button
+        onClick={() => setFilterIdle("all")}
+        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition ${
+          filterIdle === "all"
+            ? "bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-sm"
+            : "text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+        }`}
+      >
+        Semua
+      </button>
+      <button
+        onClick={() => setFilterIdle("active")}
+        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1 ${
+          filterIdle === "active"
+            ? "bg-emerald-500 text-white shadow-sm"
+            : "text-slate-500 dark:text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-400"
+        }`}
+      >
+        <span className="w-1.5 h-1.5 rounded-full bg-current"></span>
+        Aktif
+      </button>
+      <button
+        onClick={() => setFilterIdle("idle")}
+        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1 ${
+          filterIdle === "idle"
+            ? "bg-amber-500 text-white shadow-sm"
+            : "text-slate-500 dark:text-slate-400 hover:text-amber-600 dark:hover:text-amber-400"
+        }`}
+      >
+        <span className="w-1.5 h-1.5 rounded-full bg-current"></span>
+        Idle
+      </button>
+    </div>
+
+    {/* Search input */}
+    <div className="relative">
+      <i className="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+      <input
+        type="text"
+        value={searchQuery}
+        onChange={(e) => setSearchQuery(e.target.value)}
+        placeholder="Cari username..."
+        className="w-full md:w-56 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl pl-9 pr-3 py-2 text-sm text-slate-900 dark:text-white focus:outline-none focus:border-blue-500"
+      />
+    </div>
+  </div>
+</div>
             {loading ? (
               <SkeletonList count={3} />
             ) : accounts.length === 0 ? (
@@ -530,86 +633,137 @@ return Object.entries(groups)
         <th className="px-3 py-2.5 w-[22%]">Username</th>
         <th className="px-3 py-2.5 w-[13%] hidden md:table-cell">Password</th>
         <th className="px-3 py-2.5 w-[13%]">Added By</th>
+        <th className="px-3 py-2.5 w-[13%] text-center">Status</th>
         <th className="px-3 py-2.5 w-[17%] hidden lg:table-cell">Created</th>
         <th className="px-3 py-2.5 w-[30%] text-right">Aksi</th>
       </tr>
     </thead>
     <tbody>
       {group.accounts.map((acc, idx) => {
-        const isSelling = selling.has(acc.id);
-        return (
-          <tr
-            key={acc.id}
-            className={`border-t border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-900/40 transition ${
-              isSelling ? "opacity-50 pointer-events-none" : ""
+  const isSelling = selling.has(acc.id);
+  const isIdleLoading = idleLoading.has(acc.id);
+  const isIdle = acc.idle === true;
+
+  return (
+    <tr
+      key={acc.id}
+      className={`border-t border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-900/40 transition ${
+        isSelling ? "opacity-50 pointer-events-none" : ""
+      } ${isIdle ? "bg-amber-50/40 dark:bg-amber-500/5" : ""}`}
+    >
+      <td className="px-3 py-2.5 text-xs text-slate-400 font-mono text-center">
+        {idx + 1}
+      </td>
+      <td className="px-3 py-2.5">
+        <div className="flex items-center gap-2">
+          {isIdle && (
+            <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" title="Idle" />
+          )}
+          <span className={`font-mono font-bold text-xs truncate block ${
+            isIdle
+              ? "text-amber-700 dark:text-amber-400"
+              : "text-slate-900 dark:text-white"
+          }`}>
+            {acc.username}
+          </span>
+        </div>
+      </td>
+      <td className="px-3 py-2.5 hidden md:table-cell">
+        <span className="font-mono text-[11px] text-slate-500 dark:text-slate-400">
+          {acc.password ? "••••••••" : "—"}
+        </span>
+      </td>
+      <td className="px-3 py-2.5">
+        <span className="text-xs text-slate-600 dark:text-slate-300 truncate block">
+          {acc.added_by || "—"}
+        </span>
+      </td>
+
+      {/* ⭐ Kolom Status Idle */}
+      <td className="px-3 py-2.5 text-center">
+        {isIdle ? (
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-300 text-[10px] font-bold">
+            <i className="fa-solid fa-moon text-[9px]"></i>
+            IDLE
+          </span>
+        ) : (
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 text-[10px] font-bold">
+            <i className="fa-solid fa-circle text-[6px]"></i>
+            AKTIF
+          </span>
+        )}
+      </td>
+
+      <td className="px-3 py-2.5 hidden lg:table-cell">
+        <span className="text-[10px] text-slate-400 whitespace-nowrap">
+          {new Date(acc.created_at).toLocaleDateString("id-ID", {
+            day: "2-digit",
+            month: "short",
+            year: "numeric",
+          })}
+        </span>
+      </td>
+
+      <td className="px-3 py-2.5">
+        <div className="flex items-center justify-end gap-1.5">
+          {/* ⭐ Toggle Idle */}
+          <button
+            onClick={() => handleToggleIdle(acc)}
+            disabled={isIdleLoading || isSelling}
+            className={`px-2.5 py-1 text-[10px] font-bold rounded-md flex items-center gap-1 transition whitespace-nowrap ${
+              isIdle
+                ? "bg-emerald-500 hover:bg-emerald-600 text-white"
+                : "bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-300 hover:bg-amber-500 hover:text-white"
             }`}
+            title={isIdle ? "Tandai aktif lagi" : "Tandai idle (nggak dimainkan)"}
           >
-            <td className="px-3 py-2.5 w-[5%] text-xs text-slate-400 font-mono text-center">
-              {idx + 1}
-            </td>
-            <td className="px-3 py-2.5 w-[22%]">
-              <span className="font-mono font-bold text-xs text-slate-900 dark:text-white truncate block">
-                {acc.username}
-              </span>
-            </td>
-            <td className="px-3 py-2.5 w-[13%] hidden md:table-cell">
-              <span className="font-mono text-[11px] text-slate-500 dark:text-slate-400">
-                {acc.password ? "••••••••" : "—"}
-              </span>
-            </td>
-            <td className="px-3 py-2.5 w-[13%]">
-              <span className="text-xs text-slate-600 dark:text-slate-300 truncate block">
-                {acc.added_by || "—"}
-              </span>
-            </td>
-            <td className="px-3 py-2.5 w-[17%] hidden lg:table-cell">
-              <span className="text-[10px] text-slate-400 whitespace-nowrap">
-                {new Date(acc.created_at).toLocaleDateString("id-ID", {
-                  day: "2-digit",
-                  month: "short",
-                  year: "numeric",
-                })}
-              </span>
-            </td>
-            <td className="px-3 py-2.5 w-[30%]">
-              <div className="flex items-center justify-end gap-1.5">
-                {/* Jual */}
-                <button
-                  onClick={() => handleSell(acc.username)}
-                  disabled={isSelling}
-                  className="px-2.5 py-1 bg-emerald-500 hover:bg-emerald-600 text-white text-[10px] font-bold rounded-md flex items-center gap-1 transition disabled:opacity-50 whitespace-nowrap"
-                  title="Jual akun ini"
-                >
-                  {isSelling ? (
-                    <i className="fa-solid fa-spinner fa-spin text-[9px]"></i>
-                  ) : (
-                    <i className="fa-solid fa-rocket text-[9px]"></i>
-                  )}
-                  <span>{isSelling ? "..." : "Jual"}</span>
-                </button>
+            {isIdleLoading ? (
+              <i className="fa-solid fa-spinner fa-spin text-[9px]"></i>
+            ) : isIdle ? (
+              <i className="fa-solid fa-circle-check text-[9px]"></i>
+            ) : (
+              <i className="fa-solid fa-moon text-[9px]"></i>
+            )}
+            <span>{isIdle ? "Aktifkan" : "Idle"}</span>
+          </button>
 
-                {/* Edit */}
-                <button
-                  onClick={() => handleEditClick(acc)}
-                  className="w-7 h-7 inline-flex items-center justify-center bg-blue-100 dark:bg-blue-500/20 text-blue-600 dark:text-blue-300 rounded-lg hover:bg-blue-500/40 transition"
-                  title="Edit"
-                >
-                  <i className="fa-solid fa-pen text-xs"></i>
-                </button>
+          {/* Jual */}
+          <button
+            onClick={() => handleSell(acc.username)}
+            disabled={isSelling || isIdle}
+            className="px-2.5 py-1 bg-emerald-500 hover:bg-emerald-600 text-white text-[10px] font-bold rounded-md flex items-center gap-1 transition disabled:opacity-50 whitespace-nowrap"
+            title={isIdle ? "Aktifkan dulu sebelum jual" : "Jual akun ini"}
+          >
+            {isSelling ? (
+              <i className="fa-solid fa-spinner fa-spin text-[9px]"></i>
+            ) : (
+              <i className="fa-solid fa-rocket text-[9px]"></i>
+            )}
+            <span>{isSelling ? "..." : "Jual"}</span>
+          </button>
 
-                {/* Hapus */}
-                <button
-                  onClick={() => handleDelete(acc.username)}
-                  className="w-7 h-7 inline-flex items-center justify-center bg-red-100 dark:bg-red-500/20 text-red-600 dark:text-red-300 rounded-lg hover:bg-red-500/40 transition"
-                  title="Hapus"
-                >
-                  <i className="fa-solid fa-trash-can text-xs"></i>
-                </button>
-              </div>
-            </td>
-          </tr>
-        );
-      })}
+          {/* Edit */}
+          <button
+            onClick={() => handleEditClick(acc)}
+            className="w-7 h-7 inline-flex items-center justify-center bg-blue-100 dark:bg-blue-500/20 text-blue-600 dark:text-blue-300 rounded-lg hover:bg-blue-500/40 transition"
+            title="Edit"
+          >
+            <i className="fa-solid fa-pen text-xs"></i>
+          </button>
+
+          {/* Hapus */}
+          <button
+            onClick={() => handleDelete(acc.username)}
+            className="w-7 h-7 inline-flex items-center justify-center bg-red-100 dark:bg-red-500/20 text-red-600 dark:text-red-300 rounded-lg hover:bg-red-500/40 transition"
+            title="Hapus"
+          >
+            <i className="fa-solid fa-trash-can text-xs"></i>
+          </button>
+        </div>
+      </td>
+    </tr>
+  );
+})}
     </tbody>
   </table>
 </div>
