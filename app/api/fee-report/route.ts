@@ -21,7 +21,6 @@ export async function GET(request: Request) {
       );
     }
 
-    // ⭐ Ambil detail (buat ditampilin di tabel)
     const { data, error } = await supabaseAdmin
       .from("income_fee_log")
       .select("*")
@@ -35,7 +34,7 @@ export async function GET(request: Request) {
       );
     }
 
-    // ⭐ Aggregate summary per joki
+    // Aggregate per joki
     const grouped: Record<string, any> = {};
     for (const row of data || []) {
       const key = row.joki_name.toLowerCase();
@@ -57,7 +56,7 @@ export async function GET(request: Request) {
     return NextResponse.json({
       success: true,
       summary: Object.values(grouped),
-      detail: data || [],       // ⭐ INI YANG KIRIM DETAIL
+      detail: data || [],
     });
   } catch (err: any) {
     return NextResponse.json(
