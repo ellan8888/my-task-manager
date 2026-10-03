@@ -159,7 +159,7 @@ export async function GET(req: NextRequest) {
 }
 
 // ============================================================
-// POST — Input stock baru (dengan validasi password)
+// POST — Input stock baru (dengan validasi password + RESTORE)
 // ============================================================
 export async function POST(req: NextRequest) {
   try {
@@ -185,20 +185,74 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Cek duplikat
+    // ══════════════════════════════════════════════════════════
+    // ⭐ CEK DUPLIKAT — ambil info deleted
+    // ══════════════════════════════════════════════════════════
     const { data: existing } = await supabase
       .from("accounts_stock")
-      .select("id, username")
+      .select("id, username, deleted, logged_out")
       .eq("username", username)
       .maybeSingle();
 
+    // ══════════════════════════════════════════════════════════
+    // ⭐ CASE 1: Row ada & DELETED → RESTORE (bukan insert baru)
+    // ══════════════════════════════════════════════════════════
+    if (existing && existing.deleted) {
+      console.log(`[Stock POST] Restore akun "${username}" (id=${existing.id})`);
+
+      const { data: restored, error: restoreError } = await supabase
+        .from("accounts_stock")
+        .update({
+          deleted: false,
+          deleted_at: null,
+          password: password || null,
+          roblox_cookie: roblox_cookie || null,
+          kategori: kategori || "akun",
+          added_by: added_by || "lan4337",
+          used: false,
+          logged_out: false,
+          idle: false,
+          idle_marked_at: null,
+          status: status || "personal",
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", existing.id)
+        .select()
+        .single();
+
+      if (restoreError) {
+        console.error("[Stock POST] Restore error:", restoreError);
+        return NextResponse.json(
+          { success: false, message: restoreError.message },
+          { status: 500 }
+        );
+      }
+
+      return NextResponse.json({
+        success: true,
+        message: `Stock ${username} berhasil di-restore`,
+        action: "restored",     // ⭐ info ke frontend
+        data: restored,
+      });
+    }
+
+    // ══════════════════════════════════════════════════════════
+    // ⭐ CASE 2: Row ada & AKTIF → REJECT DUPLIKAT
+    // ══════════════════════════════════════════════════════════
     if (existing) {
       return NextResponse.json(
-        { success: false, message: `Username ${username} sudah ada di stock` },
+        {
+          success: false,
+          message: `Username ${username} sudah ada di stock`,
+          code: "DUPLICATE_ACTIVE",   // ⭐ info ke frontend
+        },
         { status: 409 }
       );
     }
 
+    // ══════════════════════════════════════════════════════════
+    // ⭐ CASE 3: Row nggak ada → INSERT BARU
+    // ══════════════════════════════════════════════════════════
     const { data, error } = await supabase
       .from("accounts_stock")
       .insert({
@@ -209,12 +263,14 @@ export async function POST(req: NextRequest) {
         added_by: added_by || "lan4337",
         used: false,
         logged_out: false,
+        idle: false,
         status: status || "personal",
       })
       .select()
       .single();
 
     if (error) {
+      console.error("[Stock POST] Insert error:", error);
       return NextResponse.json(
         { success: false, message: error.message },
         { status: 500 }
@@ -224,9 +280,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       success: true,
       message: `Stock ${username} berhasil ditambahkan`,
+      action: "created",     // ⭐ info ke frontend
       data,
     });
   } catch (err: any) {
+    console.error("[Stock POST] Exception:", err);
     return NextResponse.json(
       { success: false, message: err.message },
       { status: 500 }

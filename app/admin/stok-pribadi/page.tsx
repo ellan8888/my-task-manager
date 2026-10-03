@@ -136,45 +136,56 @@ useEffect(() => {
 
   // Submit — tambah akun
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  e.preventDefault();
 
-    if (!username) {
-      toast.warning("Username wajib diisi");
-      return;
-    }
+  if (!username) {
+    toast.warning("Username wajib diisi");
+    return;
+  }
 
-    setSaving(true);
-    try {
-      const res = await fetch("/api/accounts/stock", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          username,
-          password,
-          roblox_cookie: cookie,
-          kategori,
-          added_by: addedBy,
-          status: "personal",
-        }),
-      });
+  setSaving(true);
+  try {
+    const res = await fetch("/api/accounts/stock", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        username,
+        password,
+        roblox_cookie: cookie,
+        kategori,
+        added_by: addedBy,
+        status: "personal",
+      }),
+    });
 
-      const data = await res.json();
+    const data = await res.json();
 
-      if (data.success) {
+    if (data.success) {
+      // ⭐ Bedain notif: "ditambahkan" vs "di-restore"
+      if (data.action === "restored") {
+        toast.success(`Akun "${username}" di-restore dari arsip`);
+      } else {
         toast.success(data.message);
-        setUsername("");
-        setPassword("");
-        setCookie("");
-        loadAccounts();
+      }
+
+      setUsername("");
+      setPassword("");
+      setCookie("");
+      loadAccounts();
+    } else {
+      // ⭐ Handle kalau duplikat aktif
+      if (data.code === "DUPLICATE_ACTIVE") {
+        toast.error(data.message);   // pesan udah jelas dari API
       } else {
         toast.error(data.message);
       }
-    } catch {
-      toast.error("Terjadi kesalahan");
-    } finally {
-      setSaving(false);
     }
-  };
+  } catch {
+    toast.error("Terjadi kesalahan");
+  } finally {
+    setSaving(false);
+  }
+};
 
   // Jual akun
   const handleSell = (uname: string) => {
