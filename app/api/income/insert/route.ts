@@ -47,6 +47,7 @@ export async function POST(request: Request) {
       amount
     );
 
+    // ⭐ LOG internal — cuma keliatan di Vercel log (owner-only)
     console.log(
       `💰 [Income Insert] order=${order_id} joki=${finalJokiName} ` +
       `gross=Rp ${grossAmount.toLocaleString("id-ID")} ` +
@@ -55,18 +56,16 @@ export async function POST(request: Request) {
     );
 
     // ══════════════════════════════════════════════════════════
-    // UPSERT — dengan composite unique (order_id + roblox_username)
+    // INSERT KE income_log — amount = NET aja (yang mereka liat)
     // ══════════════════════════════════════════════════════════
-    const { error } = await supabaseAdmin
+    const { data: incomeData, error: incomeError } = await supabaseAdmin
       .from("income_log")
       .upsert(
         {
           order_id,
           joki_name: finalJokiName,
           product_title: product_title || "",
-          amount: netAmount,              // ⭐ NET (setelah fee)
-          gross_amount: grossAmount,      // ⭐ GROSS (asli, buat audit)
-          fee,                            // ⭐ FEE (buat audit)
+          amount: netAmount,              // ← NET aja
           completed_at: completed_at || new Date().toISOString(),
           buyer_name: buyer_name || null,
           roblox_username: roblox_username || null,
@@ -75,26 +74,43 @@ export async function POST(request: Request) {
           onConflict: "order_id,roblox_username",
           ignoreDuplicates: true,
         }
-      );
+      )
+      .select("id")
+      .maybeSingle();
 
-    if (error) {
-      console.error("[Income Insert] Supabase error:", error);
+    if (incomeError) {
+      console.error("[Income Insert] Supabase error:", incomeError);
       return NextResponse.json(
-        { success: false, message: error.message },
+        { success: false, message: incomeError.message },
         { status: 500 }
       );
     }
 
-    return NextResponse.json({
-      success: true,
-      data: {
-        order_id,
-        joki_name: finalJokiName,
-        gross_amount: grossAmount,
-        fee,
-        net_amount: netAmount,
-      },
-    });
+    // ══════════════════════════════════════════════════════════
+    // INSERT KE income_fee_log — KHUSUS ellan (kalau ada fee)
+    // ══════════════════════════════════════════════════════════
+    if (fee > 0 && incomeData?.id) {
+      const { error: feeError } = await supabaseAdmin
+        .from("income_fee_log")
+        .insert({
+          income_log_id: incomeData.id,
+          order_id,
+          joki_name: finalJokiName,
+          gross_amount: grossAmount,
+          fee_amount: fee,
+          net_amount: netAmount,
+        });
+
+      if (feeError) {
+        // ⚠️ Jangan fail — cuma log. Fee log optional.
+        console.error("[Income Insert] Fee log error:", feeError);
+      }
+    }
+
+    // ══════════════════════════════════════════════════════════
+    // RESPONSE — TANPA INFO FEE (biar nggak bocor)
+    // ══════════════════════════════════════════════════════════
+    return NextResponse.json({ success: true });
   } catch (err: any) {
     console.error("[Income Insert] Exception:", err);
     return NextResponse.json(
