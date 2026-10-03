@@ -16,7 +16,8 @@ type MenuItemBelow = {
   active: boolean;
   badge?: string;
   badgeColor?: "red" | "emerald";
-  superadminOnly?: boolean;   // ⭐ NEW
+  superadminOnly?: boolean;
+  ellanOnly?: boolean;        // ⭐ NEW — cuma ellan
 };
 
 export default function AdminSidebar({ sidebarOpen, setSidebarOpen }: Props) {
@@ -163,41 +164,59 @@ export default function AdminSidebar({ sidebarOpen, setSidebarOpen }: Props) {
   // MENU ITEMS BAWAH
   // ══════════════════════════════════════════════════════
   const allMenuItemsBelow: MenuItemBelow[] = [
-    {
-      href: "/admin/withdrawals",
-      icon: "fa-wallet",
-      label: "Penarikan",
-      active: pathname === "/admin/withdrawals",
-    },
-    {
-      href: "/admin/kategori",
-      icon: "fa-folder-tree",
-      label: "Kategori Link",
-      active: pathname === "/admin/kategori",
-    },
-    {
-      href: "/admin/order-gagal",
-      icon: "fa-triangle-exclamation",
-      label: "Order Gagal",
-      active: pathname === "/admin/order-gagal",
-      badge: failedCount > 0 ? String(failedCount) : undefined,
-      badgeColor: "red",
-      superadminOnly: true,   // ⭐ Cuma superadmin
-    },
-    {
-      href: "/queue",
-      icon: "fa-list-ol",
-      label: "Queue Jokian",
-      active: pathname === "/queue",
-      badge: "Live",
-    },
-  ];
+  {
+    href: "/admin/withdrawals",
+    icon: "fa-wallet",
+    label: "Penarikan",
+    active: pathname === "/admin/withdrawals",
+  },
+  {
+    href: "/admin/kategori",
+    icon: "fa-folder-tree",
+    label: "Kategori Link",
+    active: pathname === "/admin/kategori",
+  },
+  {
+    href: "/admin/order-gagal",
+    icon: "fa-triangle-exclamation",
+    label: "Order Gagal",
+    active: pathname === "/admin/order-gagal",
+    badge: failedCount > 0 ? String(failedCount) : undefined,
+    badgeColor: "red",
+    superadminOnly: true,
+  },
+  // ⭐ MENU BARU — cuma ellan
+  {
+    href: "/admin/fee-report",
+    icon: "fa-money-bill-trend-up",
+    label: "Laporan Fee",
+    active: pathname === "/admin/fee-report",
+    ellanOnly: true,          // ⭐ Cuma ellan yang liat
+  },
+  {
+    href: "/queue",
+    icon: "fa-list-ol",
+    label: "Queue Jokian",
+    active: pathname === "/queue",
+    badge: "Live",
+  },
+];
 
-  // ⭐ Filter menu berdasarkan role
-  const menuItemsBelow = allMenuItemsBelow.filter((item) => {
-    if (item.superadminOnly) return isSuperadmin;
-    return true;
-  });
+// ⭐ Cek apakah user ini ellan
+const isEllan =
+  currentUser?.username?.toLowerCase() === "ellan";
+
+// ⭐ Filter menu berdasarkan role
+const menuItemsBelow = allMenuItemsBelow.filter((item) => {
+  // Menu khusus ellan
+  if (item.ellanOnly) return isEllan;
+
+  // Menu khusus superadmin
+  if (item.superadminOnly) return isSuperadmin;
+
+  // Menu default — semua role bisa akses
+  return true;
+});
 
   return (
     <>

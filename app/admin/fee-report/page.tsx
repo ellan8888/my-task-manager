@@ -38,6 +38,7 @@ export default function FeeReportPage() {
   const [detail, setDetail] = useState<FeeDetail[]>([]);
   const [feeRules, setFeeRules] = useState<FeeRule[]>([]);
   const [loading, setLoading] = useState(true);
+  const [jokiDropdownOpen, setJokiDropdownOpen] = useState(false);
 
   // ⭐ Filter state
   const [filterJoki, setFilterJoki] = useState<string>("all");
@@ -99,6 +100,14 @@ export default function FeeReportPage() {
   useEffect(() => {
     if (user) fetchData();
   }, [user]);
+
+  useEffect(() => {
+  if (!jokiDropdownOpen) return;
+
+  const handleClickOutside = () => setJokiDropdownOpen(false);
+  document.addEventListener("click", handleClickOutside);
+  return () => document.removeEventListener("click", handleClickOutside);
+}, [jokiDropdownOpen]);
 
   // ══════════════════════════════════════════════════════
   // FEE RULES — HANDLERS
@@ -695,18 +704,101 @@ export default function FeeReportPage() {
               />
             </div>
 
-            <select
-              value={filterJoki}
-              onChange={(e) => setFilterJoki(e.target.value)}
-              className="px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-sm focus:outline-none focus:border-emerald-500"
+            {/* ⭐ Custom Dropdown Joki */}
+            <div
+            className="relative"
+            onClick={(e) => e.stopPropagation()}
             >
-              <option value="all">Semua Joki</option>
-              {jokiList.map((j) => (
-                <option key={j} value={j} className="capitalize">
-                  {j}
-                </option>
-              ))}
-            </select>
+            <button
+                type="button"
+                onClick={() => setJokiDropdownOpen(!jokiDropdownOpen)}
+                className={`w-full flex items-center justify-between gap-2 px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-950 border text-sm font-medium text-slate-700 dark:text-slate-300 transition ${
+                jokiDropdownOpen
+                    ? "border-emerald-500 ring-2 ring-emerald-500/20"
+                    : "border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700"
+                }`}
+            >
+                <span className="flex items-center gap-2 truncate">
+                <i className="fa-solid fa-user-tie text-xs text-slate-400"></i>
+                <span className="capitalize truncate">
+                    {filterJoki === "all" ? "Semua Joki" : filterJoki}
+                </span>
+                </span>
+                <i
+                className={`fa-solid fa-chevron-down text-[10px] text-slate-400 transition-transform duration-200 ${
+                    jokiDropdownOpen ? "rotate-180" : ""
+                }`}
+                ></i>
+            </button>
+
+            {/* Dropdown Panel */}
+            {jokiDropdownOpen && (
+                <div className="absolute top-full left-0 right-0 mt-1.5 z-30 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xl shadow-slate-900/10 dark:shadow-slate-950/50 overflow-hidden animate-in fade-in slide-in-from-top-1 duration-150">
+                {/* Option: Semua Joki */}
+                <button
+                    type="button"
+                    onClick={() => {
+                    setFilterJoki("all");
+                    setJokiDropdownOpen(false);
+                    }}
+                    className={`w-full flex items-center gap-2.5 px-3 py-2.5 text-sm transition ${
+                    filterJoki === "all"
+                        ? "bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 font-bold"
+                        : "text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800/50 font-medium"
+                    }`}
+                >
+                    <span
+                    className={`w-4 h-4 rounded-md flex items-center justify-center shrink-0 ${
+                        filterJoki === "all"
+                        ? "bg-emerald-500 text-white"
+                        : "border border-slate-300 dark:border-slate-700"
+                    }`}
+                    >
+                    {filterJoki === "all" && (
+                        <i className="fa-solid fa-check text-[9px]"></i>
+                    )}
+                    </span>
+                    <i className="fa-solid fa-users text-xs text-slate-400"></i>
+                    <span>Semua Joki</span>
+                </button>
+
+                {/* Divider */}
+                <div className="h-px bg-slate-100 dark:bg-slate-800"></div>
+
+                {/* Option: Per Joki */}
+                {jokiList.map((j) => {
+                    const isActive = filterJoki === j;
+                    return (
+                    <button
+                        key={j}
+                        type="button"
+                        onClick={() => {
+                        setFilterJoki(j);
+                        setJokiDropdownOpen(false);
+                        }}
+                        className={`w-full flex items-center gap-2.5 px-3 py-2.5 text-sm transition ${
+                        isActive
+                            ? "bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 font-bold"
+                            : "text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800/50 font-medium"
+                        }`}
+                    >
+                        <span
+                        className={`w-4 h-4 rounded-md flex items-center justify-center shrink-0 ${
+                            isActive
+                            ? "bg-emerald-500 text-white"
+                            : "border border-slate-300 dark:border-slate-700"
+                        }`}
+                        >
+                        {isActive && <i className="fa-solid fa-check text-[9px]"></i>}
+                        </span>
+                        <i className="fa-solid fa-user-tie text-xs text-slate-400"></i>
+                        <span className="capitalize">{j}</span>
+                    </button>
+                    );
+                })}
+                </div>
+            )}
+            </div>
 
             <input
               type="date"
@@ -756,7 +848,7 @@ export default function FeeReportPage() {
             </span>
           </div>
 
-          <div className="overflow-x-auto max-h-150 overflow-y-auto">
+          <div className="overflow-x-auto overflow-y-auto max-h-150 scrollbar-hide">
             <table className="w-full">
               <thead className="bg-slate-50 dark:bg-slate-950/50 sticky top-0">
                 <tr className="text-xs font-bold text-slate-500 uppercase">
