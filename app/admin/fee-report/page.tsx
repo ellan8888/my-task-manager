@@ -623,63 +623,115 @@ export default function FeeReportPage() {
         </div>
 
         {/* ═══════════════════════════════════════════════════ */}
-        {/* BREAKDOWN PER JOKI */}
-        {/* ═══════════════════════════════════════════════════ */}
-        <div className="bg-white dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden">
-          <div className="px-5 py-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
-            <h3 className="font-black text-slate-900 dark:text-white flex items-center gap-2">
-              <i className="fa-solid fa-chart-pie text-violet-600"></i>
-              Breakdown per Joki
-            </h3>
-            <span className="text-[10px] bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 px-2 py-1 rounded-full font-bold">
-              {summary.length} joki
-            </span>
+{/* BREAKDOWN PER JOKI */}
+{/* ═══════════════════════════════════════════════════ */}
+<div className="bg-white dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden">
+  <div className="px-5 py-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+    <h3 className="font-black text-slate-900 dark:text-white flex items-center gap-2">
+      <i className="fa-solid fa-chart-pie text-violet-600"></i>
+      Breakdown per Joki
+    </h3>
+    <span className="text-[10px] bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 px-2 py-1 rounded-full font-bold">
+      {summary.length} joki
+    </span>
+  </div>
+
+  {/* ⭐ DESKTOP — Tabel */}
+  <div className="hidden md:block overflow-x-auto">
+    <table className="w-full">
+      <thead className="bg-slate-50 dark:bg-slate-950/50">
+        <tr className="text-xs font-bold text-slate-500 uppercase">
+          <th className="text-left p-3">Joki</th>
+          <th className="text-right p-3">Gross</th>
+          <th className="text-right p-3">Fee</th>
+          <th className="text-right p-3">Net</th>
+          <th className="text-right p-3">Order</th>
+        </tr>
+      </thead>
+      <tbody>
+        {summary.map((row) => (
+          <tr
+            key={row.joki_name}
+            className="border-t border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-900/30 transition"
+          >
+            <td className="p-3 font-bold capitalize text-slate-900 dark:text-white">
+              {row.joki_name}
+            </td>
+            <td className="p-3 text-right font-mono text-slate-600 dark:text-slate-400">
+              Rp {row.total_gross.toLocaleString("id-ID")}
+            </td>
+            <td className="p-3 text-right font-mono font-black text-emerald-600 dark:text-emerald-400">
+              Rp {row.total_fee.toLocaleString("id-ID")}
+            </td>
+            <td className="p-3 text-right font-mono text-slate-900 dark:text-white">
+              Rp {row.total_net.toLocaleString("id-ID")}
+            </td>
+            <td className="p-3 text-right text-slate-500 dark:text-slate-400">
+              {row.total_orders}
+            </td>
+          </tr>
+        ))}
+        {summary.length === 0 && (
+          <tr>
+            <td colSpan={5} className="text-center p-8 text-slate-500">
+              Belum ada data fee
+            </td>
+          </tr>
+        )}
+      </tbody>
+    </table>
+  </div>
+
+  {/* ⭐ MOBILE — Card */}
+  <div className="md:hidden divide-y divide-slate-100 dark:divide-slate-800">
+    {summary.map((row) => (
+      <div key={row.joki_name} className="p-4 space-y-3">
+        {/* Header: Nama Joki + Order Count */}
+        <div className="flex items-center justify-between">
+          <span className="font-bold capitalize text-sm text-slate-900 dark:text-white">
+            {row.joki_name}
+          </span>
+          <span className="text-[10px] bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 px-2 py-0.5 rounded font-bold">
+            {row.total_orders} order
+          </span>
+        </div>
+
+        {/* Grid: Gross + Fee + Net */}
+        <div className="grid grid-cols-3 gap-2 text-[11px]">
+          <div>
+            <p className="text-[9px] uppercase text-slate-400 font-bold tracking-wider">
+              Gross
+            </p>
+            <p className="font-mono text-slate-600 dark:text-slate-400 mt-0.5 truncate">
+              Rp {row.total_gross.toLocaleString("id-ID")}
+            </p>
           </div>
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-slate-50 dark:bg-slate-950/50">
-                <tr className="text-xs font-bold text-slate-500 uppercase">
-                  <th className="text-left p-3">Joki</th>
-                  <th className="text-right p-3">Gross</th>
-                  <th className="text-right p-3">Fee</th>
-                  <th className="text-right p-3">Net</th>
-                  <th className="text-right p-3">Order</th>
-                </tr>
-              </thead>
-              <tbody>
-                {summary.map((row) => (
-                  <tr
-                    key={row.joki_name}
-                    className="border-t border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-900/30 transition"
-                  >
-                    <td className="p-3 font-bold capitalize text-slate-900 dark:text-white">
-                      {row.joki_name}
-                    </td>
-                    <td className="p-3 text-right font-mono text-slate-600 dark:text-slate-400">
-                      Rp {row.total_gross.toLocaleString("id-ID")}
-                    </td>
-                    <td className="p-3 text-right font-mono font-black text-emerald-600 dark:text-emerald-400">
-                      Rp {row.total_fee.toLocaleString("id-ID")}
-                    </td>
-                    <td className="p-3 text-right font-mono text-slate-900 dark:text-white">
-                      Rp {row.total_net.toLocaleString("id-ID")}
-                    </td>
-                    <td className="p-3 text-right text-slate-500 dark:text-slate-400">
-                      {row.total_orders}
-                    </td>
-                  </tr>
-                ))}
-                {summary.length === 0 && (
-                  <tr>
-                    <td colSpan={5} className="text-center p-8 text-slate-500">
-                      Belum ada data fee
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
+          <div>
+            <p className="text-[9px] uppercase text-emerald-600 dark:text-emerald-400 font-bold tracking-wider">
+              Fee
+            </p>
+            <p className="font-mono font-black text-emerald-600 dark:text-emerald-400 mt-0.5 truncate">
+              Rp {row.total_fee.toLocaleString("id-ID")}
+            </p>
+          </div>
+          <div>
+            <p className="text-[9px] uppercase text-slate-400 font-bold tracking-wider">
+              Net
+            </p>
+            <p className="font-mono font-bold text-slate-900 dark:text-white mt-0.5 truncate">
+              Rp {row.total_net.toLocaleString("id-ID")}
+            </p>
           </div>
         </div>
+      </div>
+    ))}
+    {summary.length === 0 && (
+      <div className="text-center p-8 text-slate-500 text-sm">
+        Belum ada data fee
+      </div>
+    )}
+  </div>
+</div>
 
         {/* ═══════════════════════════════════════════════════ */}
         {/* FILTER BAR */}
@@ -848,7 +900,7 @@ export default function FeeReportPage() {
             </span>
           </div>
 
-          <div className="overflow-x-auto overflow-y-auto max-h-150 scrollbar-hide">
+          <div className="hidden md:block overflow-x-auto overflow-y-auto max-h-96 scrollbar-hide">
             <table className="w-full">
               <thead className="bg-slate-50 dark:bg-slate-950/50 sticky top-0">
                 <tr className="text-xs font-bold text-slate-500 uppercase">
@@ -904,6 +956,80 @@ export default function FeeReportPage() {
               </tbody>
             </table>
           </div>
+
+          {/* ⭐ MOBILE VIEW — Detail per Order (hidden di desktop) */}
+<div className="md:hidden divide-y divide-slate-100 dark:divide-slate-800">
+  {filteredDetail.map((row) => (
+    <div key={row.id} className="p-4 space-y-2.5">
+      {/* Header: Order ID + Tanggal */}
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0 flex-1">
+          <p className="text-[10px] uppercase text-slate-400 font-bold tracking-wider">
+            Order ID
+          </p>
+          <p className="font-mono font-bold text-sm text-slate-900 dark:text-white truncate mt-0.5">
+            {row.order_id}
+          </p>
+        </div>
+        <span className="text-[10px] text-slate-400 whitespace-nowrap shrink-0">
+          {new Date(row.created_at).toLocaleString("id-ID", {
+            day: "2-digit",
+            month: "short",
+            hour: "2-digit",
+            minute: "2-digit",
+          })}
+        </span>
+      </div>
+
+      {/* Grid: Joki + Gross */}
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <p className="text-[10px] uppercase text-slate-400 font-bold tracking-wider">
+            Joki
+          </p>
+          <p className="text-xs font-bold capitalize text-slate-900 dark:text-white mt-0.5">
+            {row.joki_name}
+          </p>
+        </div>
+        <div>
+          <p className="text-[10px] uppercase text-slate-400 font-bold tracking-wider">
+            Gross
+          </p>
+          <p className="font-mono text-xs text-slate-600 dark:text-slate-400 mt-0.5">
+            Rp {row.gross_amount.toLocaleString("id-ID")}
+          </p>
+        </div>
+      </div>
+
+      {/* Footer: Fee + Net */}
+      <div className="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800">
+        <div>
+          <p className="text-[10px] uppercase text-emerald-600 dark:text-emerald-400 font-bold tracking-wider">
+            Fee
+          </p>
+          <p className="font-mono font-black text-sm text-emerald-600 dark:text-emerald-400 mt-0.5">
+            Rp {row.fee_amount.toLocaleString("id-ID")}
+          </p>
+        </div>
+        <div className="text-right">
+          <p className="text-[10px] uppercase text-slate-400 font-bold tracking-wider">
+            Net
+          </p>
+          <p className="font-mono font-bold text-sm text-slate-900 dark:text-white mt-0.5">
+            Rp {row.net_amount.toLocaleString("id-ID")}
+          </p>
+        </div>
+      </div>
+    </div>
+  ))}
+  {filteredDetail.length === 0 && (
+    <div className="text-center p-8 text-slate-500 text-sm">
+      {detail.length === 0
+        ? "Belum ada data fee"
+        : "Nggak ada order yang match filter"}
+    </div>
+  )}
+</div>
 
           {filteredDetail.length > 0 && (
             <div className="px-5 py-3 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/50 flex flex-wrap items-center justify-between gap-2 text-xs">
