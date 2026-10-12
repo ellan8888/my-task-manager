@@ -39,6 +39,43 @@ export async function POST(request: Request) {
     }
 
     // ══════════════════════════════════════════════════════════
+    // CEK DULU — kalau udah ada, balikin data yang ada
+    // ══════════════════════════════════════════════════════════
+    const { data: existing } = await supabaseAdmin
+      .from("income_log")
+      .select("id, amount, joki_name, order_id, roblox_username")
+      .eq("order_id", order_id)
+      .eq("roblox_username", roblox_username || "")
+      .maybeSingle();
+
+    if (existing) {
+      // ⭐ Ambil fee log kalau ada
+      const { data: feeLog } = await supabaseAdmin
+        .from("income_fee_log")
+        .select("gross_amount, fee_amount, net_amount, fee_percent")
+        .eq("income_log_id", existing.id)
+        .maybeSingle();
+
+      console.log(
+        `ℹ️ [Income Insert] Order ${order_id} — ${roblox_username} udah ada, skip insert`
+      );
+
+      return NextResponse.json({
+        success: true,
+        already_exists: true,
+        data: {
+          order_id: existing.order_id,
+          joki_name: existing.joki_name,
+          roblox_username: existing.roblox_username,
+          gross_amount: feeLog?.gross_amount ?? existing.amount,
+          fee: feeLog?.fee_amount ?? 0,
+          net_amount: existing.amount,
+          fee_percent: feeLog?.fee_percent ?? 0,
+        },
+      });
+    }
+
+    // ══════════════════════════════════════════════════════════
     // APPLY FEE
     // ══════════════════════════════════════════════════════════
     const finalJokiName = joki_name || "ellan";
@@ -98,7 +135,7 @@ export async function POST(request: Request) {
           gross_amount: grossAmount,
           fee_amount: fee,
           net_amount: netAmount,
-          fee_percent: feePercent,   // ⭐ tambahin ini
+          fee_percent: feePercent,
         });
 
       if (feeError) {
@@ -107,9 +144,20 @@ export async function POST(request: Request) {
     }
 
     // ══════════════════════════════════════════════════════════
-    // RESPONSE — TANPA info fee
+    // RESPONSE — balikin data lengkap biar bot bisa pake buat notif
     // ══════════════════════════════════════════════════════════
-    return NextResponse.json({ success: true });
+    return NextResponse.json({
+      success: true,
+      data: {
+        order_id,
+        joki_name: finalJokiName,
+        roblox_username: roblox_username || null,
+        gross_amount: grossAmount,
+        fee,
+        net_amount: netAmount,
+        fee_percent: feePercent,
+      },
+    });
   } catch (err: any) {
     console.error("[Income Insert] Exception:", err);
     return NextResponse.json(

@@ -1,3 +1,4 @@
+// app/api/income/check/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
@@ -30,9 +31,10 @@ export async function GET(req: NextRequest) {
       );
     }
 
+    // ⭐ Ambil income_log + fee log (kalau ada)
     const { data, error } = await supabase
       .from("income_log")
-      .select("id")
+      .select("id, amount, joki_name, order_id, roblox_username")
       .eq("order_id", order_id)
       .eq("roblox_username", roblox_username)
       .maybeSingle();
@@ -44,9 +46,33 @@ export async function GET(req: NextRequest) {
       );
     }
 
+    // Kalau nggak ada → exists: false
+    if (!data) {
+      return NextResponse.json({
+        success: true,
+        exists: false,
+      });
+    }
+
+    // ⭐ Ambil fee log biar dapet gross + fee + percent
+    const { data: feeLog } = await supabase
+      .from("income_fee_log")
+      .select("gross_amount, fee_amount, net_amount, fee_percent")
+      .eq("income_log_id", data.id)
+      .maybeSingle();
+
     return NextResponse.json({
       success: true,
-      exists: !!data,
+      exists: true,
+      data: {
+        order_id: data.order_id,
+        joki_name: data.joki_name,
+        roblox_username: data.roblox_username,
+        gross_amount: feeLog?.gross_amount ?? data.amount,
+        fee: feeLog?.fee_amount ?? 0,
+        net_amount: data.amount,
+        fee_percent: feeLog?.fee_percent ?? 0,
+      },
     });
   } catch (err: any) {
     return NextResponse.json(
