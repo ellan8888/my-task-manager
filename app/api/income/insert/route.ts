@@ -42,7 +42,7 @@ export async function POST(request: Request) {
     // APPLY FEE
     // ══════════════════════════════════════════════════════════
     const finalJokiName = joki_name || "ellan";
-    const { grossAmount, fee, netAmount } = await applyFee(
+    const { grossAmount, fee, netAmount, feePercent } = await applyFee(
       finalJokiName,
       amount
     );
@@ -50,7 +50,7 @@ export async function POST(request: Request) {
     console.log(
       `💰 [Income Insert] order=${order_id} joki=${finalJokiName} ` +
       `gross=Rp ${grossAmount.toLocaleString("id-ID")} ` +
-      `fee=Rp ${fee.toLocaleString("id-ID")} ` +
+      `fee=Rp ${fee.toLocaleString("id-ID")} (${feePercent}%) ` +
       `net=Rp ${netAmount.toLocaleString("id-ID")}`
     );
 
@@ -98,6 +98,7 @@ export async function POST(request: Request) {
           gross_amount: grossAmount,
           fee_amount: fee,
           net_amount: netAmount,
+          fee_percent: feePercent,   // ⭐ tambahin ini
         });
 
       if (feeError) {

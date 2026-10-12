@@ -11,6 +11,7 @@ type FeeDetail = {
   gross_amount: number;
   fee_amount: number;
   net_amount: number;
+  fee_percent?: number;
   created_at: string;
 };
 
@@ -25,7 +26,8 @@ type FeeSummary = {
 type FeeRule = {
   id: number;
   joki_name: string;
-  fee_amount: number;
+  fee_amount: number;      // legacy
+  fee_percent: number;     // ⭐ NEW
   is_active: boolean;
   description: string | null;
 };
@@ -51,7 +53,7 @@ export default function FeeReportPage() {
   const [editFeeValue, setEditFeeValue] = useState<number>(0);
   const [showAddForm, setShowAddForm] = useState(false);
   const [newJokiName, setNewJokiName] = useState("");
-  const [newFeeAmount, setNewFeeAmount] = useState(500);
+  const [newFeeAmount, setNewFeeAmount] = useState(4);
   const [actionLoading, setActionLoading] = useState(false);
 
   // ══════════════════════════════════════════════════════
@@ -102,12 +104,12 @@ export default function FeeReportPage() {
   }, [user]);
 
   useEffect(() => {
-  if (!jokiDropdownOpen) return;
+    if (!jokiDropdownOpen) return;
 
-  const handleClickOutside = () => setJokiDropdownOpen(false);
-  document.addEventListener("click", handleClickOutside);
-  return () => document.removeEventListener("click", handleClickOutside);
-}, [jokiDropdownOpen]);
+    const handleClickOutside = () => setJokiDropdownOpen(false);
+    document.addEventListener("click", handleClickOutside);
+    return () => document.removeEventListener("click", handleClickOutside);
+  }, [jokiDropdownOpen]);
 
   // ══════════════════════════════════════════════════════
   // FEE RULES — HANDLERS
@@ -123,7 +125,7 @@ export default function FeeReportPage() {
         body: JSON.stringify({
           username: user.username,
           joki_name: jokiName,
-          fee_amount: newFee,
+          fee_percent: newFee,
         }),
       });
       const data = await res.json();
@@ -131,7 +133,7 @@ export default function FeeReportPage() {
       if (data.success) {
         setFeeRules((prev) =>
           prev.map((r) =>
-            r.joki_name === jokiName ? { ...r, fee_amount: newFee } : r
+            r.joki_name === jokiName ? { ...r, fee_percent: newFee } : r
           )
         );
         setEditingFee(null);
@@ -189,7 +191,7 @@ export default function FeeReportPage() {
         body: JSON.stringify({
           username: user.username,
           joki_name: newJokiName.trim().toLowerCase(),
-          fee_amount: newFeeAmount,
+          fee_percent: newFeeAmount,
         }),
       });
       const data = await res.json();
@@ -197,7 +199,7 @@ export default function FeeReportPage() {
       if (data.success) {
         setFeeRules((prev) => [...prev, data.data]);
         setNewJokiName("");
-        setNewFeeAmount(500);
+        setNewFeeAmount(4);
         setShowAddForm(false);
       } else {
         alert(data.message || "Gagal tambah joki");
@@ -461,13 +463,21 @@ export default function FeeReportPage() {
                   onChange={(e) => setNewJokiName(e.target.value)}
                   className="px-3 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-sm focus:outline-none focus:border-emerald-500"
                 />
-                <input
-                  type="number"
-                  placeholder="Fee (Rp)"
-                  value={newFeeAmount}
-                  onChange={(e) => setNewFeeAmount(parseInt(e.target.value) || 0)}
-                  className="px-3 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-sm focus:outline-none focus:border-emerald-500"
-                />
+                <div className="relative">
+                  <input
+                    type="number"
+                    step="0.1"
+                    min="0"
+                    max="100"
+                    placeholder="Fee (%)"
+                    value={newFeeAmount}
+                    onChange={(e) => setNewFeeAmount(parseFloat(e.target.value) || 0)}
+                    className="w-full px-3 py-2 pr-10 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-sm focus:outline-none focus:border-emerald-500"
+                  />
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm font-bold pointer-events-none">
+                    %
+                  </span>
+                </div>
                 <div className="flex gap-2">
                   <button
                     onClick={handleAddJoki}
@@ -538,7 +548,7 @@ export default function FeeReportPage() {
                         )}
                       </div>
                       <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">
-                        {isEllan ? "Nggak kena fee" : "Fee per order"}
+                        {isEllan ? "Nggak kena fee" : "Fee per order (persen)"}
                       </p>
                     </div>
                   </div>
@@ -546,17 +556,25 @@ export default function FeeReportPage() {
                   <div className="flex items-center gap-2 shrink-0">
                     {isEditing ? (
                       <>
-                        <input
-                          type="number"
-                          value={editFeeValue}
-                          onChange={(e) => setEditFeeValue(parseInt(e.target.value) || 0)}
-                          autoFocus
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") handleUpdateFee(rule.joki_name, editFeeValue);
-                            if (e.key === "Escape") setEditingFee(null);
-                          }}
-                          className="w-24 px-2 py-1 rounded-lg bg-white dark:bg-slate-900 border border-emerald-500 text-xs font-mono font-bold focus:outline-none"
-                        />
+                        <div className="relative">
+                          <input
+                            type="number"
+                            step="0.1"
+                            min="0"
+                            max="100"
+                            value={editFeeValue}
+                            onChange={(e) => setEditFeeValue(parseFloat(e.target.value) || 0)}
+                            autoFocus
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") handleUpdateFee(rule.joki_name, editFeeValue);
+                              if (e.key === "Escape") setEditingFee(null);
+                            }}
+                            className="w-20 px-2 py-1 pr-6 rounded-lg bg-white dark:bg-slate-900 border border-emerald-500 text-xs font-mono font-bold focus:outline-none"
+                          />
+                          <span className="absolute right-2 top-1/2 -translate-y-1/2 text-emerald-500 text-[10px] font-bold pointer-events-none">
+                            %
+                          </span>
+                        </div>
                         <button
                           onClick={() => handleUpdateFee(rule.joki_name, editFeeValue)}
                           disabled={actionLoading}
@@ -574,13 +592,13 @@ export default function FeeReportPage() {
                     ) : (
                       <>
                         <span className="font-mono font-black text-sm text-slate-900 dark:text-white">
-                          Rp {rule.fee_amount.toLocaleString("id-ID")}
+                          {rule.fee_percent ?? 0}%
                         </span>
 
                         <button
                           onClick={() => {
                             setEditingFee(rule.joki_name);
-                            setEditFeeValue(rule.fee_amount);
+                            setEditFeeValue(rule.fee_percent ?? 0);
                           }}
                           className="w-7 h-7 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-400 flex items-center justify-center transition"
                           title="Edit fee"
@@ -623,115 +641,113 @@ export default function FeeReportPage() {
         </div>
 
         {/* ═══════════════════════════════════════════════════ */}
-{/* BREAKDOWN PER JOKI */}
-{/* ═══════════════════════════════════════════════════ */}
-<div className="bg-white dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden">
-  <div className="px-5 py-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
-    <h3 className="font-black text-slate-900 dark:text-white flex items-center gap-2">
-      <i className="fa-solid fa-chart-pie text-violet-600"></i>
-      Breakdown per Joki
-    </h3>
-    <span className="text-[10px] bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 px-2 py-1 rounded-full font-bold">
-      {summary.length} joki
-    </span>
-  </div>
+        {/* BREAKDOWN PER JOKI */}
+        {/* ═══════════════════════════════════════════════════ */}
+        <div className="bg-white dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden">
+          <div className="px-5 py-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+            <h3 className="font-black text-slate-900 dark:text-white flex items-center gap-2">
+              <i className="fa-solid fa-chart-pie text-violet-600"></i>
+              Breakdown per Joki
+            </h3>
+            <span className="text-[10px] bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 px-2 py-1 rounded-full font-bold">
+              {summary.length} joki
+            </span>
+          </div>
 
-  {/* ⭐ DESKTOP — Tabel */}
-  <div className="hidden md:block overflow-x-auto">
-    <table className="w-full">
-      <thead className="bg-slate-50 dark:bg-slate-950/50">
-        <tr className="text-xs font-bold text-slate-500 uppercase">
-          <th className="text-left p-3">Joki</th>
-          <th className="text-right p-3">Gross</th>
-          <th className="text-right p-3">Fee</th>
-          <th className="text-right p-3">Net</th>
-          <th className="text-right p-3">Order</th>
-        </tr>
-      </thead>
-      <tbody>
-        {summary.map((row) => (
-          <tr
-            key={row.joki_name}
-            className="border-t border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-900/30 transition"
-          >
-            <td className="p-3 font-bold capitalize text-slate-900 dark:text-white">
-              {row.joki_name}
-            </td>
-            <td className="p-3 text-right font-mono text-slate-600 dark:text-slate-400">
-              Rp {row.total_gross.toLocaleString("id-ID")}
-            </td>
-            <td className="p-3 text-right font-mono font-black text-emerald-600 dark:text-emerald-400">
-              Rp {row.total_fee.toLocaleString("id-ID")}
-            </td>
-            <td className="p-3 text-right font-mono text-slate-900 dark:text-white">
-              Rp {row.total_net.toLocaleString("id-ID")}
-            </td>
-            <td className="p-3 text-right text-slate-500 dark:text-slate-400">
-              {row.total_orders}
-            </td>
-          </tr>
-        ))}
-        {summary.length === 0 && (
-          <tr>
-            <td colSpan={5} className="text-center p-8 text-slate-500">
-              Belum ada data fee
-            </td>
-          </tr>
-        )}
-      </tbody>
-    </table>
-  </div>
+          {/* DESKTOP — Tabel */}
+          <div className="hidden md:block overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-slate-50 dark:bg-slate-950/50">
+                <tr className="text-xs font-bold text-slate-500 uppercase">
+                  <th className="text-left p-3">Joki</th>
+                  <th className="text-right p-3">Gross</th>
+                  <th className="text-right p-3">Fee</th>
+                  <th className="text-right p-3">Net</th>
+                  <th className="text-right p-3">Order</th>
+                </tr>
+              </thead>
+              <tbody>
+                {summary.map((row) => (
+                  <tr
+                    key={row.joki_name}
+                    className="border-t border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-900/30 transition"
+                  >
+                    <td className="p-3 font-bold capitalize text-slate-900 dark:text-white">
+                      {row.joki_name}
+                    </td>
+                    <td className="p-3 text-right font-mono text-slate-600 dark:text-slate-400">
+                      Rp {row.total_gross.toLocaleString("id-ID")}
+                    </td>
+                    <td className="p-3 text-right font-mono font-black text-emerald-600 dark:text-emerald-400">
+                      Rp {row.total_fee.toLocaleString("id-ID")}
+                    </td>
+                    <td className="p-3 text-right font-mono text-slate-900 dark:text-white">
+                      Rp {row.total_net.toLocaleString("id-ID")}
+                    </td>
+                    <td className="p-3 text-right text-slate-500 dark:text-slate-400">
+                      {row.total_orders}
+                    </td>
+                  </tr>
+                ))}
+                {summary.length === 0 && (
+                  <tr>
+                    <td colSpan={5} className="text-center p-8 text-slate-500">
+                      Belum ada data fee
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
 
-  {/* ⭐ MOBILE — Card */}
-  <div className="md:hidden divide-y divide-slate-100 dark:divide-slate-800">
-    {summary.map((row) => (
-      <div key={row.joki_name} className="p-4 space-y-3">
-        {/* Header: Nama Joki + Order Count */}
-        <div className="flex items-center justify-between">
-          <span className="font-bold capitalize text-sm text-slate-900 dark:text-white">
-            {row.joki_name}
-          </span>
-          <span className="text-[10px] bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 px-2 py-0.5 rounded font-bold">
-            {row.total_orders} order
-          </span>
+          {/* MOBILE — Card */}
+          <div className="md:hidden divide-y divide-slate-100 dark:divide-slate-800">
+            {summary.map((row) => (
+              <div key={row.joki_name} className="p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold capitalize text-sm text-slate-900 dark:text-white">
+                    {row.joki_name}
+                  </span>
+                  <span className="text-[10px] bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 px-2 py-0.5 rounded font-bold">
+                    {row.total_orders} order
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-3 gap-2 text-[11px]">
+                  <div>
+                    <p className="text-[9px] uppercase text-slate-400 font-bold tracking-wider">
+                      Gross
+                    </p>
+                    <p className="font-mono text-slate-600 dark:text-slate-400 mt-0.5 truncate">
+                      Rp {row.total_gross.toLocaleString("id-ID")}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-[9px] uppercase text-emerald-600 dark:text-emerald-400 font-bold tracking-wider">
+                      Fee
+                    </p>
+                    <p className="font-mono font-black text-emerald-600 dark:text-emerald-400 mt-0.5 truncate">
+                      Rp {row.total_fee.toLocaleString("id-ID")}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-[9px] uppercase text-slate-400 font-bold tracking-wider">
+                      Net
+                    </p>
+                    <p className="font-mono font-bold text-slate-900 dark:text-white mt-0.5 truncate">
+                      Rp {row.total_net.toLocaleString("id-ID")}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            ))}
+            {summary.length === 0 && (
+              <div className="text-center p-8 text-slate-500 text-sm">
+                Belum ada data fee
+              </div>
+            )}
+          </div>
         </div>
-
-        {/* Grid: Gross + Fee + Net */}
-        <div className="grid grid-cols-3 gap-2 text-[11px]">
-          <div>
-            <p className="text-[9px] uppercase text-slate-400 font-bold tracking-wider">
-              Gross
-            </p>
-            <p className="font-mono text-slate-600 dark:text-slate-400 mt-0.5 truncate">
-              Rp {row.total_gross.toLocaleString("id-ID")}
-            </p>
-          </div>
-          <div>
-            <p className="text-[9px] uppercase text-emerald-600 dark:text-emerald-400 font-bold tracking-wider">
-              Fee
-            </p>
-            <p className="font-mono font-black text-emerald-600 dark:text-emerald-400 mt-0.5 truncate">
-              Rp {row.total_fee.toLocaleString("id-ID")}
-            </p>
-          </div>
-          <div>
-            <p className="text-[9px] uppercase text-slate-400 font-bold tracking-wider">
-              Net
-            </p>
-            <p className="font-mono font-bold text-slate-900 dark:text-white mt-0.5 truncate">
-              Rp {row.total_net.toLocaleString("id-ID")}
-            </p>
-          </div>
-        </div>
-      </div>
-    ))}
-    {summary.length === 0 && (
-      <div className="text-center p-8 text-slate-500 text-sm">
-        Belum ada data fee
-      </div>
-    )}
-  </div>
-</div>
 
         {/* ═══════════════════════════════════════════════════ */}
         {/* FILTER BAR */}
@@ -756,100 +772,93 @@ export default function FeeReportPage() {
               />
             </div>
 
-            {/* ⭐ Custom Dropdown Joki */}
-            <div
-            className="relative"
-            onClick={(e) => e.stopPropagation()}
-            >
-            <button
+            {/* Custom Dropdown Joki */}
+            <div className="relative" onClick={(e) => e.stopPropagation()}>
+              <button
                 type="button"
                 onClick={() => setJokiDropdownOpen(!jokiDropdownOpen)}
                 className={`w-full flex items-center justify-between gap-2 px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-950 border text-sm font-medium text-slate-700 dark:text-slate-300 transition ${
-                jokiDropdownOpen
+                  jokiDropdownOpen
                     ? "border-emerald-500 ring-2 ring-emerald-500/20"
                     : "border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700"
                 }`}
-            >
+              >
                 <span className="flex items-center gap-2 truncate">
-                <i className="fa-solid fa-user-tie text-xs text-slate-400"></i>
-                <span className="capitalize truncate">
+                  <i className="fa-solid fa-user-tie text-xs text-slate-400"></i>
+                  <span className="capitalize truncate">
                     {filterJoki === "all" ? "Semua Joki" : filterJoki}
-                </span>
+                  </span>
                 </span>
                 <i
-                className={`fa-solid fa-chevron-down text-[10px] text-slate-400 transition-transform duration-200 ${
+                  className={`fa-solid fa-chevron-down text-[10px] text-slate-400 transition-transform duration-200 ${
                     jokiDropdownOpen ? "rotate-180" : ""
-                }`}
+                  }`}
                 ></i>
-            </button>
+              </button>
 
-            {/* Dropdown Panel */}
-            {jokiDropdownOpen && (
+              {jokiDropdownOpen && (
                 <div className="absolute top-full left-0 right-0 mt-1.5 z-30 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xl shadow-slate-900/10 dark:shadow-slate-950/50 overflow-hidden animate-in fade-in slide-in-from-top-1 duration-150">
-                {/* Option: Semua Joki */}
-                <button
+                  <button
                     type="button"
                     onClick={() => {
-                    setFilterJoki("all");
-                    setJokiDropdownOpen(false);
+                      setFilterJoki("all");
+                      setJokiDropdownOpen(false);
                     }}
                     className={`w-full flex items-center gap-2.5 px-3 py-2.5 text-sm transition ${
-                    filterJoki === "all"
+                      filterJoki === "all"
                         ? "bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 font-bold"
                         : "text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800/50 font-medium"
                     }`}
-                >
+                  >
                     <span
-                    className={`w-4 h-4 rounded-md flex items-center justify-center shrink-0 ${
+                      className={`w-4 h-4 rounded-md flex items-center justify-center shrink-0 ${
                         filterJoki === "all"
-                        ? "bg-emerald-500 text-white"
-                        : "border border-slate-300 dark:border-slate-700"
-                    }`}
+                          ? "bg-emerald-500 text-white"
+                          : "border border-slate-300 dark:border-slate-700"
+                      }`}
                     >
-                    {filterJoki === "all" && (
+                      {filterJoki === "all" && (
                         <i className="fa-solid fa-check text-[9px]"></i>
-                    )}
+                      )}
                     </span>
                     <i className="fa-solid fa-users text-xs text-slate-400"></i>
                     <span>Semua Joki</span>
-                </button>
+                  </button>
 
-                {/* Divider */}
-                <div className="h-px bg-slate-100 dark:bg-slate-800"></div>
+                  <div className="h-px bg-slate-100 dark:bg-slate-800"></div>
 
-                {/* Option: Per Joki */}
-                {jokiList.map((j) => {
+                  {jokiList.map((j) => {
                     const isActive = filterJoki === j;
                     return (
-                    <button
+                      <button
                         key={j}
                         type="button"
                         onClick={() => {
-                        setFilterJoki(j);
-                        setJokiDropdownOpen(false);
+                          setFilterJoki(j);
+                          setJokiDropdownOpen(false);
                         }}
                         className={`w-full flex items-center gap-2.5 px-3 py-2.5 text-sm transition ${
-                        isActive
+                          isActive
                             ? "bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 font-bold"
                             : "text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800/50 font-medium"
                         }`}
-                    >
+                      >
                         <span
-                        className={`w-4 h-4 rounded-md flex items-center justify-center shrink-0 ${
+                          className={`w-4 h-4 rounded-md flex items-center justify-center shrink-0 ${
                             isActive
-                            ? "bg-emerald-500 text-white"
-                            : "border border-slate-300 dark:border-slate-700"
-                        }`}
+                              ? "bg-emerald-500 text-white"
+                              : "border border-slate-300 dark:border-slate-700"
+                          }`}
                         >
-                        {isActive && <i className="fa-solid fa-check text-[9px]"></i>}
+                          {isActive && <i className="fa-solid fa-check text-[9px]"></i>}
                         </span>
                         <i className="fa-solid fa-user-tie text-xs text-slate-400"></i>
                         <span className="capitalize">{j}</span>
-                    </button>
+                      </button>
                     );
-                })}
+                  })}
                 </div>
-            )}
+              )}
             </div>
 
             <input
@@ -957,79 +966,76 @@ export default function FeeReportPage() {
             </table>
           </div>
 
-          {/* ⭐ MOBILE VIEW — Detail per Order (hidden di desktop) */}
-<div className="md:hidden divide-y divide-slate-100 dark:divide-slate-800">
-  {filteredDetail.map((row) => (
-    <div key={row.id} className="p-4 space-y-2.5">
-      {/* Header: Order ID + Tanggal */}
-      <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0 flex-1">
-          <p className="text-[10px] uppercase text-slate-400 font-bold tracking-wider">
-            Order ID
-          </p>
-          <p className="font-mono font-bold text-sm text-slate-900 dark:text-white truncate mt-0.5">
-            {row.order_id}
-          </p>
-        </div>
-        <span className="text-[10px] text-slate-400 whitespace-nowrap shrink-0">
-          {new Date(row.created_at).toLocaleString("id-ID", {
-            day: "2-digit",
-            month: "short",
-            hour: "2-digit",
-            minute: "2-digit",
-          })}
-        </span>
-      </div>
+          {/* MOBILE VIEW */}
+          <div className="md:hidden divide-y divide-slate-100 dark:divide-slate-800">
+            {filteredDetail.map((row) => (
+              <div key={row.id} className="p-4 space-y-2.5">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[10px] uppercase text-slate-400 font-bold tracking-wider">
+                      Order ID
+                    </p>
+                    <p className="font-mono font-bold text-sm text-slate-900 dark:text-white truncate mt-0.5">
+                      {row.order_id}
+                    </p>
+                  </div>
+                  <span className="text-[10px] text-slate-400 whitespace-nowrap shrink-0">
+                    {new Date(row.created_at).toLocaleString("id-ID", {
+                      day: "2-digit",
+                      month: "short",
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
+                  </span>
+                </div>
 
-      {/* Grid: Joki + Gross */}
-      <div className="grid grid-cols-2 gap-3">
-        <div>
-          <p className="text-[10px] uppercase text-slate-400 font-bold tracking-wider">
-            Joki
-          </p>
-          <p className="text-xs font-bold capitalize text-slate-900 dark:text-white mt-0.5">
-            {row.joki_name}
-          </p>
-        </div>
-        <div>
-          <p className="text-[10px] uppercase text-slate-400 font-bold tracking-wider">
-            Gross
-          </p>
-          <p className="font-mono text-xs text-slate-600 dark:text-slate-400 mt-0.5">
-            Rp {row.gross_amount.toLocaleString("id-ID")}
-          </p>
-        </div>
-      </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <p className="text-[10px] uppercase text-slate-400 font-bold tracking-wider">
+                      Joki
+                    </p>
+                    <p className="text-xs font-bold capitalize text-slate-900 dark:text-white mt-0.5">
+                      {row.joki_name}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] uppercase text-slate-400 font-bold tracking-wider">
+                      Gross
+                    </p>
+                    <p className="font-mono text-xs text-slate-600 dark:text-slate-400 mt-0.5">
+                      Rp {row.gross_amount.toLocaleString("id-ID")}
+                    </p>
+                  </div>
+                </div>
 
-      {/* Footer: Fee + Net */}
-      <div className="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800">
-        <div>
-          <p className="text-[10px] uppercase text-emerald-600 dark:text-emerald-400 font-bold tracking-wider">
-            Fee
-          </p>
-          <p className="font-mono font-black text-sm text-emerald-600 dark:text-emerald-400 mt-0.5">
-            Rp {row.fee_amount.toLocaleString("id-ID")}
-          </p>
-        </div>
-        <div className="text-right">
-          <p className="text-[10px] uppercase text-slate-400 font-bold tracking-wider">
-            Net
-          </p>
-          <p className="font-mono font-bold text-sm text-slate-900 dark:text-white mt-0.5">
-            Rp {row.net_amount.toLocaleString("id-ID")}
-          </p>
-        </div>
-      </div>
-    </div>
-  ))}
-  {filteredDetail.length === 0 && (
-    <div className="text-center p-8 text-slate-500 text-sm">
-      {detail.length === 0
-        ? "Belum ada data fee"
-        : "Nggak ada order yang match filter"}
-    </div>
-  )}
-</div>
+                <div className="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800">
+                  <div>
+                    <p className="text-[10px] uppercase text-emerald-600 dark:text-emerald-400 font-bold tracking-wider">
+                      Fee
+                    </p>
+                    <p className="font-mono font-black text-sm text-emerald-600 dark:text-emerald-400 mt-0.5">
+                      Rp {row.fee_amount.toLocaleString("id-ID")}
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-[10px] uppercase text-slate-400 font-bold tracking-wider">
+                      Net
+                    </p>
+                    <p className="font-mono font-bold text-sm text-slate-900 dark:text-white mt-0.5">
+                      Rp {row.net_amount.toLocaleString("id-ID")}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            ))}
+            {filteredDetail.length === 0 && (
+              <div className="text-center p-8 text-slate-500 text-sm">
+                {detail.length === 0
+                  ? "Belum ada data fee"
+                  : "Nggak ada order yang match filter"}
+              </div>
+            )}
+          </div>
 
           {filteredDetail.length > 0 && (
             <div className="px-5 py-3 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/50 flex flex-wrap items-center justify-between gap-2 text-xs">

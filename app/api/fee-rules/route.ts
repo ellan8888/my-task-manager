@@ -9,9 +9,6 @@ const supabaseAdmin = createClient(
 
 const OWNER_USERNAMES = ["ellan"];
 
-// ══════════════════════════════════════════════════════════════
-// HELPER — cek owner
-// ══════════════════════════════════════════════════════════════
 function isOwner(username: string | null): boolean {
   return !!username && OWNER_USERNAMES.includes(username.toLowerCase());
 }
@@ -58,7 +55,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { username, joki_name, fee_amount, description } = body;
+    const { username, joki_name, fee_percent, description } = body;
 
     if (!isOwner(username)) {
       return NextResponse.json(
@@ -67,9 +64,16 @@ export async function POST(request: Request) {
       );
     }
 
-    if (!joki_name || typeof fee_amount !== "number") {
+    if (!joki_name || typeof fee_percent !== "number") {
       return NextResponse.json(
-        { success: false, message: "joki_name & fee_amount wajib" },
+        { success: false, message: "joki_name & fee_percent wajib" },
+        { status: 400 }
+      );
+    }
+
+    if (fee_percent < 0 || fee_percent > 100) {
+      return NextResponse.json(
+        { success: false, message: "fee_percent harus antara 0-100" },
         { status: 400 }
       );
     }
@@ -78,7 +82,8 @@ export async function POST(request: Request) {
       .from("joki_fee_rules")
       .insert({
         joki_name: joki_name.toLowerCase().trim(),
-        fee_amount,
+        fee_percent,
+        fee_amount: 0,        // legacy field — tetap 0
         description: description || null,
         is_active: true,
       })
@@ -107,7 +112,7 @@ export async function POST(request: Request) {
 export async function PATCH(request: Request) {
   try {
     const body = await request.json();
-    const { username, joki_name, fee_amount, is_active, description } = body;
+    const { username, joki_name, fee_percent, is_active, description } = body;
 
     if (!isOwner(username)) {
       return NextResponse.json(
@@ -127,7 +132,16 @@ export async function PATCH(request: Request) {
       updated_at: new Date().toISOString(),
     };
 
-    if (typeof fee_amount === "number") updates.fee_amount = fee_amount;
+    if (typeof fee_percent === "number") {
+      if (fee_percent < 0 || fee_percent > 100) {
+        return NextResponse.json(
+          { success: false, message: "fee_percent harus antara 0-100" },
+          { status: 400 }
+        );
+      }
+      updates.fee_percent = fee_percent;
+    }
+
     if (typeof is_active === "boolean") updates.is_active = is_active;
     if (description !== undefined) updates.description = description;
 
@@ -177,7 +191,6 @@ export async function DELETE(request: Request) {
       );
     }
 
-    // Guard: jangan hapus ellan
     if (joki_name.toLowerCase() === "ellan") {
       return NextResponse.json(
         { success: false, message: "Nggak bisa hapus owner" },
