@@ -11,7 +11,11 @@ type KategoriLink = {
   kategori: string;
   link: string;
   active: boolean;
+  nama_produk?: string | null;
+  image_url?: string | null;
 };
+
+type EditMode = "add" | "edit_link" | "edit_product";
 
 export default function KategoriPage() {
   const toast = useToast();
@@ -27,6 +31,9 @@ export default function KategoriPage() {
   const [productFile, setProductFile] = useState<File | null>(null);
   const [productPreview, setProductPreview] = useState<string | null>(null);
   const productInputRef = useRef<HTMLInputElement>(null);
+
+  // Mode & editing
+  const [editMode, setEditMode] = useState<EditMode>("add");
   const [editingKategori, setEditingKategori] = useState<string | null>(null);
 
   // ══════════════════════════════════════════════════════
@@ -73,7 +80,21 @@ export default function KategoriPage() {
   };
 
   // ══════════════════════════════════════════════════════
-  // SUBMIT — Tambah Kategori + Upload Foto + Webhook
+  // RESET FORM
+  // ══════════════════════════════════════════════════════
+  const resetForm = () => {
+    setKategori("");
+    setLink("");
+    setNamaProduk("");
+    setProductFile(null);
+    setProductPreview(null);
+    if (productInputRef.current) productInputRef.current.value = "";
+    setEditMode("add");
+    setEditingKategori(null);
+  };
+
+  // ══════════════════════════════════════════════════════
+  // SUBMIT
   // ══════════════════════════════════════════════════════
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -83,9 +104,8 @@ export default function KategoriPage() {
       return;
     }
 
-    // ⭐ Validasi khusus saat tambah baru (bukan edit)
-    const isAddNew = !editingKategori;
-    if (isAddNew) {
+    // ⭐ Validasi per mode
+    if (editMode === "add" || editMode === "edit_product") {
       if (!namaProduk.trim()) {
         toast.warning("Nama produk wajib diisi");
         return;
@@ -98,11 +118,44 @@ export default function KategoriPage() {
 
     setSaving(true);
     try {
-      // ─── 1. Simpan kategori ke DB ───
+      let imageUrl = "";
+
+      // ⭐ Upload foto (kalo ada)
+      if (productFile) {
+        const formData = new FormData();
+        formData.append("file", productFile);
+
+        const uploadRes = await fetch("/api/upload/product-image", {
+          method: "POST",
+          body: formData,
+        });
+        const uploadData = await uploadRes.json();
+
+        if (!uploadData.success) {
+          toast.error("Gagal upload foto: " + uploadData.message);
+          setSaving(false);
+          return;
+        }
+        imageUrl = uploadData.url;
+      }
+
+      // ⭐ Build payload
+      const payload: any = {
+        kategori,
+        link,
+        mode: editMode,
+      };
+
+      if (imageUrl) {
+        payload.nama_produk = namaProduk.trim();
+        payload.image_url = imageUrl;
+      }
+
+      // ⭐ Submit
       const res = await fetch("/api/kategori/links", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ kategori, link }),
+        body: JSON.stringify(payload),
       });
 
       const data = await res.json();
@@ -113,56 +166,24 @@ export default function KategoriPage() {
         return;
       }
 
-      // ─── 2. Kalau ADD NEW & ada foto → upload + webhook ───
-      if (isAddNew && productFile) {
-        try {
-          // Upload foto
-          const formData = new FormData();
-          formData.append("file", productFile);
-
-          const uploadRes = await fetch("/api/upload/product-image", {
-            method: "POST",
-            body: formData,
-          });
-          const uploadData = await uploadRes.json();
-
-          if (!uploadData.success) {
-            toast.warning("Kategori tersimpan, tapi foto gagal diupload");
-          } else {
-            // Kirim webhook
-            const notifyRes = await fetch("/api/kategori/notify", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                kategori,
-                nama_produk: namaProduk.trim(),
-                image_url: uploadData.url,
-              }),
-            });
-            const notifyData = await notifyRes.json();
-
-            if (notifyData.success) {
-              toast.success("Kategori + produk baru terkirim ke webhook!");
-            } else {
-              toast.warning("Kategori tersimpan, tapi webhook gagal");
-            }
-          }
-        } catch (err) {
-          console.error(err);
-          toast.warning("Kategori tersimpan, tapi notify gagal");
-        }
-      } else {
-        toast.success(data.message || "Kategori disimpan");
+      // ⭐ Success toast
+      if (editMode === "add") {
+        toast.success(
+          data.bot_sent
+            ? "Kategori + produk terkirim ke Discord!"
+            : "Kategori ditambahkan (bot offline — notif disimpan)"
+        );
+      } else if (editMode === "edit_link") {
+        toast.success("Link kategori di-update");
+      } else if (editMode === "edit_product") {
+        toast.success(
+          data.bot_sent
+            ? "Produk di-update + terkirim ke Discord!"
+            : "Produk di-update (bot offline — notif disimpan)"
+        );
       }
 
-      // ─── 3. Reset form ───
-      setKategori("");
-      setLink("");
-      setNamaProduk("");
-      setProductFile(null);
-      setProductPreview(null);
-      if (productInputRef.current) productInputRef.current.value = "";
-      setEditingKategori(null);
+      resetForm();
       loadKategori();
     } catch {
       toast.error("Terjadi kesalahan");
@@ -194,29 +215,72 @@ export default function KategoriPage() {
   };
 
   // ══════════════════════════════════════════════════════
-  // EDIT
+  // EDIT LINK
   // ══════════════════════════════════════════════════════
-  const handleEdit = (item: KategoriLink) => {
+  const handleEditLink = (item: KategoriLink) => {
     setKategori(item.kategori);
     setLink(item.link);
-    setEditingKategori(item.kategori);
-    // Reset produk karena edit cuma buat link
     setNamaProduk("");
     setProductFile(null);
     setProductPreview(null);
+    if (productInputRef.current) productInputRef.current.value = "";
+    setEditMode("edit_link");
+    setEditingKategori(item.kategori);
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  const handleCancelEdit = () => {
-    setKategori("");
-    setLink("");
+  // ══════════════════════════════════════════════════════
+  // EDIT PRODUK
+  // ══════════════════════════════════════════════════════
+  const handleEditProduct = (item: KategoriLink) => {
+    setKategori(item.kategori);
+    setLink(item.link);
+    // ⭐ Kosong — user isi manual
     setNamaProduk("");
     setProductFile(null);
     setProductPreview(null);
-    setEditingKategori(null);
+    if (productInputRef.current) productInputRef.current.value = "";
+    setEditMode("edit_product");
+    setEditingKategori(item.kategori);
+    window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  const isAddNew = !editingKategori;
+  const handleCancelEdit = () => resetForm();
+
+  const isAddNew = editMode === "add";
+  const isEdit = editMode !== "add";
+
+  // ══════════════════════════════════════════════════════
+  // UI HELPERS
+  // ══════════════════════════════════════════════════════
+  const formTitle = (() => {
+    if (editMode === "add") return "Tambah Kategori Baru";
+    if (editMode === "edit_link") return "Edit Link Kategori";
+    if (editMode === "edit_product") return "Edit Produk (kirim ke Discord)";
+    return "";
+  })();
+
+  const formIcon = (() => {
+    if (editMode === "add") return "fa-plus";
+    if (editMode === "edit_link") return "fa-link";
+    return "fa-bullhorn";
+  })();
+
+  const submitIcon = saving
+    ? "fa-spinner fa-spin"
+    : editMode === "edit_product"
+    ? "fa-paper-plane"
+    : editMode === "edit_link"
+    ? "fa-check"
+    : "fa-plus";
+
+  const submitLabel = saving
+    ? "Menyimpan..."
+    : editMode === "add"
+    ? "Tambah Kategori & Kirim ke Webhook"
+    : editMode === "edit_link"
+    ? "Update Link"
+    : "Update Produk & Kirim ke Discord";
 
   return (
     <>
@@ -230,20 +294,13 @@ export default function KategoriPage() {
         <div className="flex items-center space-x-3">
           <button
             onClick={toggleSidebar}
-            className="w-10 h-10 flex items-center justify-center rounded-xl bg-slate-100 dark:bg-slate-900 hover:bg-slate-200 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition"
-            title={sidebarOpen ? "Tutup Sidebar" : "Buka Sidebar"}
+            className="w-10 h-10 flex items-center justify-center rounded-xl bg-slate-100 dark:bg-slate-900 hover:bg-slate-200 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 transition"
           >
-            <i
-              className={`fa-solid ${
-                sidebarOpen ? "fa-bars-staggered" : "fa-bars"
-              } text-base`}
-            ></i>
+            <i className={`fa-solid ${sidebarOpen ? "fa-bars-staggered" : "fa-bars"} text-base`}></i>
           </button>
-
           <div className="w-10 h-10 rounded-2xl bg-linear-to-tr from-emerald-600 to-teal-500 flex items-center justify-center text-white shadow-lg shadow-emerald-600/30">
             <i className="fa-solid fa-folder-tree text-base"></i>
           </div>
-
           <div>
             <h2 className="text-base md:text-xl font-extrabold text-slate-900 dark:text-white tracking-tight">
               Kategori Link
@@ -258,21 +315,27 @@ export default function KategoriPage() {
       {/* Content */}
       <div className="flex-1 overflow-y-auto custom-scrollbar p-4 md:p-8">
         <div className="max-w-5xl mx-auto">
-          {/* FORM */}
+          {/* ══════════════════════════════════════════════ */}
+          {/* FORM                                            */}
+          {/* ══════════════════════════════════════════════ */}
           <form
             onSubmit={handleSubmit}
             className="bg-white dark:bg-slate-900/60 rounded-2xl p-6 border border-slate-200 dark:border-slate-800 mb-6 shadow-sm"
           >
             <h2 className="font-bold mb-4 text-slate-900 dark:text-white flex items-center gap-2">
-              <i
-                className={`fa-solid ${
-                  editingKategori ? "fa-pen-to-square" : "fa-plus"
-                } text-emerald-600 dark:text-emerald-400`}
-              ></i>
-              <span>
-                {editingKategori ? "Edit Kategori" : "Tambah Kategori Baru"}
-              </span>
+              <i className={`fa-solid ${formIcon} text-emerald-600 dark:text-emerald-400`}></i>
+              <span>{formTitle}</span>
             </h2>
+
+            {/* Info banner kalo mode edit_product */}
+            {editMode === "edit_product" && (
+              <div className="mb-4 p-3 rounded-xl bg-violet-50 dark:bg-violet-500/5 border border-violet-200 dark:border-violet-500/20 flex items-start gap-2">
+                <i className="fa-solid fa-bullhorn text-violet-600 dark:text-violet-400 text-xs mt-0.5"></i>
+                <p className="text-xs text-violet-700 dark:text-violet-300">
+                  Isi nama produk + upload foto baru. Setelah submit, <strong>otomatis terkirim ke Discord channel produk</strong>.
+                </p>
+              </div>
+            )}
 
             {/* Row 1: Kategori + Link */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
@@ -285,14 +348,12 @@ export default function KategoriPage() {
                   value={kategori}
                   onChange={(e) => setKategori(e.target.value)}
                   placeholder="3000 diamond"
-                  disabled={!!editingKategori}
+                  disabled={isEdit}
                   className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm text-slate-900 dark:text-white focus:outline-none focus:border-emerald-500 disabled:opacity-60 disabled:cursor-not-allowed"
                 />
                 <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 flex items-center gap-1">
                   <i className="fa-solid fa-circle-info text-[10px]"></i>
-                  {editingKategori
-                    ? "Nama kategori nggak bisa diubah saat edit"
-                    : "Gunakan huruf kecil (contoh: 3000 diamond)"}
+                  {isEdit ? "Nama kategori nggak bisa diubah" : "Gunakan huruf kecil"}
                 </p>
               </div>
 
@@ -307,15 +368,11 @@ export default function KategoriPage() {
                   placeholder="https://tokoku.itemku.com/pengiriman-otomatis/baru/XXXXXXX"
                   className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm text-slate-900 dark:text-white focus:outline-none focus:border-emerald-500"
                 />
-                <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 flex items-center gap-1">
-                  <i className="fa-solid fa-circle-info text-[10px]"></i>
-                  Copy URL dari itemku → produk → "Pengiriman Otomatis"
-                </p>
               </div>
             </div>
 
-            {/* Row 2: Info Produk (cuma muncul saat ADD NEW) */}
-            {isAddNew && (
+            {/* Row 2: Info Produk — muncul di ADD & EDIT_PRODUCT */}
+            {(isAddNew || editMode === "edit_product") && (
               <div className="border-t border-slate-200 dark:border-slate-800 pt-4 mb-4">
                 <div className="flex items-center gap-2 mb-3">
                   <div className="w-7 h-7 rounded-lg bg-violet-100 dark:bg-violet-500/10 text-violet-600 dark:text-violet-400 flex items-center justify-center">
@@ -332,7 +389,6 @@ export default function KategoriPage() {
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {/* Nama Produk */}
                   <div>
                     <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-2">
                       Nama Produk *
@@ -344,13 +400,8 @@ export default function KategoriPage() {
                       placeholder="mis. Diamond 3000 - Fast Process"
                       className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm text-slate-900 dark:text-white focus:outline-none focus:border-violet-500"
                     />
-                    <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 flex items-center gap-1">
-                      <i className="fa-solid fa-circle-info text-[10px]"></i>
-                      Nama produk yang bakal ditampilin di Discord
-                    </p>
                   </div>
 
-                  {/* Foto Produk */}
                   <div>
                     <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-2">
                       Foto Produk *
@@ -360,7 +411,7 @@ export default function KategoriPage() {
                       <button
                         type="button"
                         onClick={() => productInputRef.current?.click()}
-                        className="w-full py-3 rounded-xl border-2 border-dashed border-slate-300 dark:border-slate-700 hover:border-violet-500 dark:hover:border-violet-500 bg-slate-50 dark:bg-slate-950/30 transition flex items-center justify-center gap-2"
+                        className="w-full py-3 rounded-xl border-2 border-dashed border-slate-300 dark:border-slate-700 hover:border-violet-500 bg-slate-50 dark:bg-slate-950/30 transition flex items-center justify-center gap-2"
                       >
                         <i className="fa-solid fa-cloud-arrow-up text-violet-600 dark:text-violet-400"></i>
                         <span className="text-sm font-bold text-slate-700 dark:text-slate-300">
@@ -408,25 +459,11 @@ export default function KategoriPage() {
                 disabled={saving}
                 className="flex-1 bg-linear-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 disabled:opacity-50 text-white font-bold py-3 rounded-xl transition flex items-center justify-center gap-2"
               >
-                <i
-                  className={`fa-solid ${
-                    saving
-                      ? "fa-spinner fa-spin"
-                      : editingKategori
-                      ? "fa-check"
-                      : "fa-plus"
-                  }`}
-                ></i>
-                <span>
-                  {saving
-                    ? "Menyimpan..."
-                    : editingKategori
-                    ? "Update Kategori"
-                    : "Tambah Kategori & Kirim ke Webhook"}
-                </span>
+                <i className={`fa-solid ${submitIcon}`}></i>
+                <span>{submitLabel}</span>
               </button>
 
-              {editingKategori && (
+              {isEdit && (
                 <button
                   type="button"
                   onClick={handleCancelEdit}
@@ -439,7 +476,9 @@ export default function KategoriPage() {
             </div>
           </form>
 
-          {/* LIST */}
+          {/* ══════════════════════════════════════════════ */}
+          {/* LIST                                            */}
+          {/* ══════════════════════════════════════════════ */}
           <div className="bg-white dark:bg-slate-900/60 rounded-2xl p-6 border border-slate-200 dark:border-slate-800 shadow-sm">
             <h2 className="font-bold mb-4 text-slate-900 dark:text-white flex items-center gap-2">
               <i className="fa-solid fa-list text-emerald-600 dark:text-emerald-400"></i>
@@ -464,7 +503,7 @@ export default function KategoriPage() {
                     className="bg-slate-50 dark:bg-slate-950 rounded-xl p-4 border border-slate-200 dark:border-slate-800 flex items-center justify-between gap-3"
                   >
                     <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2 mb-1">
+                      <div className="flex items-center gap-2 mb-1 flex-wrap">
                         <i className="fa-solid fa-tag text-emerald-600 dark:text-emerald-400 text-xs"></i>
                         <p className="font-bold text-sm text-slate-900 dark:text-white truncate">
                           {item.kategori}
@@ -476,6 +515,12 @@ export default function KategoriPage() {
                         ) : (
                           <span className="px-2 py-0.5 bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400 text-[10px] font-bold rounded">
                             INACTIVE
+                          </span>
+                        )}
+                        {item.nama_produk && (
+                          <span className="px-2 py-0.5 bg-violet-100 dark:bg-violet-500/20 text-violet-700 dark:text-violet-300 text-[10px] font-bold rounded flex items-center gap-1">
+                            <i className="fa-solid fa-image text-[8px]"></i>
+                            PRODUK
                           </span>
                         )}
                       </div>
@@ -490,15 +535,26 @@ export default function KategoriPage() {
                       </a>
                     </div>
 
-                    <div className="flex items-center gap-2 shrink-0">
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      {/* Edit Link */}
                       <button
-                        onClick={() => handleEdit(item)}
+                        onClick={() => handleEditLink(item)}
                         className="w-8 h-8 flex items-center justify-center bg-blue-100 dark:bg-blue-500/20 text-blue-600 dark:text-blue-300 rounded-lg hover:bg-blue-500/40 transition"
-                        title="Edit"
+                        title="Edit Link"
                       >
-                        <i className="fa-solid fa-pen text-xs"></i>
+                        <i className="fa-solid fa-link text-xs"></i>
                       </button>
 
+                      {/* Edit Produk */}
+                      <button
+                        onClick={() => handleEditProduct(item)}
+                        className="w-8 h-8 flex items-center justify-center bg-violet-100 dark:bg-violet-500/20 text-violet-600 dark:text-violet-300 rounded-lg hover:bg-violet-500/40 transition"
+                        title="Edit Produk (kirim ke Discord)"
+                      >
+                        <i className="fa-solid fa-bullhorn text-xs"></i>
+                      </button>
+
+                      {/* Hapus */}
                       <button
                         onClick={() => handleDelete(item.kategori)}
                         className="w-8 h-8 flex items-center justify-center bg-red-100 dark:bg-red-500/20 text-red-600 dark:text-red-300 rounded-lg hover:bg-red-500/40 transition"
