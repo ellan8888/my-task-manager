@@ -199,7 +199,7 @@ const allMenuItemsBelow: MenuItemBelow[] = [
   {
     href: "/admin/redeem",
     icon: "fa-ticket",
-    label: "Redeem Code",
+    label: "Code Redfinger",
     active: pathname === "/admin/redeem",
   },
   {
