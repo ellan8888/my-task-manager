@@ -22,6 +22,16 @@ type PendingPurchase = {
   requested_at: string;
 };
 
+// ⭐ Tipe buat confirm modal
+type ConfirmState = {
+  title: string;
+  message: string;
+  detail?: { label: string; value: string; highlight?: boolean }[];
+  confirmText: string;
+  confirmColor: "emerald" | "rose" | "violet" | "blue";
+  onConfirm: () => void;
+} | null;
+
 export default function RedeemPage() {
   const { sidebarOpen, toggleSidebar } = useSidebar();
   const [user, setUser] = useState<any>(null);
@@ -44,6 +54,9 @@ export default function RedeemPage() {
   const [notes, setNotes] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // ⭐ State buat confirm modal
+  const [confirmState, setConfirmState] = useState<ConfirmState>(null);
 
   const isOwner = user?.username?.toLowerCase() === "ellan";
 
@@ -116,11 +129,9 @@ export default function RedeemPage() {
     reader.readAsDataURL(file);
   };
 
-  const handleBuyBalance = async () => {
-    const msg = isOwner
-      ? "Ambil 1 code gratis sebagai owner?"
-      : "Beli 1 code pake saldo Rp 20.000?";
-    if (!confirm(msg)) return;
+  // ⭐ Function buat actual beli pake saldo
+  const doBuyBalance = async () => {
+    setConfirmState(null);
     setBuying(true);
     try {
       const res = await fetch("/api/redeem/purchase-balance", {
@@ -139,6 +150,37 @@ export default function RedeemPage() {
       setToast({ type: "error", msg: "Error, coba lagi" });
     } finally {
       setBuying(false);
+    }
+  };
+
+  // ⭐ Buka confirm modal dulu, baru process
+  const handleBuyBalance = () => {
+    if (isOwner) {
+      setConfirmState({
+        title: "Ambil Code Gratis",
+        message: "Sebagai owner, kamu bisa ambil 1 code dari stock tanpa bayar. Stok tetap berkurang.",
+        detail: [
+          { label: "Harga Normal", value: formatRupiah(20000) },
+          { label: "Harga Kamu", value: "Gratis (Owner)", highlight: true },
+          { label: "Stock Tersedia", value: `${stockCount} code` },
+        ],
+        confirmText: "Ambil Sekarang",
+        confirmColor: "violet",
+        onConfirm: doBuyBalance,
+      });
+    } else {
+      setConfirmState({
+        title: "Beli Code pake Saldo",
+        message: "Saldo kamu bakal berkurang dan code langsung masuk ke Kode Saya.",
+        detail: [
+          { label: "Harga Code", value: formatRupiah(20000) },
+          { label: "Saldo Sekarang", value: formatRupiah(sisa) },
+          { label: "Sisa Setelah Beli", value: formatRupiah(sisa - 20000), highlight: true },
+        ],
+        confirmText: "Konfirmasi Beli",
+        confirmColor: "emerald",
+        onConfirm: doBuyBalance,
+      });
     }
   };
 
@@ -192,11 +234,9 @@ export default function RedeemPage() {
     }
   };
 
-  const handleAddStock = async () => {
-    if (!newCode.trim()) {
-      setToast({ type: "error", msg: "Isi code-nya" });
-      return;
-    }
+  // ⭐ Function actual add stock
+  const doAddStock = async () => {
+    setConfirmState(null);
     setAddingStock(true);
     try {
       const res = await fetch("/api/admin/redeem/add-stock", {
@@ -223,8 +263,27 @@ export default function RedeemPage() {
     }
   };
 
-  const handleVerify = async (purchaseId: number, action: "approve" | "reject") => {
-    if (!confirm(action === "approve" ? "Approve & assign code random?" : "Reject?")) return;
+  const handleAddStock = () => {
+    if (!newCode.trim()) {
+      setToast({ type: "error", msg: "Isi code-nya" });
+      return;
+    }
+    setConfirmState({
+      title: "Simpan Code ke Stock",
+      message: "Code ini bakal masuk ke stock dan bisa dibeli user.",
+      detail: [
+        { label: "Kode", value: newCode.trim().toUpperCase(), highlight: true },
+        { label: "Harga Jual", value: formatRupiah(20000) },
+      ],
+      confirmText: "Simpan",
+      confirmColor: "violet",
+      onConfirm: doAddStock,
+    });
+  };
+
+  // ⭐ Function actual verify
+  const doVerify = async (purchaseId: number, action: "approve" | "reject") => {
+    setConfirmState(null);
     setVerifyingId(purchaseId);
     try {
       const res = await fetch("/api/admin/redeem/verify", {
@@ -254,6 +313,31 @@ export default function RedeemPage() {
       setToast({ type: "error", msg: "Error, coba lagi" });
     } finally {
       setVerifyingId(null);
+    }
+  };
+
+  const handleVerify = (purchaseId: number, action: "approve" | "reject") => {
+    if (action === "approve") {
+      setConfirmState({
+        title: "Approve Pembelian",
+        message: "Code random dari stock bakal otomatis di-assign ke user ini.",
+        detail: [
+          { label: "Aksi", value: "Approve", highlight: true },
+          { label: "Stock Tersedia", value: `${stockCount} code` },
+        ],
+        confirmText: "Approve",
+        confirmColor: "emerald",
+        onConfirm: () => doVerify(purchaseId, action),
+      });
+    } else {
+      setConfirmState({
+        title: "Reject Pembelian",
+        message: "Pembelian ini bakal di-reject dan user nggak dapet code.",
+        detail: [{ label: "Aksi", value: "Reject", highlight: true }],
+        confirmText: "Reject",
+        confirmColor: "rose",
+        onConfirm: () => doVerify(purchaseId, action),
+      });
     }
   };
 
@@ -302,14 +386,10 @@ export default function RedeemPage() {
           </div>
         ) : (
           <div className="space-y-5">
-
             {/* ═══════════ SECTION 1: SALDO & BELI ═══════════ */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-              {/* LEFT (2/3): Saldo + Button */}
               <div className="lg:col-span-2 space-y-5">
-                {/* ⭐ SUMMARY — 3 kartu sejajar */}
                 <div className="grid grid-cols-3 gap-3">
-                  {/* Saldo */}
                   <div className="bg-emerald-50 dark:bg-emerald-500/5 border border-emerald-200 dark:border-emerald-500/20 rounded-xl p-4">
                     <div className="flex items-center gap-2 mb-2">
                       <div className="w-7 h-7 rounded-lg bg-emerald-100 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
@@ -324,7 +404,6 @@ export default function RedeemPage() {
                     </p>
                   </div>
 
-                  {/* Harga */}
                   <div className="bg-white dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 rounded-xl p-4">
                     <div className="flex items-center gap-2 mb-2">
                       <div className="w-7 h-7 rounded-lg bg-violet-100 dark:bg-violet-500/10 text-violet-600 dark:text-violet-400 flex items-center justify-center">
@@ -339,7 +418,6 @@ export default function RedeemPage() {
                     </p>
                   </div>
 
-                  {/* Stock */}
                   <div className="bg-white dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 rounded-xl p-4">
                     <div className="flex items-center gap-2 mb-2">
                       <div className="w-7 h-7 rounded-lg bg-amber-100 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center">
@@ -355,41 +433,39 @@ export default function RedeemPage() {
                   </div>
                 </div>
 
-                {/* ⭐ TOMBOL BELI — 2 kolom */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-  <button
-    onClick={handleBuyBalance}
-    disabled={buying || (!isOwner && sisa < 20000)}
-    className="w-full bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 hover:border-emerald-500/50 disabled:bg-slate-100 dark:disabled:bg-slate-900 disabled:border-slate-200 dark:disabled:border-slate-800 disabled:cursor-not-allowed text-emerald-700 dark:text-emerald-300 disabled:text-slate-400 px-5 py-3.5 rounded-xl font-bold transition flex items-center justify-center gap-2"
-  >
-    {buying ? (
-      <i className="fa-solid fa-spinner fa-spin"></i>
-    ) : isOwner ? (
-      <>
-        <i className="fa-solid fa-crown"></i>
-        Ambil Code (Gratis)
-      </>
-    ) : sisa < 20000 ? (
-      "Saldo Kurang"
-    ) : (
-      <>
-        <i className="fa-solid fa-cart-shopping"></i>
-        Beli pake Saldo
-      </>
-    )}
-  </button>
+                  <button
+                    onClick={handleBuyBalance}
+                    disabled={buying || (!isOwner && sisa < 20000)}
+                    className="w-full bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 hover:border-emerald-500/50 disabled:bg-slate-100 dark:disabled:bg-slate-900 disabled:border-slate-200 dark:disabled:border-slate-800 disabled:cursor-not-allowed text-emerald-700 dark:text-emerald-300 disabled:text-slate-400 px-5 py-3.5 rounded-xl font-bold transition flex items-center justify-center gap-2"
+                  >
+                    {buying ? (
+                      <i className="fa-solid fa-spinner fa-spin"></i>
+                    ) : isOwner ? (
+                      <>
+                        <i className="fa-solid fa-crown"></i>
+                        Ambil Code (Gratis)
+                      </>
+                    ) : sisa < 20000 ? (
+                      "Saldo Kurang"
+                    ) : (
+                      <>
+                        <i className="fa-solid fa-cart-shopping"></i>
+                        Beli pake Saldo
+                      </>
+                    )}
+                  </button>
 
-  <button
-    onClick={() => setShowTransferModal(true)}
-    className="w-full bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/30 hover:border-blue-500/50 text-blue-700 dark:text-blue-300 px-5 py-3.5 rounded-xl font-bold transition flex items-center justify-center gap-2"
-  >
-    <i className="fa-solid fa-building-columns"></i>
-    Beli pake Transfer
-  </button>
-</div>
+                  <button
+                    onClick={() => setShowTransferModal(true)}
+                    className="w-full bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/30 hover:border-blue-500/50 text-blue-700 dark:text-blue-300 px-5 py-3.5 rounded-xl font-bold transition flex items-center justify-center gap-2"
+                  >
+                    <i className="fa-solid fa-building-columns"></i>
+                    Beli pake Transfer
+                  </button>
+                </div>
               </div>
 
-              {/* RIGHT (1/3): Info singkat */}
               <div className="bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 rounded-xl p-4">
                 <div className="flex items-center gap-2 mb-3">
                   <div className="w-7 h-7 rounded-lg bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400 flex items-center justify-center">
@@ -519,8 +595,6 @@ export default function RedeemPage() {
             {/* ═══════════ SECTION 3: KELOLA (OWNER ONLY) ═══════════ */}
             {isOwner && (
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-
-                {/* Card 1: Tambah Stock */}
                 <div className="bg-white dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 rounded-xl shadow-sm overflow-hidden">
                   <div className="px-4 py-3 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
                     <div className="flex items-center gap-2">
@@ -565,7 +639,6 @@ export default function RedeemPage() {
                   </div>
                 </div>
 
-                {/* Card 2: Pending Transfer */}
                 <div className="bg-white dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 rounded-xl shadow-sm overflow-hidden">
                   <div className="px-4 py-3 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
                     <div className="flex items-center gap-2">
@@ -670,7 +743,6 @@ export default function RedeemPage() {
                 </div>
               </div>
             )}
-
           </div>
         )}
       </div>
@@ -707,132 +779,130 @@ export default function RedeemPage() {
             </div>
 
             <div className="bg-blue-50 dark:bg-blue-500/5 border border-blue-200 dark:border-blue-500/20 rounded-xl p-3 mb-4 space-y-2">
-  <p className="text-[10px] font-bold text-blue-700 dark:text-blue-300 uppercase tracking-wider flex items-center gap-1.5 mb-2">
-    <i className="fa-solid fa-info-circle text-[10px]"></i>
-    Transfer ke:
-  </p>
+              <p className="text-[10px] font-bold text-blue-700 dark:text-blue-300 uppercase tracking-wider flex items-center gap-1.5 mb-2">
+                <i className="fa-solid fa-info-circle text-[10px]"></i>
+                Transfer ke:
+              </p>
 
-  {/* Bank + Rek (1 baris) */}
-  <div className="flex items-center justify-between gap-2 bg-white dark:bg-slate-900 rounded-lg p-2 border border-blue-200/50 dark:border-blue-500/20">
-    <div className="flex items-center gap-2 min-w-0 flex-1">
-      <i className="fa-solid fa-building-columns text-blue-600 dark:text-blue-400 text-xs shrink-0"></i>
-      <div className="min-w-0">
-        <p className="text-[9px] text-blue-600 dark:text-blue-400 font-bold uppercase">
-          Sea Bank
-        </p>
-        <p className="text-sm font-mono font-black text-blue-900 dark:text-blue-200 truncate tracking-wide">
-          901647793874
-        </p>
-      </div>
-    </div>
-    <button
-      type="button"
-      onClick={() => {
-        navigator.clipboard.writeText("901647793874");
-        setToast({ type: "success", msg: "Nomor rekening dicopy!" });
-      }}
-      className="w-7 h-7 rounded-lg bg-blue-600 hover:bg-blue-500 text-white flex items-center justify-center shrink-0"
-      title="Copy"
-    >
-      <i className="fa-regular fa-copy text-[10px]"></i>
-    </button>
-  </div>
-
-  {/* Atas Nama — tanpa tombol copy */}
-  <div className="flex items-center gap-2 bg-white dark:bg-slate-900 rounded-lg p-2 border border-blue-200/50 dark:border-blue-500/20">
-    <i className="fa-solid fa-user text-blue-600 dark:text-blue-400 text-xs shrink-0"></i>
-    <p className="text-xs font-bold text-blue-900 dark:text-blue-200 truncate">
-      Ellan Arya Al Qohary
-    </p>
-  </div>
-</div>
-
-<div className="mt-4">
-  <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2 block">
-    Foto Bukti Transfer
-  </label>
-
-            {!proofPreview ? (
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                className="w-full py-8 rounded-xl border-2 border-dashed border-slate-300 dark:border-slate-700 hover:border-blue-500 dark:hover:border-blue-500 bg-slate-50 dark:bg-slate-950/30 transition flex flex-col items-center justify-center gap-2 mb-3"
-              >
-                <div className="w-12 h-12 rounded-full bg-blue-100 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center">
-                  <i className="fa-solid fa-cloud-arrow-up text-lg"></i>
+              <div className="flex items-center justify-between gap-2 bg-white dark:bg-slate-900 rounded-lg p-2 border border-blue-200/50 dark:border-blue-500/20">
+                <div className="flex items-center gap-2 min-w-0 flex-1">
+                  <i className="fa-solid fa-building-columns text-blue-600 dark:text-blue-400 text-xs shrink-0"></i>
+                  <div className="min-w-0">
+                    <p className="text-[9px] text-blue-600 dark:text-blue-400 font-bold uppercase">
+                      Sea Bank
+                    </p>
+                    <p className="text-sm font-mono font-black text-blue-900 dark:text-blue-200 truncate tracking-wide">
+                      901647793874
+                    </p>
+                  </div>
                 </div>
-                <p className="text-sm font-bold text-slate-700 dark:text-slate-300">
-                  Pilih Foto
-                </p>
-                <p className="text-[10px] text-slate-500">
-                  JPG, PNG • Max 5 MB
-                </p>
-              </button>
-            ) : (
-              <div className="relative mb-3">
-                <img
-                  src={proofPreview}
-                  alt="Preview"
-                  className="w-full h-48 object-contain rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950"
-                />
                 <button
                   type="button"
                   onClick={() => {
-                    setProofFile(null);
-                    setProofPreview(null);
-                    if (fileInputRef.current) fileInputRef.current.value = "";
+                    navigator.clipboard.writeText("901647793874");
+                    setToast({ type: "success", msg: "Nomor rekening dicopy!" });
                   }}
-                  className="absolute top-2 right-2 w-8 h-8 rounded-lg bg-rose-600 hover:bg-rose-500 text-white flex items-center justify-center"
+                  className="w-7 h-7 rounded-lg bg-blue-600 hover:bg-blue-500 text-white flex items-center justify-center shrink-0"
+                  title="Copy"
                 >
-                  <i className="fa-solid fa-xmark text-xs"></i>
+                  <i className="fa-regular fa-copy text-[10px]"></i>
                 </button>
               </div>
-            )}
 
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              onChange={handleFileChange}
-              className="hidden"
-            />
-
-            <textarea
-              placeholder="Catatan (opsional)"
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              className="w-full px-3 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 mb-4 text-sm focus:outline-none focus:border-blue-500"
-              rows={3}
-            />
-
-            <div className="flex gap-2">
-              <button
-                onClick={handleSubmitTransfer}
-                disabled={submitting || !proofFile}
-                className="flex-1 bg-linear-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 disabled:from-slate-300 disabled:to-slate-400 dark:disabled:from-slate-800 dark:disabled:to-slate-700 disabled:cursor-not-allowed text-white disabled:text-slate-500 dark:disabled:text-slate-500 px-5 py-3 rounded-xl font-bold shadow-sm transition flex items-center justify-center gap-2"
-              >
-                {submitting ? (
-                  <i className="fa-solid fa-spinner fa-spin"></i>
-                ) : (
-                  <>
-                    <i className="fa-solid fa-paper-plane text-xs"></i>
-                    Kirim
-                  </>
-                )}
-              </button>
-              <button
-                onClick={() => {
-                  setShowTransferModal(false);
-                  setProofFile(null);
-                  setProofPreview(null);
-                  setNotes("");
-                }}
-                className="px-4 py-3 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 font-bold transition"
-              >
-                Batal
-              </button>
+              <div className="flex items-center gap-2 bg-white dark:bg-slate-900 rounded-lg p-2 border border-blue-200/50 dark:border-blue-500/20">
+                <i className="fa-solid fa-user text-blue-600 dark:text-blue-400 text-xs shrink-0"></i>
+                <p className="text-xs font-bold text-blue-900 dark:text-blue-200 truncate">
+                  Ellan Arya Al Qohary
+                </p>
+              </div>
             </div>
-            </div> 
+
+            <div className="mt-4">
+              <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2 block">
+                Foto Bukti Transfer
+              </label>
+
+              {!proofPreview ? (
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="w-full py-8 rounded-xl border-2 border-dashed border-slate-300 dark:border-slate-700 hover:border-blue-500 dark:hover:border-blue-500 bg-slate-50 dark:bg-slate-950/30 transition flex flex-col items-center justify-center gap-2 mb-3"
+                >
+                  <div className="w-12 h-12 rounded-full bg-blue-100 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center">
+                    <i className="fa-solid fa-cloud-arrow-up text-lg"></i>
+                  </div>
+                  <p className="text-sm font-bold text-slate-700 dark:text-slate-300">
+                    Pilih Foto
+                  </p>
+                  <p className="text-[10px] text-slate-500">
+                    JPG, PNG • Max 5 MB
+                  </p>
+                </button>
+              ) : (
+                <div className="relative mb-3">
+                  <img
+                    src={proofPreview}
+                    alt="Preview"
+                    className="w-full h-48 object-contain rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setProofFile(null);
+                      setProofPreview(null);
+                      if (fileInputRef.current) fileInputRef.current.value = "";
+                    }}
+                    className="absolute top-2 right-2 w-8 h-8 rounded-lg bg-rose-600 hover:bg-rose-500 text-white flex items-center justify-center"
+                  >
+                    <i className="fa-solid fa-xmark text-xs"></i>
+                  </button>
+                </div>
+              )}
+
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleFileChange}
+                className="hidden"
+              />
+
+              <textarea
+                placeholder="Catatan (opsional)"
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                className="w-full px-3 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 mb-4 text-sm focus:outline-none focus:border-blue-500"
+                rows={3}
+              />
+
+              <div className="flex gap-2">
+                <button
+                  onClick={handleSubmitTransfer}
+                  disabled={submitting || !proofFile}
+                  className="flex-1 bg-linear-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 disabled:from-slate-300 disabled:to-slate-400 dark:disabled:from-slate-800 dark:disabled:to-slate-700 disabled:cursor-not-allowed text-white disabled:text-slate-500 dark:disabled:text-slate-500 px-5 py-3 rounded-xl font-bold shadow-sm transition flex items-center justify-center gap-2"
+                >
+                  {submitting ? (
+                    <i className="fa-solid fa-spinner fa-spin"></i>
+                  ) : (
+                    <>
+                      <i className="fa-solid fa-paper-plane text-xs"></i>
+                      Kirim
+                    </>
+                  )}
+                </button>
+                <button
+                  onClick={() => {
+                    setShowTransferModal(false);
+                    setProofFile(null);
+                    setProofPreview(null);
+                    setNotes("");
+                  }}
+                  className="px-4 py-3 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 font-bold transition"
+                >
+                  Batal
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}
@@ -869,10 +939,107 @@ export default function RedeemPage() {
         </div>
       )}
 
+      {/* ⭐ CONFIRM MODAL — ganti confirm() browser */}
+      {confirmState && (
+        <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-md z-100 flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 max-w-sm w-full shadow-2xl overflow-hidden">
+            {/* Header */}
+            <div className={`px-5 py-4 border-b border-slate-200 dark:border-slate-800 bg-linear-to-br ${
+              confirmState.confirmColor === "emerald" ? "from-emerald-50 to-green-50 dark:from-emerald-500/5 dark:to-green-500/5" :
+              confirmState.confirmColor === "rose" ? "from-rose-50 to-red-50 dark:from-rose-500/5 dark:to-red-500/5" :
+              confirmState.confirmColor === "blue" ? "from-blue-50 to-cyan-50 dark:from-blue-500/5 dark:to-cyan-500/5" :
+              "from-violet-50 to-indigo-50 dark:from-violet-500/5 dark:to-indigo-500/5"
+            }`}>
+              <div className="flex items-center gap-3">
+                <div className={`w-10 h-10 rounded-2xl flex items-center justify-center ${
+                  confirmState.confirmColor === "emerald" ? "bg-emerald-100 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400" :
+                  confirmState.confirmColor === "rose" ? "bg-rose-100 dark:bg-rose-500/20 text-rose-600 dark:text-rose-400" :
+                  confirmState.confirmColor === "blue" ? "bg-blue-100 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400" :
+                  "bg-violet-100 dark:bg-violet-500/20 text-violet-600 dark:text-violet-400"
+                }`}>
+                  <i className={`fa-solid ${
+                    confirmState.confirmColor === "rose" ? "fa-triangle-exclamation" :
+                    confirmState.confirmColor === "emerald" ? "fa-circle-check" :
+                    confirmState.confirmColor === "blue" ? "fa-circle-info" :
+                    "fa-circle-question"
+                  } text-base`}></i>
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-base text-slate-900 dark:text-white">
+                    {confirmState.title}
+                  </h3>
+                </div>
+              </div>
+            </div>
+
+            {/* Body */}
+            <div className="p-5">
+              <p className="text-sm text-slate-600 dark:text-slate-400 mb-4">
+                {confirmState.message}
+              </p>
+
+              {/* Detail list */}
+              {confirmState.detail && confirmState.detail.length > 0 && (
+                <div className="space-y-2 mb-4">
+                  {confirmState.detail.map((d, i) => (
+                    <div
+                      key={i}
+                      className={`flex items-center justify-between p-2.5 rounded-xl border ${
+                        d.highlight
+                          ? confirmState.confirmColor === "emerald" ? "bg-emerald-50 dark:bg-emerald-500/5 border-emerald-200 dark:border-emerald-500/20" :
+                            confirmState.confirmColor === "rose" ? "bg-rose-50 dark:bg-rose-500/5 border-rose-200 dark:border-rose-500/20" :
+                            confirmState.confirmColor === "blue" ? "bg-blue-50 dark:bg-blue-500/5 border-blue-200 dark:border-blue-500/20" :
+                            "bg-violet-50 dark:bg-violet-500/5 border-violet-200 dark:border-violet-500/20"
+                          : "bg-slate-50 dark:bg-slate-950/50 border-slate-200 dark:border-slate-800"
+                      }`}
+                    >
+                      <span className="text-xs text-slate-600 dark:text-slate-400 font-medium">
+                        {d.label}
+                      </span>
+                      <span className={`text-sm font-black ${
+                        d.highlight
+                          ? confirmState.confirmColor === "emerald" ? "text-emerald-700 dark:text-emerald-400" :
+                            confirmState.confirmColor === "rose" ? "text-rose-700 dark:text-rose-400" :
+                            confirmState.confirmColor === "blue" ? "text-blue-700 dark:text-blue-400" :
+                            "text-violet-700 dark:text-violet-400"
+                          : "text-slate-900 dark:text-white"
+                      }`}>
+                        {d.value}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Actions */}
+              <div className="flex gap-2">
+                <button
+                  onClick={confirmState.onConfirm}
+                  className={`flex-1 px-4 py-3 rounded-xl font-bold text-sm text-white transition shadow-sm ${
+                    confirmState.confirmColor === "emerald" ? "bg-linear-to-r from-emerald-600 to-green-600 hover:from-emerald-500 hover:to-green-500 shadow-emerald-600/20" :
+                    confirmState.confirmColor === "rose" ? "bg-linear-to-r from-rose-600 to-red-600 hover:from-rose-500 hover:to-red-500 shadow-rose-600/20" :
+                    confirmState.confirmColor === "blue" ? "bg-linear-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 shadow-blue-600/20" :
+                    "bg-linear-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 shadow-violet-600/20"
+                  }`}
+                >
+                  {confirmState.confirmText}
+                </button>
+                <button
+                  onClick={() => setConfirmState(null)}
+                  className="px-5 py-3 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 font-bold text-sm transition"
+                >
+                  Batal
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* TOAST */}
       {toast && (
         <div
-          className={`fixed bottom-4 right-4 px-4 py-3 rounded-xl shadow-2xl text-white font-bold z-50 cursor-pointer max-w-sm flex items-center gap-2 ${
+          className={`fixed bottom-4 right-4 px-4 py-3 rounded-xl shadow-2xl text-white font-bold z-110 cursor-pointer max-w-sm flex items-center gap-2 ${
             toast.type === "success" ? "bg-emerald-600" : "bg-rose-600"
           }`}
           onClick={() => setToast(null)}
