@@ -1,7 +1,7 @@
 // app/admin/kategori/page.tsx
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useToast } from "@/app/components/ToastProvider";
 import { useSidebar } from "../SidebarContext";
 import { SkeletonList } from "@/app/components/Skeleton";
@@ -23,10 +23,14 @@ export default function KategoriPage() {
   // Form state
   const [kategori, setKategori] = useState("");
   const [link, setLink] = useState("");
+  const [namaProduk, setNamaProduk] = useState("");
+  const [productFile, setProductFile] = useState<File | null>(null);
+  const [productPreview, setProductPreview] = useState<string | null>(null);
+  const productInputRef = useRef<HTMLInputElement>(null);
   const [editingKategori, setEditingKategori] = useState<string | null>(null);
 
   // ══════════════════════════════════════════════════════
-  // LOAD DATA — pakai ?active=false biar semua muncul
+  // LOAD DATA
   // ══════════════════════════════════════════════════════
   const loadKategori = async () => {
     setLoading(true);
@@ -47,7 +51,29 @@ export default function KategoriPage() {
   }, []);
 
   // ══════════════════════════════════════════════════════
-  // SUBMIT — Tambah / Update (upsert di API)
+  // HANDLE FILE UPLOAD
+  // ══════════════════════════════════════════════════════
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      toast.error("File harus gambar (JPG/PNG)");
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("Maksimal 5 MB");
+      return;
+    }
+
+    setProductFile(file);
+    const reader = new FileReader();
+    reader.onload = (ev) => setProductPreview(ev.target?.result as string);
+    reader.readAsDataURL(file);
+  };
+
+  // ══════════════════════════════════════════════════════
+  // SUBMIT — Tambah Kategori + Upload Foto + Webhook
   // ══════════════════════════════════════════════════════
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -57,8 +83,22 @@ export default function KategoriPage() {
       return;
     }
 
+    // ⭐ Validasi khusus saat tambah baru (bukan edit)
+    const isAddNew = !editingKategori;
+    if (isAddNew) {
+      if (!namaProduk.trim()) {
+        toast.warning("Nama produk wajib diisi");
+        return;
+      }
+      if (!productFile) {
+        toast.warning("Foto produk wajib diupload");
+        return;
+      }
+    }
+
     setSaving(true);
     try {
+      // ─── 1. Simpan kategori ke DB ───
       const res = await fetch("/api/kategori/links", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -67,15 +107,63 @@ export default function KategoriPage() {
 
       const data = await res.json();
 
-      if (data.success) {
-        toast.success(data.message || "Kategori disimpan");
-        setKategori("");
-        setLink("");
-        setEditingKategori(null);
-        loadKategori();
-      } else {
+      if (!data.success) {
         toast.error(data.message);
+        setSaving(false);
+        return;
       }
+
+      // ─── 2. Kalau ADD NEW & ada foto → upload + webhook ───
+      if (isAddNew && productFile) {
+        try {
+          // Upload foto
+          const formData = new FormData();
+          formData.append("file", productFile);
+
+          const uploadRes = await fetch("/api/upload/product-image", {
+            method: "POST",
+            body: formData,
+          });
+          const uploadData = await uploadRes.json();
+
+          if (!uploadData.success) {
+            toast.warning("Kategori tersimpan, tapi foto gagal diupload");
+          } else {
+            // Kirim webhook
+            const notifyRes = await fetch("/api/kategori/notify", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                kategori,
+                nama_produk: namaProduk.trim(),
+                image_url: uploadData.url,
+              }),
+            });
+            const notifyData = await notifyRes.json();
+
+            if (notifyData.success) {
+              toast.success("Kategori + produk baru terkirim ke webhook!");
+            } else {
+              toast.warning("Kategori tersimpan, tapi webhook gagal");
+            }
+          }
+        } catch (err) {
+          console.error(err);
+          toast.warning("Kategori tersimpan, tapi notify gagal");
+        }
+      } else {
+        toast.success(data.message || "Kategori disimpan");
+      }
+
+      // ─── 3. Reset form ───
+      setKategori("");
+      setLink("");
+      setNamaProduk("");
+      setProductFile(null);
+      setProductPreview(null);
+      if (productInputRef.current) productInputRef.current.value = "";
+      setEditingKategori(null);
+      loadKategori();
     } catch {
       toast.error("Terjadi kesalahan");
     } finally {
@@ -84,7 +172,7 @@ export default function KategoriPage() {
   };
 
   // ══════════════════════════════════════════════════════
-  // HAPUS — pakai ?kategori= (sesuai API kamu)
+  // HAPUS
   // ══════════════════════════════════════════════════════
   const handleDelete = async (nama: string) => {
     if (!confirm(`Hapus kategori "${nama}"?`)) return;
@@ -106,20 +194,29 @@ export default function KategoriPage() {
   };
 
   // ══════════════════════════════════════════════════════
-  // EDIT — isi form dengan data existing
+  // EDIT
   // ══════════════════════════════════════════════════════
   const handleEdit = (item: KategoriLink) => {
     setKategori(item.kategori);
     setLink(item.link);
     setEditingKategori(item.kategori);
+    // Reset produk karena edit cuma buat link
+    setNamaProduk("");
+    setProductFile(null);
+    setProductPreview(null);
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   const handleCancelEdit = () => {
     setKategori("");
     setLink("");
+    setNamaProduk("");
+    setProductFile(null);
+    setProductPreview(null);
     setEditingKategori(null);
   };
+
+  const isAddNew = !editingKategori;
 
   return (
     <>
@@ -177,6 +274,7 @@ export default function KategoriPage() {
               </span>
             </h2>
 
+            {/* Row 1: Kategori + Link */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
               <div>
                 <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-2">
@@ -216,6 +314,94 @@ export default function KategoriPage() {
               </div>
             </div>
 
+            {/* Row 2: Info Produk (cuma muncul saat ADD NEW) */}
+            {isAddNew && (
+              <div className="border-t border-slate-200 dark:border-slate-800 pt-4 mb-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="w-7 h-7 rounded-lg bg-violet-100 dark:bg-violet-500/10 text-violet-600 dark:text-violet-400 flex items-center justify-center">
+                    <i className="fa-solid fa-bullhorn text-xs"></i>
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-sm text-slate-900 dark:text-white">
+                      Info Produk (buat Webhook)
+                    </h3>
+                    <p className="text-[10px] text-slate-500 dark:text-slate-400">
+                      Data ini bakal dikirim ke Discord channel produk
+                    </p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Nama Produk */}
+                  <div>
+                    <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-2">
+                      Nama Produk *
+                    </label>
+                    <input
+                      type="text"
+                      value={namaProduk}
+                      onChange={(e) => setNamaProduk(e.target.value)}
+                      placeholder="mis. Diamond 3000 - Fast Process"
+                      className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm text-slate-900 dark:text-white focus:outline-none focus:border-violet-500"
+                    />
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 flex items-center gap-1">
+                      <i className="fa-solid fa-circle-info text-[10px]"></i>
+                      Nama produk yang bakal ditampilin di Discord
+                    </p>
+                  </div>
+
+                  {/* Foto Produk */}
+                  <div>
+                    <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-2">
+                      Foto Produk *
+                    </label>
+
+                    {!productPreview ? (
+                      <button
+                        type="button"
+                        onClick={() => productInputRef.current?.click()}
+                        className="w-full py-3 rounded-xl border-2 border-dashed border-slate-300 dark:border-slate-700 hover:border-violet-500 dark:hover:border-violet-500 bg-slate-50 dark:bg-slate-950/30 transition flex items-center justify-center gap-2"
+                      >
+                        <i className="fa-solid fa-cloud-arrow-up text-violet-600 dark:text-violet-400"></i>
+                        <span className="text-sm font-bold text-slate-700 dark:text-slate-300">
+                          Pilih Foto
+                        </span>
+                      </button>
+                    ) : (
+                      <div className="relative">
+                        <img
+                          src={productPreview}
+                          alt="Preview"
+                          className="w-full h-24 object-contain rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setProductFile(null);
+                            setProductPreview(null);
+                            if (productInputRef.current)
+                              productInputRef.current.value = "";
+                          }}
+                          className="absolute top-1 right-1 w-7 h-7 rounded-lg bg-rose-600 hover:bg-rose-500 text-white flex items-center justify-center"
+                        >
+                          <i className="fa-solid fa-xmark text-xs"></i>
+                        </button>
+                      </div>
+                    )}
+
+                    <input
+                      ref={productInputRef}
+                      type="file"
+                      accept="image/*"
+                      onChange={handleFileChange}
+                      className="hidden"
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Actions */}
             <div className="flex gap-2">
               <button
                 type="submit"
@@ -236,7 +422,7 @@ export default function KategoriPage() {
                     ? "Menyimpan..."
                     : editingKategori
                     ? "Update Kategori"
-                    : "Tambah Kategori"}
+                    : "Tambah Kategori & Kirim ke Webhook"}
                 </span>
               </button>
 
@@ -305,7 +491,6 @@ export default function KategoriPage() {
                     </div>
 
                     <div className="flex items-center gap-2 shrink-0">
-                      {/* Edit */}
                       <button
                         onClick={() => handleEdit(item)}
                         className="w-8 h-8 flex items-center justify-center bg-blue-100 dark:bg-blue-500/20 text-blue-600 dark:text-blue-300 rounded-lg hover:bg-blue-500/40 transition"
@@ -314,7 +499,6 @@ export default function KategoriPage() {
                         <i className="fa-solid fa-pen text-xs"></i>
                       </button>
 
-                      {/* Hapus */}
                       <button
                         onClick={() => handleDelete(item.kategori)}
                         className="w-8 h-8 flex items-center justify-center bg-red-100 dark:bg-red-500/20 text-red-600 dark:text-red-300 rounded-lg hover:bg-red-500/40 transition"
