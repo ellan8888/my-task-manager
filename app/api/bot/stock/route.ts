@@ -47,10 +47,10 @@ export async function GET(request: Request) {
     }
 
     // ⭐ 2. Query kategori_links (source utama)
-    const { data: kategoriLinks, error: katErr } = await supabaseAdmin
-      .from("kategori_links")
-      .select("kategori, nama_produk")
-      .order("kategori", { ascending: true });
+const { data: kategoriLinks, error: katErr } = await supabaseAdmin
+  .from("kategori_links")
+  .select("kategori, nama_produk, price")
+  .order("kategori", { ascending: true });
 
     if (katErr) {
       console.error("[bot/stock] Kategori query error:", katErr);
@@ -62,25 +62,25 @@ export async function GET(request: Request) {
 
     // ⭐ 3. Build list base dari kategori_links
     //     + exact map buat fuzzy matching
-    const exactMap: Record<string, string> = {};
-    const fuzzyList: { key: string; nama: string }[] = [];
-    const seenNama = new Set<string>();
+const exactMap: Record<string, string> = {};
+const fuzzyList: { key: string; nama: string; price: number }[] = [];  // ⭐ +price
+const seenNama = new Set<string>();
 
     for (const row of kategoriLinks || []) {
-      if (!row.kategori || !row.nama_produk) continue;
+  if (!row.kategori || !row.nama_produk) continue;
 
-      // Bersihin <br> & normalisasi
-      const rawKat = String(row.kategori).replace(/<br>/gi, "").trim();
-      const key = rawKat.toLowerCase();
+  // Bersihin <br> & normalisasi
+  const rawKat = String(row.kategori).replace(/<br>/gi, "").trim();
+  const key = rawKat.toLowerCase();
 
-      exactMap[key] = row.nama_produk;
+  exactMap[key] = row.nama_produk;
 
-      // Skip duplikat nama_produk
-      if (seenNama.has(row.nama_produk)) continue;
-      seenNama.add(row.nama_produk);
+  // Skip duplikat nama_produk
+  if (seenNama.has(row.nama_produk)) continue;
+  seenNama.add(row.nama_produk);
 
-      fuzzyList.push({ key, nama: row.nama_produk });
-    }
+  fuzzyList.push({ key, nama: row.nama_produk, price: row.price || 0 });  // ⭐ +price
+}
 
     // ⭐ 4. Helper: exact + fuzzy match
     const findNamaProduk = (kat: string): string | null => {
@@ -123,7 +123,7 @@ export async function GET(request: Request) {
     // ⭐ 6. Build result — base dari kategori_links (SEMUA kategori)
     //     + isi stock count (0 kalau nggak ada)
     const result = fuzzyList
-      .map(({ key, nama }) => {
+  .map(({ key, nama, price }) => {
         // Coba match dengan stockCount
         // 1. Exact match
         let stock = stockCount[key] || 0;
@@ -155,7 +155,7 @@ export async function GET(request: Request) {
           kategori: key,
           nama_produk: nama,
           stock,
-          price: 0,
+          price,   // ⭐ dari fuzzyList (destructure di map)
         };
       })
       // Sort by numeric prefix
