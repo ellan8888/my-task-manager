@@ -11,8 +11,10 @@ const OWNER_USERNAMES = ["ellan"];
 
 export async function POST(request: Request) {
   try {
-    const { username, code, target_username, notes } = await request.json();
+    const body = await request.json();
+    const { username, code, codes, target_username, notes } = body;
 
+    // ⭐ Auth check
     if (!OWNER_USERNAMES.includes(username?.toLowerCase())) {
       return NextResponse.json(
         { success: false, message: "Unauthorized" },
@@ -20,34 +22,100 @@ export async function POST(request: Request) {
       );
     }
 
-    if (!code) {
+    // ⭐ Support 2 format:
+    // - `codes`: array (bulk, dari frontend baru)
+    // - `code`: string (single, backward compat)
+    let codeList: string[] = [];
+
+    if (Array.isArray(codes)) {
+      codeList = codes;
+    } else if (typeof code === "string" && code.trim()) {
+      codeList = [code];
+    }
+
+    // Normalize: uppercase, trim, buang kosong
+    codeList = codeList
+      .map((c: string) => String(c).toUpperCase().trim())
+      .filter((c: string) => c.length > 0);
+
+    // Hapus duplikat dalam input
+    codeList = Array.from(new Set(codeList));
+
+    if (codeList.length === 0) {
       return NextResponse.json(
-        { success: false, message: "code wajib" },
+        { success: false, message: "Minimal 1 code wajib" },
         { status: 400 }
       );
     }
 
-    const { data, error } = await supabaseAdmin
+    // ⭐ Cek duplikat di DB (biar nggak error constraint)
+    const { data: existing, error: checkErr } = await supabaseAdmin
       .from("redeem_codes")
-      .insert({
-        code: code.toUpperCase().trim(),
-        username: target_username?.toLowerCase().trim() || null,
-        status: "available",
-        price: 20000,
-        notes: notes || null,
-      })
-      .select()
-      .single();
+      .select("code")
+      .in("code", codeList);
 
-    if (error) {
+    if (checkErr) {
+      console.error("[add-stock] Check existing error:", checkErr);
       return NextResponse.json(
-        { success: false, message: error.message },
+        { success: false, message: checkErr.message },
         { status: 500 }
       );
     }
 
-    return NextResponse.json({ success: true, data });
+    const existingSet = new Set(
+      (existing || []).map((r: any) => r.code)
+    );
+    const newCodes = codeList.filter((c) => !existingSet.has(c));
+
+    if (newCodes.length === 0) {
+      return NextResponse.json({
+        success: false,
+        message: `Semua code udah ada di DB (${codeList.length} duplikat)`,
+      });
+    }
+
+    // ⭐ Bulk insert
+    const targetUsername = target_username?.toLowerCase().trim() || null;
+
+    const rows = newCodes.map((code) => ({
+      code,
+      username: targetUsername,
+      status: "available",
+      price: 20000,
+      notes: notes || null,
+    }));
+
+    const { data: inserted, error: insertErr } = await supabaseAdmin
+      .from("redeem_codes")
+      .insert(rows)
+      .select();
+
+    if (insertErr) {
+      console.error("[add-stock] Insert error:", insertErr);
+      return NextResponse.json(
+        { success: false, message: insertErr.message },
+        { status: 500 }
+      );
+    }
+
+    const skipped = codeList.length - newCodes.length;
+
+    console.log(
+      `✅ [add-stock] Inserted ${inserted?.length || 0} codes, skipped ${skipped}`
+    );
+
+    return NextResponse.json({
+      success: true,
+      data: {
+        inserted: inserted?.length || 0,
+        skipped,
+        codes: inserted?.map((r: any) => r.code) || [],
+        // Backward compat: kalau cuma 1 code, kirim juga `code`
+        code: inserted?.[0]?.code,
+      },
+    });
   } catch (err: any) {
+    console.error("[add-stock] Error:", err);
     return NextResponse.json(
       { success: false, message: err.message },
       { status: 500 }

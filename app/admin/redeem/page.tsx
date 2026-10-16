@@ -27,6 +27,12 @@ type ConfirmState = {
   title: string;
   message: string;
   detail?: { label: string; value: string; highlight?: boolean }[];
+  // ⭐ List opsional (buat preview kode bulk)
+  list?: {
+    title: string;
+    items: string[];
+    emptyText?: string;
+  };
   confirmText: string;
   confirmColor: "emerald" | "rose" | "violet" | "blue";
   onConfirm: () => void;
@@ -41,7 +47,7 @@ export default function RedeemPage() {
   const [toast, setToast] = useState<{ type: "success" | "error"; msg: string } | null>(null);
 
   const [myCodes, setMyCodes] = useState<RedeemCode[]>([]);
-  const [newCode, setNewCode] = useState("");
+  const [newCodes, setNewCodes] = useState("");
   const [stockCount, setStockCount] = useState(0);
   const [addingStock, setAddingStock] = useState(false);
   const [pendingList, setPendingList] = useState<PendingPurchase[]>([]);
@@ -241,50 +247,85 @@ export default function RedeemPage() {
 
   // ⭐ Function actual add stock
   const doAddStock = async () => {
-    setConfirmState(null);
-    setAddingStock(true);
-    try {
-      const res = await fetch("/api/admin/redeem/add-stock", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          username: user.username,
-          code: newCode.trim(),
-          target_username: null,
-        }),
-      });
-      const data = await res.json();
-      if (data.success) {
-        setToast({ type: "success", msg: `Code ${data.data.code} masuk stock` });
-        setNewCode("");
-        fetchAll();
-      } else {
-        setToast({ type: "error", msg: data.message });
-      }
-    } catch {
-      setToast({ type: "error", msg: "Error, coba lagi" });
-    } finally {
-      setAddingStock(false);
-    }
-  };
+  setConfirmState(null);
+  setAddingStock(true);
+  try {
+    // ⭐ Parse: split per baris atau koma, trim, buang kosong, dedupe
+    const codes = newCodes
+      .split(/[\n,]/)               // split by newline atau koma
+      .map((c) => c.trim().toUpperCase())
+      .filter((c) => c.length > 0);
+    
+    const uniqueCodes = Array.from(new Set(codes)); // hapus duplikat
 
-  const handleAddStock = () => {
-    if (!newCode.trim()) {
-      setToast({ type: "error", msg: "Isi code-nya" });
+    if (uniqueCodes.length === 0) {
+      setToast({ type: "error", msg: "Nggak ada code valid" });
+      setAddingStock(false);
       return;
     }
-    setConfirmState({
-      title: "Simpan Code ke Stock",
-      message: "Code ini bakal masuk ke stock dan bisa dibeli user.",
-      detail: [
-        { label: "Kode", value: newCode.trim().toUpperCase(), highlight: true },
-        { label: "Harga Jual", value: formatRupiah(20000) },
-      ],
-      confirmText: "Simpan",
-      confirmColor: "violet",
-      onConfirm: doAddStock,
+
+    const res = await fetch("/api/admin/redeem/add-stock", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        username: user.username,
+        codes: uniqueCodes,             // ⭐ kirim array
+        target_username: null,
+      }),
     });
-  };
+    const data = await res.json();
+
+    if (data.success) {
+      const inserted = data.data?.inserted ?? uniqueCodes.length;
+      const skipped = data.data?.skipped ?? 0;
+      
+      let msg = `${inserted} code masuk stock`;
+      if (skipped > 0) msg += ` (${skipped} duplikat di-skip)`;
+      
+      setToast({ type: "success", msg });
+      setNewCodes("");
+      fetchAll();
+    } else {
+      setToast({ type: "error", msg: data.message });
+    }
+  } catch {
+    setToast({ type: "error", msg: "Error, coba lagi" });
+  } finally {
+    setAddingStock(false);
+  }
+};
+
+  const handleAddStock = () => {
+  const codes = newCodes
+    .split(/[\n,]/)
+    .map((c) => c.trim().toUpperCase())
+    .filter((c) => c.length > 0);
+
+  const uniqueCodes = Array.from(new Set(codes));
+
+  if (uniqueCodes.length === 0) {
+    setToast({ type: "error", msg: "Isi minimal 1 code" });
+    return;
+  }
+
+  setConfirmState({
+    title: "Simpan Code ke Stock",
+    message: `${uniqueCodes.length} code bakal masuk ke stock dan bisa dibeli user.`,
+    detail: [
+      { label: "Jumlah Code", value: `${uniqueCodes.length} code`, highlight: true },
+      { label: "Harga Jual", value: formatRupiah(20000) + " / code" },
+    ],
+    // ⭐ List kode lengkap
+    list: {
+      title: "Preview Code",
+      items: uniqueCodes,
+      emptyText: "Belum ada code",
+    },
+    confirmText: `Simpan ${uniqueCodes.length} Code`,
+    confirmColor: "violet",
+    onConfirm: doAddStock,
+  });
+};
 
   // ⭐ Function actual verify
   const doVerify = async (purchaseId: number, action: "approve" | "reject") => {
@@ -617,19 +658,21 @@ export default function RedeemPage() {
 
                   <div className="p-4">
                     <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2 block">
-                      Kode Baru
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="mis. DIAMOND-003"
-                      value={newCode}
-                      onChange={(e) => setNewCode(e.target.value.toUpperCase())}
-                      onKeyDown={(e) => e.key === "Enter" && handleAddStock()}
-                      className="w-full px-3 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-sm font-mono focus:outline-none focus:border-violet-500 mb-3"
-                    />
+  Kode Baru (1 per baris)
+</label>
+<textarea
+  placeholder={"CODE-001\nCODE-002\nCODE-003"}
+  value={newCodes}
+  onChange={(e) => setNewCodes(e.target.value.toUpperCase())}
+  rows={6}
+  className="w-full px-3 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-sm font-mono focus:outline-none focus:border-violet-500 mb-3 resize-none"
+/>
+<p className="text-[10px] text-slate-500 dark:text-slate-400 mb-3">
+  Bisa juga pakai koma: <span className="font-mono">CODE-001, CODE-002</span>
+</p>
                     <button
-                      onClick={handleAddStock}
-                      disabled={addingStock || !newCode.trim()}
+  onClick={handleAddStock}
+  disabled={addingStock || !newCodes.trim()}
                       className="w-full bg-linear-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 disabled:from-slate-300 disabled:to-slate-400 dark:disabled:from-slate-800 dark:disabled:to-slate-700 disabled:cursor-not-allowed text-white disabled:text-slate-500 dark:disabled:text-slate-500 px-5 py-3 rounded-xl font-bold text-sm shadow-sm transition flex items-center justify-center gap-2"
                     >
                       {addingStock ? (
@@ -1013,6 +1056,42 @@ export default function RedeemPage() {
                       </span>
                     </div>
                   ))}
+                </div>
+              )}
+
+                            {/* ⭐ Preview list (buat bulk add stock) */}
+              {confirmState.list && (
+                <div className="mb-4">
+                  <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">
+                    {confirmState.list.title}
+                  </p>
+
+                  {confirmState.list.items.length === 0 ? (
+                    <div className="text-center py-4 text-xs text-slate-400 italic bg-slate-50 dark:bg-slate-950/50 rounded-xl border border-slate-200 dark:border-slate-800">
+                      {confirmState.list.emptyText || "Kosong"}
+                    </div>
+                  ) : (
+                    <div className="max-h-48 overflow-y-auto rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/50 divide-y divide-slate-200 dark:divide-slate-800">
+                      {confirmState.list.items.map((item, i) => (
+                        <div
+                          key={i}
+                          className="flex items-center gap-2 px-3 py-2 text-xs"
+                        >
+                          <span className="w-5 h-5 rounded-md bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400 flex items-center justify-center text-[9px] font-bold shrink-0">
+                            {i + 1}
+                          </span>
+                          <span className="font-mono font-bold text-slate-900 dark:text-white truncate">
+                            {item}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  <p className="text-[10px] text-slate-400 mt-1.5 text-center">
+                    {confirmState.list.items.length} kode
+                    {confirmState.list.items.length > 8 && " • scroll untuk lihat semua"}
+                  </p>
                 </div>
               )}
 
