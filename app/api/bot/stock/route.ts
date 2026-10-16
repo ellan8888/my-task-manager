@@ -30,7 +30,7 @@ export async function GET(request: Request) {
       );
     }
 
-    // ⭐ 1. Query stock dari accounts_stock
+    // ⭐ 1. Query stock dari accounts_stock (yang READY)
     const { data: accounts, error: stockErr } = await supabaseAdmin
       .from("accounts_stock")
       .select("kategori")
@@ -46,27 +46,39 @@ export async function GET(request: Request) {
       );
     }
 
-    // ⭐ 2. Query kategori_links
+    // ⭐ 2. Query kategori_links (source utama)
     const { data: kategoriLinks, error: katErr } = await supabaseAdmin
       .from("kategori_links")
-      .select("kategori, nama_produk");
+      .select("kategori, nama_produk")
+      .order("kategori", { ascending: true });
 
     if (katErr) {
       console.error("[bot/stock] Kategori query error:", katErr);
+      return NextResponse.json(
+        { success: false, message: katErr.message },
+        { status: 500 }
+      );
     }
 
-    // ⭐ 3. Build 2 map: exact + fuzzy list
+    // ⭐ 3. Build list base dari kategori_links
+    //     + exact map buat fuzzy matching
     const exactMap: Record<string, string> = {};
     const fuzzyList: { key: string; nama: string }[] = [];
+    const seenNama = new Set<string>();
 
     for (const row of kategoriLinks || []) {
       if (!row.kategori || !row.nama_produk) continue;
 
-      // ⭐ Bersihin <br> & normalisasi
+      // Bersihin <br> & normalisasi
       const rawKat = String(row.kategori).replace(/<br>/gi, "").trim();
       const key = rawKat.toLowerCase();
 
       exactMap[key] = row.nama_produk;
+
+      // Skip duplikat nama_produk
+      if (seenNama.has(row.nama_produk)) continue;
+      seenNama.add(row.nama_produk);
+
       fuzzyList.push({ key, nama: row.nama_produk });
     }
 
@@ -84,7 +96,6 @@ export async function GET(request: Request) {
       if (exactMap[k]) return exactMap[k];
 
       // 4c. Fuzzy: links.key diawali akun + separator
-      //     Contoh: akun="1b-5b/s", links="1b-5b/s | steal an egg"
       for (const { key, nama } of fuzzyList) {
         if (key.startsWith(k + " ") || key.startsWith(k + "|")) {
           return nama;
@@ -101,7 +112,7 @@ export async function GET(request: Request) {
       return null;
     };
 
-    // ⭐ 5. Count per kategori
+    // ⭐ 5. Count stock per kategori (dari accounts_stock)
     const stockCount: Record<string, number> = {};
     for (const acc of accounts || []) {
       const kat = (acc.kategori || "").trim().toLowerCase();
@@ -109,18 +120,45 @@ export async function GET(request: Request) {
       stockCount[kat] = (stockCount[kat] || 0) + 1;
     }
 
-    // ⭐ 6. Build result
-    const result = Object.entries(stockCount)
-      .map(([kategori, stock]) => {
-        const namaProduk = findNamaProduk(kategori) || kategori.toUpperCase();
+    // ⭐ 6. Build result — base dari kategori_links (SEMUA kategori)
+    //     + isi stock count (0 kalau nggak ada)
+    const result = fuzzyList
+      .map(({ key, nama }) => {
+        // Coba match dengan stockCount
+        // 1. Exact match
+        let stock = stockCount[key] || 0;
+
+        // 2. Kalau 0, coba fuzzy: ada kategori di stockCount yang match
+        if (stock === 0) {
+          for (const [stockKey, count] of Object.entries(stockCount)) {
+            // Cek apakah stockKey match dengan key (exact atau fuzzy)
+            if (
+              stockKey === key ||
+              key.startsWith(stockKey + " ") ||
+              key.startsWith(stockKey + "|") ||
+              stockKey.startsWith(key + " ") ||
+              stockKey.startsWith(key + "|")
+            ) {
+              stock += count;
+            }
+          }
+        }
+
+        // 3. Manual map: kalau key ini di-manual-map, cari stock dari mapping
+        for (const [akunKat, linkKat] of Object.entries(MANUAL_MAP)) {
+          if (linkKat === key) {
+            stock += stockCount[akunKat] || 0;
+          }
+        }
 
         return {
-          kategori,
-          nama_produk: namaProduk,
+          kategori: key,
+          nama_produk: nama,
           stock,
           price: 0,
         };
       })
+      // Sort by numeric prefix
       .sort((a, b) => {
         const numA = parseInt(a.kategori.match(/^\d+/)?.[0] || "999999", 10);
         const numB = parseInt(b.kategori.match(/^\d+/)?.[0] || "999999", 10);
