@@ -18,6 +18,7 @@ export async function POST(request: Request) {
       order_type,
       progress_keyword,
       counted_rarities,   // ⭐ TAMBAH
+      bonus_rarities,
       target_count,
       progress_count,
       confirmed_by,

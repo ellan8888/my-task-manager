@@ -68,10 +68,10 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // ⭐ 2. MATCHING — cari order yang counted_rarities-nya include egg rarity
+        // ⭐ 2. MATCHING — bedain target vs bonus
     const eggRarity = rarity.toLowerCase();
 
-    // Helper: ambil counted rarities order (fallback ke [progress_keyword])
+    // Helper: ambil counted rarities (target)
     const getCountedRarities = (order: any): string[] => {
       const cr = order.counted_rarities;
       if (Array.isArray(cr) && cr.length > 0) {
@@ -82,20 +82,32 @@ export async function POST(req: NextRequest) {
         : [];
     };
 
-    // Filter: order yang counted_rarities include eggRarity
+    // Helper: ambil bonus rarities
+    const getBonusRarities = (order: any): string[] => {
+      const br = order.bonus_rarities;
+      if (Array.isArray(br) && br.length > 0) {
+        return br.map((r: string) => r.toLowerCase());
+      }
+      return [];
+    };
+
+    // ⭐ FILTER: cari order yang egg rarity-nya = TARGET atau BONUS
     const candidates = orders
       .map((o) => {
-        const rarities = getCountedRarities(o);
-        const covers = rarities.includes(eggRarity);
-        const exact =
-          (o.progress_keyword || "").toLowerCase() === eggRarity;
-        return { order: o, covers, exact };
+        const counted = getCountedRarities(o);
+        const bonus = getBonusRarities(o);
+        const isTarget = counted.includes(eggRarity);
+        const isBonus = bonus.includes(eggRarity);
+        const exact = (o.progress_keyword || "").toLowerCase() === eggRarity;
+        return { order: o, isTarget, isBonus, exact };
       })
-      .filter((c) => c.covers)
+      .filter((c) => c.isTarget || c.isBonus)
       .sort((a, b) => {
-        // ⭐ Prioritas 1: exact match (progress_keyword === egg_rarity)
+        // ⭐ Prioritas 1: target dulu (yang naikin progress)
+        if (a.isTarget !== b.isTarget) return a.isTarget ? -1 : 1;
+        // ⭐ Prioritas 2: exact match
         if (a.exact !== b.exact) return a.exact ? -1 : 1;
-        // ⭐ Prioritas 2: FIFO (yang paling lama)
+        // ⭐ Prioritas 3: FIFO
         const aTime = new Date(a.order.created_at).getTime();
         const bTime = new Date(b.order.created_at).getTime();
         return aTime - bTime;
@@ -124,7 +136,8 @@ export async function POST(req: NextRequest) {
         matched: true,
         order_id: fallbackOrder.order_id,
         counted: false,
-        message: `Egg rarity '${eggRarity}' nggak masuk target order mana pun`,
+        is_bonus: false,
+        message: `Egg rarity '${eggRarity}' nggak masuk target/bonus order mana pun`,
       });
     }
 
@@ -132,7 +145,11 @@ export async function POST(req: NextRequest) {
     const matched = candidates[0];
     const order = matched.order;
     const orderRarity = (order.progress_keyword || "").toLowerCase();
-    const isCounted = true;  // selalu true karena udah lolos filter cover
+
+    // ⭐ isCounted = TRUE kalau egg ini TARGET (naikin progress)
+    //    isCounted = FALSE kalau egg ini BONUS (cuma di-log)
+    const isCounted = matched.isTarget;
+    const isBonusEgg = matched.isBonus && !matched.isTarget;
 
     // 4. INSERT log egg (semua egg, counted atau nggak)
     const { error: insertErr } = await supabase
@@ -238,6 +255,7 @@ export async function POST(req: NextRequest) {
       egg_rarity: eggRarity,
       order_rarity: orderRarity,
       counted: isCounted,
+      is_bonus: isBonusEgg,
       progress_count: newProgress,
       target_count: order.target_count,
       is_complete: isComplete,
