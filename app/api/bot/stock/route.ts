@@ -9,9 +9,15 @@ const supabaseAdmin = createClient(
 
 const BOT_API_KEY = process.env.BOT_API_KEY || "bot-secret-tokoku-2026-xYz123";
 
+// ⭐ Manual mapping untuk kategori yang nggak bisa di-fuzzy match
+const MANUAL_MAP: Record<string, string> = {
+  "last map": "100 egg last map | steal an egg",
+  "100 secret egg": "100 secret egg | steal an egg",
+};
+
 export async function GET(request: Request) {
   try {
-    // ⭐ Auth — terima dari header ATAU query param (buat testing browser)
+    // ⭐ Auth
     const { searchParams } = new URL(request.url);
     const headerKey = request.headers.get("x-bot-api-key");
     const queryKey = searchParams.get("api_key");
@@ -24,7 +30,7 @@ export async function GET(request: Request) {
       );
     }
 
-    // ⭐ 1. Query stock dari accounts_stock (yang READY)
+    // ⭐ 1. Query stock dari accounts_stock
     const { data: accounts, error: stockErr } = await supabaseAdmin
       .from("accounts_stock")
       .select("kategori")
@@ -40,25 +46,62 @@ export async function GET(request: Request) {
       );
     }
 
-    // ⭐ 2. Query mapping kategori → nama_produk dari kategori_links
+    // ⭐ 2. Query kategori_links
     const { data: kategoriLinks, error: katErr } = await supabaseAdmin
       .from("kategori_links")
       .select("kategori, nama_produk");
 
     if (katErr) {
       console.error("[bot/stock] Kategori query error:", katErr);
-      // Tetap lanjut tanpa nama_produk (fallback ke kategori)
     }
 
-    // ⭐ 3. Build mapping: kategori (lowercase, trimmed) → nama_produk
-    const namaProdukMap: Record<string, string> = {};
+    // ⭐ 3. Build 2 map: exact + fuzzy list
+    const exactMap: Record<string, string> = {};
+    const fuzzyList: { key: string; nama: string }[] = [];
+
     for (const row of kategoriLinks || []) {
-      if (row.kategori && row.nama_produk) {
-        namaProdukMap[row.kategori.toLowerCase().trim()] = row.nama_produk;
-      }
+      if (!row.kategori || !row.nama_produk) continue;
+
+      // ⭐ Bersihin <br> & normalisasi
+      const rawKat = String(row.kategori).replace(/<br>/gi, "").trim();
+      const key = rawKat.toLowerCase();
+
+      exactMap[key] = row.nama_produk;
+      fuzzyList.push({ key, nama: row.nama_produk });
     }
 
-    // ⭐ 4. Count per kategori
+    // ⭐ 4. Helper: exact + fuzzy match
+    const findNamaProduk = (kat: string): string | null => {
+      const k = kat.toLowerCase().trim();
+
+      // 4a. Manual map dulu
+      const manualKey = MANUAL_MAP[k];
+      if (manualKey && exactMap[manualKey]) {
+        return exactMap[manualKey];
+      }
+
+      // 4b. Exact match
+      if (exactMap[k]) return exactMap[k];
+
+      // 4c. Fuzzy: links.key diawali akun + separator
+      //     Contoh: akun="1b-5b/s", links="1b-5b/s | steal an egg"
+      for (const { key, nama } of fuzzyList) {
+        if (key.startsWith(k + " ") || key.startsWith(k + "|")) {
+          return nama;
+        }
+      }
+
+      // 4d. Fuzzy terbalik
+      for (const { key, nama } of fuzzyList) {
+        if (k.startsWith(key + " ") || k.startsWith(key + "|")) {
+          return nama;
+        }
+      }
+
+      return null;
+    };
+
+    // ⭐ 5. Count per kategori
     const stockCount: Record<string, number> = {};
     for (const acc of accounts || []) {
       const kat = (acc.kategori || "").trim().toLowerCase();
@@ -66,20 +109,19 @@ export async function GET(request: Request) {
       stockCount[kat] = (stockCount[kat] || 0) + 1;
     }
 
-    // ⭐ 5. Build result — pake nama_produk kalau ada, fallback ke kategori
+    // ⭐ 6. Build result
     const result = Object.entries(stockCount)
       .map(([kategori, stock]) => {
-        const namaProduk = namaProdukMap[kategori] || kategori;
+        const namaProduk = findNamaProduk(kategori) || kategori.toUpperCase();
 
         return {
-          kategori,                  // raw kategori (lowercase)
-          nama_produk: namaProduk,   // ⭐ nama produk buat display
+          kategori,
+          nama_produk: namaProduk,
           stock,
-          price: 0,                  // dummy dulu, nanti bisa diisi
+          price: 0,
         };
       })
       .sort((a, b) => {
-        // ⭐ Sort by numeric prefix (1b-5b/s, 6b-10b/s, dst)
         const numA = parseInt(a.kategori.match(/^\d+/)?.[0] || "999999", 10);
         const numB = parseInt(b.kategori.match(/^\d+/)?.[0] || "999999", 10);
         if (numA !== numB) return numA - numB;
