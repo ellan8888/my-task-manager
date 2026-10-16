@@ -230,12 +230,13 @@ export default function RedeemPage() {
       const data = await res.json();
 
       if (data.success) {
-        setToast({ type: "success", msg: "Request terkirim. Tunggu admin verify." });
-        setShowTransferModal(false);
-        setProofFile(null);
-        setProofPreview(null);
-        setNotes("");
-      } else {
+  setToast({ type: "success", msg: "Request terkirim. Tunggu admin verify." });
+  setShowTransferModal(false);
+  setProofFile(null);
+  setProofPreview(null);
+  setNotes("");
+  fetchAll();   // ⭐ refresh list "Pending Transfer" langsung
+} else {
         setToast({ type: "error", msg: data.message });
       }
     } catch {
