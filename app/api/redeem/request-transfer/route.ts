@@ -58,6 +58,76 @@ export async function POST(request: Request) {
       );
     }
 
+    // ══════════════════════════════════════════════════════════
+    // ⭐ PUSH NOTIF KE SEMUA SUPERADMIN
+    // ══════════════════════════════════════════════════════════
+    try {
+      const baseUrl =
+        process.env.NEXT_PUBLIC_BASE_URL ||
+        "https://my-task-manager-self.vercel.app";
+
+      // Ambil semua superadmin aktif
+      const { data: admins, error: adminsErr } = await supabaseAdmin
+        .from("users")
+        .select("username")
+        .eq("role", "superadmin")
+        .eq("is_active", true);
+
+      if (adminsErr) {
+        console.warn(
+          "[request-transfer] Gagal ambil superadmin:",
+          adminsErr.message
+        );
+      }
+
+      // Fallback kalau query gagal / kosong
+      const adminUsernames =
+        admins && admins.length > 0
+          ? admins.map((a) => a.username).filter(Boolean)
+          : ["ellan"];
+
+      console.log(
+        `[request-transfer] Push ke ${adminUsernames.length} superadmin:`,
+        adminUsernames
+      );
+
+      // Kirim push ke tiap superadmin
+      for (const adminUser of adminUsernames) {
+        try {
+          const pushRes = await fetch(`${baseUrl}/api/push`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              username: adminUser,
+              title: "💸 Pending Transfer Baru!",
+              body: `${user} — Rp 20.000${notes ? ` • "${notes}"` : ""}`,
+              url: "/redeem",
+            }),
+          });
+
+          if (pushRes.ok) {
+            const pushData = await pushRes.json();
+            console.log(
+              `[request-transfer] Push ke ${adminUser}: sent=${pushData.sent}, failed=${pushData.failed}`
+            );
+          } else {
+            const txt = await pushRes.text();
+            console.warn(
+              `[request-transfer] Push ke ${adminUser} gagal: HTTP ${pushRes.status} — ${txt}`
+            );
+          }
+        } catch (pushErr) {
+          console.error(
+            `[request-transfer] Error push ke ${adminUser}:`,
+            pushErr
+          );
+        }
+      }
+    } catch (notifErr) {
+      // ⚠️ Notif gagal ≠ request gagal — tetap return success
+      console.error("[request-transfer] Gagal kirim push notif:", notifErr);
+    }
+
     return NextResponse.json({ success: true, data });
   } catch (err: any) {
     return NextResponse.json(
