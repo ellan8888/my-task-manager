@@ -799,11 +799,23 @@ const { error } = await supabase.from("tasks").insert([newTask]);
 };
 
   const isUsernameUsedInOtherCards = (username: string, currentOrderId: number) => {
-    return jokiOrders.some(
-      (o) => o.id !== currentOrderId &&
-             o.roblox_username?.toLowerCase() === username.toLowerCase()
-    );
-  };
+  const currentOrder = jokiOrders.find((o) => o.id === currentOrderId);
+  const currentKeyword = currentOrder?.progress_keyword;
+  const currentType = currentOrder?.order_type;
+
+  return jokiOrders.some((o) => {
+    if (o.id === currentOrderId) return false;
+    if (o.roblox_username?.toLowerCase() !== username.toLowerCase()) return false;
+
+    // ⭐ Progress order: boleh username sama asal progress_keyword beda
+    if (currentType === "progress" && o.order_type === "progress") {
+      return o.progress_keyword === currentKeyword;  // conflict cuma kalau keyword SAMA
+    }
+
+    // ⭐ Selain itu (countdown, atau beda type), tetap conflict
+    return true;
+  });
+};
 
   const fetchRamAccounts = async () => {
     setLoadingAccounts(true);
