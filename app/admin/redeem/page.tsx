@@ -82,6 +82,11 @@ export default function RedeemPage() {
       const codesData = await codesRes.json();
       if (codesData.success) setMyCodes(codesData.data || []);
 
+      // ⭐ Fetch stock count buat SEMUA user (bukan cuma owner)
+      const stockCountRes = await fetch("/api/redeem/stock-count");
+      const stockCountData = await stockCountRes.json();
+      if (stockCountData.success) setStockCount(stockCountData.count);
+
       if (isOwner) {
         const [stockRes, pendingRes] = await Promise.all([
           fetch(`/api/admin/redeem/stock?username=${user.username}`),
