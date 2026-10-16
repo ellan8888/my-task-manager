@@ -14,9 +14,10 @@ export async function POST(request: Request) {
       schedule_date,
       schedule_time,
       note,
-      // ⭐ FIELD PROGRESS — TAMBAH 4 INI:
+      // ⭐ FIELD PROGRESS
       order_type,
       progress_keyword,
+      counted_rarities,   // ⭐ TAMBAH
       target_count,
       progress_count,
       confirmed_by,
@@ -54,13 +55,22 @@ export async function POST(request: Request) {
 
     // Kalau ini progress order, tambah field progress
     if (order_type === "progress") {
-      upsertData.order_type = "progress";
-      upsertData.progress_keyword = progress_keyword || null;
-      upsertData.target_count = target_count || 0;
-      upsertData.progress_count = progress_count || 0;
-      if (confirmed_by !== undefined) upsertData.confirmed_by = confirmed_by;
-      if (webhook_url !== undefined) upsertData.webhook_url = webhook_url;
-    } else if (order_type === "countdown") {
+  upsertData.order_type = "progress";
+  upsertData.progress_keyword = progress_keyword || null;
+  
+  // ⭐ Counted rarities — dari bot, atau fallback ke [progress_keyword]
+  const rarities = Array.isArray(counted_rarities) && counted_rarities.length > 0
+    ? counted_rarities.map((r: string) => r.toLowerCase())
+    : progress_keyword
+      ? [progress_keyword.toLowerCase()]
+      : [];
+  upsertData.counted_rarities = rarities;
+  
+  upsertData.target_count = target_count || 0;
+  upsertData.progress_count = progress_count || 0;
+  if (confirmed_by !== undefined) upsertData.confirmed_by = confirmed_by;
+  if (webhook_url !== undefined) upsertData.webhook_url = webhook_url;
+} else if (order_type === "countdown") {
       // Kalau countdown eksplisit
       upsertData.order_type = "countdown";
     }

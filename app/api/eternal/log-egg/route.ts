@@ -30,11 +30,13 @@ export async function POST(req: NextRequest) {
     }
 
     // 1. Cari order aktif berdasarkan roblox_username
+        // ⭐ 1. Cari SEMUA order progress aktif untuk username ini
     const { data: orders, error: fetchErr } = await supabase
       .from("joki_orders")
       .select("*")
       .eq("roblox_username", roblox_username)
       .eq("order_type", "progress")
+      .or("completed.is.null,completed.eq.false")
       .order("created_at", { ascending: true });
 
     if (fetchErr) {
@@ -45,7 +47,6 @@ export async function POST(req: NextRequest) {
     }
 
     if (!orders || orders.length === 0) {
-      // Tetep log ke DB meski nggak ada order (buat audit)
       await supabase.from("eternal_egg_logs").insert({
         order_id: null,
         roblox_username,
@@ -67,14 +68,71 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // 2. Ambil order pertama (FIFO) sebagai match
-    //    Kalau mau matching per rarity, ubah logic di sini
-    const order = orders[0];
-    const orderRarity = (order.progress_keyword || "").toLowerCase();
+    // ⭐ 2. MATCHING — cari order yang counted_rarities-nya include egg rarity
     const eggRarity = rarity.toLowerCase();
 
-    // 3. Cek apakah rarity match
-    const isCounted = orderRarity === eggRarity;
+    // Helper: ambil counted rarities order (fallback ke [progress_keyword])
+    const getCountedRarities = (order: any): string[] => {
+      const cr = order.counted_rarities;
+      if (Array.isArray(cr) && cr.length > 0) {
+        return cr.map((r: string) => r.toLowerCase());
+      }
+      return order.progress_keyword
+        ? [order.progress_keyword.toLowerCase()]
+        : [];
+    };
+
+    // Filter: order yang counted_rarities include eggRarity
+    const candidates = orders
+      .map((o) => {
+        const rarities = getCountedRarities(o);
+        const covers = rarities.includes(eggRarity);
+        const exact =
+          (o.progress_keyword || "").toLowerCase() === eggRarity;
+        return { order: o, covers, exact };
+      })
+      .filter((c) => c.covers)
+      .sort((a, b) => {
+        // ⭐ Prioritas 1: exact match (progress_keyword === egg_rarity)
+        if (a.exact !== b.exact) return a.exact ? -1 : 1;
+        // ⭐ Prioritas 2: FIFO (yang paling lama)
+        const aTime = new Date(a.order.created_at).getTime();
+        const bTime = new Date(b.order.created_at).getTime();
+        return aTime - bTime;
+      });
+
+    // Kalau nggak ada order yang cover rarity ini
+    if (candidates.length === 0) {
+      const fallbackOrder = orders[0];
+
+      await supabase.from("eternal_egg_logs").insert({
+        order_id: fallbackOrder.order_id,
+        roblox_username,
+        egg_name,
+        rarity: eggRarity,
+        area,
+        size,
+        weight,
+        earns,
+        counted: false,
+        discord_message_id,
+        discord_channel_id,
+      });
+
+      return NextResponse.json({
+        success: true,
+        matched: true,
+        order_id: fallbackOrder.order_id,
+        counted: false,
+        message: `Egg rarity '${eggRarity}' nggak masuk target order mana pun`,
+      });
+    }
+
+    // ⭐ 3. Pilih order menang
+    const matched = candidates[0];
+    const order = matched.order;
+    const orderRarity = (order.progress_keyword || "").toLowerCase();
+    const isCounted = true;  // selalu true karena udah lolos filter cover
 
     // 4. INSERT log egg (semua egg, counted atau nggak)
     const { error: insertErr } = await supabase
