@@ -21,7 +21,8 @@ export default function WithdrawalsPage() {
     sisa: number;
   } | null>(null);
 
-  const [withdrawals, setWithdrawals] = useState<any[]>([]);
+  const [withdrawals, setWithdrawals] = useState<any[]>([]); // withdraw beneran
+  const [purchases, setPurchases] = useState<any[]>([]);         // belanja code
   const [pendingRequests, setPendingRequests] = useState<any[]>([]);
   const [showWithdrawModal, setShowWithdrawModal] = useState(false);
   const [approveModal, setApproveModal] = useState<any>(null);
@@ -81,18 +82,34 @@ export default function WithdrawalsPage() {
         const incomeData = await incomeRes.json();
         const withdrawData = await withdrawRes.json();
 
-        const totalIncome = incomeData.total || 0;
-        const totalWithdrawn =
-          (withdrawData.totals?.[currentUser.username] || 0) +
-          (withdrawData.pendingTotals?.[currentUser.username] || 0);
+                const totalIncome = incomeData.total || 0;
+
+        const allRows = withdrawData.data || [];
+
+        // ⭐ Pisahin: withdraw beneran vs belanja code
+        const isPurchase = (w: any) => (w.note || "").startsWith("[BELI CODE]");
+
+        const withdrawRows = allRows.filter((w: any) => !isPurchase(w));
+        const purchaseRows = allRows.filter((w: any) => isPurchase(w));
+
+        // Total withdraw beneran (cuma dari row non-purchase)
+        const totalWithdrawn = withdrawRows
+          .filter((w: any) => w.status === "approved" || w.status === "pending")
+          .reduce((s: number, w: any) => s + (w.amount || 0), 0);
+
+        // Total belanja code (dari row purchase)
+        const totalPurchases = purchaseRows
+          .filter((w: any) => w.status === "approved" || w.status === "pending")
+          .reduce((s: number, w: any) => s + (w.amount || 0), 0);
 
         setMyBalance({
           totalIncome,
           totalWithdrawn,
-          sisa: totalIncome - totalWithdrawn,
+          sisa: totalIncome - totalWithdrawn - totalPurchases, // ⭐ sisa = income - ditarik - belanja
         });
 
-        setWithdrawals(withdrawData.data || []);
+        setWithdrawals(withdrawRows);
+        setPurchases(purchaseRows);
       } catch (err) {
         console.error(err);
       } finally {
@@ -118,8 +135,18 @@ export default function WithdrawalsPage() {
         const pendingData = await pendingRes.json();
         const allData = await allRes.json();
 
-        if (pendingData.success) setPendingRequests(pendingData.data || []);
-        if (allData.success) setWithdrawals(allData.data || []);
+        if (pendingData.success)
+          setPendingRequests(
+            (pendingData.data || []).filter(
+              (w: any) => !(w.note || "").startsWith("[BELI CODE]")
+            )
+          );
+        if (allData.success)
+          setWithdrawals(
+            (allData.data || []).filter(
+              (w: any) => !(w.note || "").startsWith("[BELI CODE]")
+            )
+          );
       } catch (err) {
         console.error(err);
       } finally {
@@ -133,6 +160,12 @@ export default function WithdrawalsPage() {
   }, [currentUser]);
 
   const formatRupiah = (num: number) => "Rp " + num.toLocaleString("id-ID");
+    // ⭐ Helper: filter belanja code dari list withdrawals
+  const isPurchaseCode = (w: any) =>
+    (w.note || "").startsWith("[BELI CODE]");
+
+  const filterDisplayable = (list: any[]) =>
+    list.filter((w) => !isPurchaseCode(w));
 
   return (
     <>
@@ -231,19 +264,19 @@ export default function WithdrawalsPage() {
                   {/* ⭐ TARIK BUTTON — Full width */}
                   {myBalance && (
                     <button
-                      onClick={() => setShowWithdrawModal(true)}
-                      disabled={myBalance.sisa <= 0 || bankAccounts.length === 0}
-                      className="w-full bg-linear-to-r from-emerald-600 to-green-600 hover:from-emerald-500 hover:to-green-500 disabled:from-slate-300 disabled:to-slate-400 dark:disabled:from-slate-800 dark:disabled:to-slate-700 disabled:cursor-not-allowed text-white disabled:text-slate-500 dark:disabled:text-slate-500 px-5 py-3.5 rounded-xl font-black shadow-lg shadow-emerald-600/20 transition flex items-center justify-center gap-2"
-                    >
-                      <i className="fa-solid fa-money-bill-transfer"></i>
-                      <span>
-                        {bankAccounts.length === 0
-                          ? "Tambah Rekening Dulu"
-                          : myBalance.sisa <= 0
-                          ? "Saldo Kosong"
-                          : "Tarik Sekarang"}
-                      </span>
-                    </button>
+  onClick={() => setShowWithdrawModal(true)}
+  disabled={myBalance.sisa <= 0 || bankAccounts.length === 0}
+  className="w-full bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 hover:border-emerald-500/50 disabled:bg-slate-100 dark:disabled:bg-slate-900 disabled:border-slate-200 dark:disabled:border-slate-800 disabled:cursor-not-allowed text-emerald-700 dark:text-emerald-300 disabled:text-slate-400 px-5 py-3.5 rounded-xl font-bold transition flex items-center justify-center gap-2"
+>
+  <i className="fa-solid fa-money-bill-transfer"></i>
+  <span>
+    {bankAccounts.length === 0
+      ? "Tambah Rekening Dulu"
+      : myBalance.sisa <= 0
+      ? "Saldo Kosong"
+      : "Tarik Sekarang"}
+  </span>
+</button>
                   )}
 
                   {/* ⭐ HISTORY */}
@@ -332,6 +365,73 @@ export default function WithdrawalsPage() {
                             </div>
 
                             <p className="text-sm font-black text-rose-600 dark:text-rose-400 font-mono shrink-0">
+                              -{formatRupiah(w.amount)}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                                        )}
+                  </div>
+
+                  {/* ⭐ PENGELUARAN — SECTION BARU */}
+                  <div className="bg-white dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 rounded-xl shadow-sm overflow-hidden">
+                    <div className="px-4 py-3 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <div className="w-7 h-7 rounded-lg bg-violet-100 dark:bg-violet-500/10 text-violet-600 dark:text-violet-400 flex items-center justify-center">
+                          <i className="fa-solid fa-ticket text-xs"></i>
+                        </div>
+                        <h3 className="font-bold text-slate-900 dark:text-white text-sm">
+                          Pengeluaran (Beli Code)
+                        </h3>
+                      </div>
+                      <span className="text-[10px] bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 px-2 py-0.5 rounded-full font-bold">
+                        {purchases.length}
+                      </span>
+                    </div>
+
+                    {purchases.length === 0 ? (
+                      <div className="text-center py-12">
+                        <div className="w-12 h-12 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-400 flex items-center justify-center mx-auto mb-3">
+                          <i className="fa-solid fa-ticket text-lg"></i>
+                        </div>
+                        <p className="text-sm font-semibold text-slate-500">
+                          Belum ada beli code
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="divide-y divide-slate-100 dark:divide-slate-800">
+                        {purchases.map((w) => (
+                          <div
+                            key={w.id}
+                            className="px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-900/50 transition flex items-center justify-between gap-3"
+                          >
+                            <div className="flex items-center gap-3 min-w-0 flex-1">
+                              <div className="w-8 h-8 rounded-lg bg-violet-100 dark:bg-violet-500/10 text-violet-600 dark:text-violet-400 flex items-center justify-center shrink-0 border border-violet-200 dark:border-violet-500/20">
+                                <i className="fa-solid fa-ticket text-[10px]"></i>
+                              </div>
+
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-center gap-1.5">
+                                  <span className="text-xs font-bold text-slate-900 dark:text-white">
+                                    Beli Code
+                                  </span>
+                                  <span className="text-[10px] font-mono text-violet-600 dark:text-violet-400 truncate">
+                                    • {(w.note || "").replace("[BELI CODE] ", "")}
+                                  </span>
+                                </div>
+                                <p className="text-[10px] text-slate-500 dark:text-slate-400 truncate">
+                                  {new Date(w.approved_at || w.requested_at).toLocaleString("id-ID", {
+                                    day: "numeric",
+                                    month: "short",
+                                    year: "numeric",
+                                    hour: "2-digit",
+                                    minute: "2-digit",
+                                  })}
+                                </p>
+                              </div>
+                            </div>
+
+                            <p className="text-sm font-black text-violet-600 dark:text-violet-400 font-mono shrink-0">
                               -{formatRupiah(w.amount)}
                             </p>
                           </div>

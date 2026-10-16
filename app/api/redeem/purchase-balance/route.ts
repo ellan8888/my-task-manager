@@ -9,6 +9,7 @@ const supabaseAdmin = createClient(
 
 const PRICE_PER_CODE = 20000;
 const OWNER_USERNAMES = ["ellan"];
+const PURCHASE_NOTE_PREFIX = "[BELI CODE] ";
 
 function isOwner(u: string | null) {
   return !!u && OWNER_USERNAMES.includes(u.toLowerCase());
@@ -28,9 +29,7 @@ export async function POST(request: Request) {
     const user = username.toLowerCase().trim();
     const isFree = isOwner(user);
 
-    // ═══════════════════════════════════════════════════════
-    // 1. Cek saldo (skip kalo owner)
-    // ═══════════════════════════════════════════════════════
+    // 1. Cek saldo (skip kalau owner)
     if (!isFree) {
       const { data: income } = await supabaseAdmin
         .from("income_log")
@@ -62,14 +61,9 @@ export async function POST(request: Request) {
       }
     }
 
-    // ═══════════════════════════════════════════════════════
     // 2. Ambil code RANDOM dari stock available
-    //    Prioritas: code yang di-assign ke user ini dulu,
-    //    terus kalo nggak ada, ambil code kosong (username null)
-    // ═══════════════════════════════════════════════════════
     let code: any = null;
 
-    // Prioritas 1: code khusus user ini (username = user)
     const { data: ownCode } = await supabaseAdmin
       .from("redeem_codes")
       .select("id, code")
@@ -80,7 +74,6 @@ export async function POST(request: Request) {
 
     if (ownCode) code = ownCode;
 
-    // Prioritas 2: code kosong (username null / '')
     if (!code) {
       const { data: anyCode } = await supabaseAdmin
         .from("redeem_codes")
@@ -100,9 +93,36 @@ export async function POST(request: Request) {
       );
     }
 
-    // ═══════════════════════════════════════════════════════
-    // 3. Update code → used, assign ke user
-    // ═══════════════════════════════════════════════════════
+    // 3. ⭐ INSERT WITHDRAWAL DULU (biar saldo berkurang)
+    let withdrawalId: number | null = null;
+
+    if (!isFree) {
+      const { data: wdRow, error: wdErr } = await supabaseAdmin
+        .from("withdrawals")
+        .insert({
+          joki_name: user,
+          amount: PRICE_PER_CODE,
+          note: `${PURCHASE_NOTE_PREFIX}${code.code}`,
+          status: "approved",
+          requested_by: user,
+          approved_by: "system",
+          approved_at: new Date().toISOString(),
+        })
+        .select("id")
+        .single();
+
+      if (wdErr) {
+        console.error("[purchase-balance] Gagal insert withdrawal:", wdErr);
+        return NextResponse.json(
+          { success: false, message: "Gagal nyatet pengeluaran: " + wdErr.message },
+          { status: 500 }
+        );
+      }
+
+      withdrawalId = wdRow.id;
+    }
+
+    // 4. Update code → used, assign ke user
     const { error: err } = await supabaseAdmin
       .from("redeem_codes")
       .update({
@@ -114,13 +134,18 @@ export async function POST(request: Request) {
       .eq("id", code.id);
 
     if (err) {
+      // ⚠️ Rollback: hapus withdrawal kalau update code gagal
+      if (withdrawalId) {
+        await supabaseAdmin.from("withdrawals").delete().eq("id", withdrawalId);
+        console.warn("[purchase-balance] Rollback withdrawal id:", withdrawalId);
+      }
       return NextResponse.json(
         { success: false, message: err.message },
         { status: 500 }
       );
     }
 
-    // Audit trail
+    // 5. Audit trail di redeem_purchases
     await supabaseAdmin.from("redeem_purchases").insert({
       username: user,
       amount: isFree ? 0 : PRICE_PER_CODE,
