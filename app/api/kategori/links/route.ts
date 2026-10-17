@@ -58,7 +58,15 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { kategori, link, nama_produk, image_url, mode } = body;
+    const { 
+      kategori, 
+      link, 
+      nama_produk, 
+      image_url, 
+      mode,
+      default_income,   // ⭐ NEW
+      default_speed,    // ⭐ NEW
+    } = body;
 
     if (!kategori || !link) {
       return NextResponse.json(
@@ -71,10 +79,9 @@ export async function POST(req: NextRequest) {
     const linkClean = link.trim();
 
     // ═══════════════════════════════════════════════════════
-    // MODE: ADD (tambah baru)
+    // MODE: ADD
     // ═══════════════════════════════════════════════════════
     if (!mode || mode === "add") {
-      // Validasi
       if (!nama_produk || !image_url) {
         return NextResponse.json(
           { success: false, message: "Nama produk & foto wajib untuk kategori baru" },
@@ -82,7 +89,6 @@ export async function POST(req: NextRequest) {
         );
       }
 
-      // Cek duplikat
       const { data: existing } = await supabase
         .from("kategori_links")
         .select("id")
@@ -96,7 +102,6 @@ export async function POST(req: NextRequest) {
         );
       }
 
-      // Insert
       const { data, error } = await supabase
         .from("kategori_links")
         .insert({
@@ -104,6 +109,8 @@ export async function POST(req: NextRequest) {
           link: linkClean,
           nama_produk,
           image_url,
+          default_income: default_income?.trim() || null,   // ⭐ NEW
+          default_speed: default_speed?.trim() || null,     // ⭐ NEW
           active: true,
         })
         .select()
@@ -116,7 +123,6 @@ export async function POST(req: NextRequest) {
         );
       }
 
-      // ⭐ Simpan notif pending dulu, baru coba kirim ke bot
       const botSent = await queueAndSendNotif({
         kategori: kategoriClean,
         nama_produk,
@@ -134,15 +140,25 @@ export async function POST(req: NextRequest) {
     }
 
     // ═══════════════════════════════════════════════════════
-    // MODE: EDIT_LINK (cuma update link)
+    // MODE: EDIT_LINK
     // ═══════════════════════════════════════════════════════
     if (mode === "edit_link") {
+      const updateData: any = {
+        link: linkClean,
+        updated_at: new Date().toISOString(),
+      };
+      
+      // ⭐ Update default_income & default_speed kalau dikirim
+      if (default_income !== undefined) {
+        updateData.default_income = default_income?.trim() || null;
+      }
+      if (default_speed !== undefined) {
+        updateData.default_speed = default_speed?.trim() || null;
+      }
+
       const { data, error } = await supabase
         .from("kategori_links")
-        .update({
-          link: linkClean,
-          updated_at: new Date().toISOString(),
-        })
+        .update(updateData)
         .eq("kategori", kategoriClean)
         .select()
         .single();
@@ -163,7 +179,7 @@ export async function POST(req: NextRequest) {
     }
 
     // ═══════════════════════════════════════════════════════
-    // MODE: EDIT_PRODUCT (update nama produk + foto + kirim webhook)
+    // MODE: EDIT_PRODUCT
     // ═══════════════════════════════════════════════════════
     if (mode === "edit_product") {
       if (!nama_produk || !image_url) {
@@ -173,14 +189,24 @@ export async function POST(req: NextRequest) {
         );
       }
 
+      const updateData: any = {
+        link: linkClean,
+        nama_produk,
+        image_url,
+        updated_at: new Date().toISOString(),
+      };
+      
+      // ⭐ Update default_income & default_speed kalau dikirim
+      if (default_income !== undefined) {
+        updateData.default_income = default_income?.trim() || null;
+      }
+      if (default_speed !== undefined) {
+        updateData.default_speed = default_speed?.trim() || null;
+      }
+
       const { data, error } = await supabase
         .from("kategori_links")
-        .update({
-          link: linkClean,
-          nama_produk,
-          image_url,
-          updated_at: new Date().toISOString(),
-        })
+        .update(updateData)
         .eq("kategori", kategoriClean)
         .select()
         .single();

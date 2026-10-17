@@ -13,6 +13,8 @@ type KategoriLink = {
   active: boolean;
   nama_produk?: string | null;
   image_url?: string | null;
+  default_income?: string | null;   // ⭐ NEW
+  default_speed?: string | null;    // ⭐ NEW
 };
 
 type EditMode = "add" | "edit_link" | "edit_product";
@@ -23,6 +25,8 @@ export default function KategoriPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const { sidebarOpen, toggleSidebar } = useSidebar();
+  const [defaultIncome, setDefaultIncome] = useState("");
+const [defaultSpeed, setDefaultSpeed] = useState("");
 
   // Form state
   const [kategori, setKategori] = useState("");
@@ -88,6 +92,8 @@ export default function KategoriPage() {
     setNamaProduk("");
     setProductFile(null);
     setProductPreview(null);
+    setDefaultIncome("");   // ⭐ NEW
+    setDefaultSpeed("");    // ⭐ NEW
     if (productInputRef.current) productInputRef.current.value = "";
     setEditMode("add");
     setEditingKategori(null);
@@ -144,6 +150,8 @@ export default function KategoriPage() {
         kategori,
         link,
         mode: editMode,
+        default_income: defaultIncome,   // ⭐ NEW
+        default_speed: defaultSpeed,     // ⭐ NEW
       };
 
       if (imageUrl) {
@@ -223,6 +231,8 @@ export default function KategoriPage() {
     setNamaProduk("");
     setProductFile(null);
     setProductPreview(null);
+    setDefaultIncome(item.default_income || "");   // ⭐ NEW
+    setDefaultSpeed(item.default_speed || "");     // ⭐ NEW
     if (productInputRef.current) productInputRef.current.value = "";
     setEditMode("edit_link");
     setEditingKategori(item.kategori);
@@ -235,10 +245,11 @@ export default function KategoriPage() {
   const handleEditProduct = (item: KategoriLink) => {
     setKategori(item.kategori);
     setLink(item.link);
-    // ⭐ Kosong — user isi manual
     setNamaProduk("");
     setProductFile(null);
     setProductPreview(null);
+    setDefaultIncome(item.default_income || "");   // ⭐ NEW
+    setDefaultSpeed(item.default_speed || "");     // ⭐ NEW
     if (productInputRef.current) productInputRef.current.value = "";
     setEditMode("edit_product");
     setEditingKategori(item.kategori);
@@ -452,6 +463,57 @@ export default function KategoriPage() {
               </div>
             )}
 
+            {/* ⭐ Target Default Monitor */}
+{(isAddNew || editMode === "edit_link" || editMode === "edit_product") && (
+  <div className="border-t border-slate-200 dark:border-slate-800 pt-4 mb-4">
+    <div className="flex items-center gap-2 mb-3">
+      <div className="w-7 h-7 rounded-lg bg-amber-100 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center">
+        <i className="fa-solid fa-bullseye text-xs"></i>
+      </div>
+      <div>
+        <h3 className="font-bold text-sm text-slate-900 dark:text-white">
+          Target Default Monitor
+        </h3>
+        <p className="text-[10px] text-slate-500 dark:text-slate-400">
+          Akun yang pakai kategori ini otomatis masuk monitor progress
+        </p>
+      </div>
+    </div>
+
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div>
+        <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-2">
+          Default Income <span className="text-amber-500">(opsional)</span>
+        </label>
+        <input
+          type="text"
+          value={defaultIncome}
+          onChange={(e) => setDefaultIncome(e.target.value)}
+          placeholder="500B, 2T, 1.5T"
+          className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm text-slate-900 dark:text-white focus:outline-none focus:border-amber-500"
+        />
+        <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1 flex items-center gap-1">
+          <i className="fa-solid fa-circle-info text-[9px]"></i>
+          Kosong = akun nggak auto-masuk monitor
+        </p>
+      </div>
+
+      <div>
+        <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-2">
+          Default Speed <span className="text-slate-400">(opsional)</span>
+        </label>
+        <input
+          type="text"
+          value={defaultSpeed}
+          onChange={(e) => setDefaultSpeed(e.target.value)}
+          placeholder="100B, 50B"
+          className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm text-slate-900 dark:text-white focus:outline-none focus:border-amber-500"
+        />
+      </div>
+    </div>
+  </div>
+)}
+
             {/* Actions */}
             <div className="flex gap-2">
               <button
@@ -523,6 +585,14 @@ export default function KategoriPage() {
                             PRODUK
                           </span>
                         )}
+
+                        {item.default_income && (
+  <span className="px-2 py-0.5 bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-300 text-[10px] font-bold rounded flex items-center gap-1">
+    <i className="fa-solid fa-bullseye text-[8px]"></i>
+    {item.default_income}
+    {item.default_speed && ` / ${item.default_speed}`}
+  </span>
+)}
                       </div>
                       <a
                         href={item.link}

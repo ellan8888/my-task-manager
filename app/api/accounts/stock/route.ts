@@ -277,10 +277,47 @@ export async function POST(req: NextRequest) {
       );
     }
 
+        // ⭐ AUTO-ADD KE MONITOR (kalau kategori punya default_income)
+    try {
+      const { data: katData } = await supabase
+        .from("kategori_links")
+        .select("default_income, default_speed")
+        .eq("kategori", (kategori || "").toLowerCase().trim())
+        .maybeSingle();
+
+      if (katData?.default_income) {
+        const BOT_API_URL = process.env.BOT_API_URL || "http://localhost:5001";
+        
+        const botRes = await fetch(`${BOT_API_URL}/api/monitor/add`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            username,
+            target_income: katData.default_income,
+            target_speed: katData.default_speed || null,
+            input_by: added_by || "system",
+          }),
+          signal: AbortSignal.timeout(5000),
+        });
+
+        if (botRes.ok) {
+          const botData = await botRes.json();
+          console.log(`✅ [Auto-Monitor] ${username} →`, botData.message);
+        } else {
+          console.warn(`⚠️ [Auto-Monitor] ${username} gagal — bot return ${botRes.status}`);
+        }
+      } else {
+        console.log(`⏭️ [Auto-Monitor] ${username} skip — kategori nggak punya default_income`);
+      }
+    } catch (err: any) {
+      console.warn(`⚠️ [Auto-Monitor] ${username} error:`, err.message);
+      // ⚠️ JANGAN throw — biar insert akun tetep sukses
+    }
+
     return NextResponse.json({
       success: true,
       message: `Stock ${username} berhasil ditambahkan`,
-      action: "created",     // ⭐ info ke frontend
+      action: "created",
       data,
     });
   } catch (err: any) {
