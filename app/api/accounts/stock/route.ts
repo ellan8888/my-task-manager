@@ -285,7 +285,8 @@ export async function POST(req: NextRequest) {
         .eq("kategori", (kategori || "").toLowerCase().trim())
         .maybeSingle();
 
-      if (katData?.default_income) {
+      // ⭐ Cek apakah ada income ATAU speed
+      if (katData?.default_income || katData?.default_speed) {
         const BOT_API_URL = process.env.BOT_API_URL || "http://localhost:5001";
         
         const botRes = await fetch(`${BOT_API_URL}/api/monitor/add`, {
