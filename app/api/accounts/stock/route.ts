@@ -290,7 +290,10 @@ export async function POST(req: NextRequest) {
         
         const botRes = await fetch(`${BOT_API_URL}/api/monitor/add`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { 
+            "Content-Type": "application/json",
+            "ngrok-skip-browser-warning": "true",   // ⭐ TAMBAH INI
+          },
           body: JSON.stringify({
             username,
             target_income: katData.default_income,
