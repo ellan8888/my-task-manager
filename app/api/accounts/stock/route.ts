@@ -277,7 +277,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-        // ⭐ AUTO-ADD KE MONITOR (kalau kategori punya default_income)
+            // ⭐ AUTO-ADD KE MONITOR
     try {
       const { data: katData } = await supabase
         .from("kategori_links")
@@ -285,20 +285,21 @@ export async function POST(req: NextRequest) {
         .eq("kategori", (kategori || "").toLowerCase().trim())
         .maybeSingle();
 
-      // ⭐ Cek apakah ada income ATAU speed
-      if (katData?.default_income || katData?.default_speed) {
+      // ⭐ Cek apakah ada income, speed, ATAU pickaxe
+      if (katData?.default_income || katData?.default_speed || katData?.default_pickaxe) {
         const BOT_API_URL = process.env.BOT_API_URL || "http://localhost:5001";
         
         const botRes = await fetch(`${BOT_API_URL}/api/monitor/add`, {
           method: "POST",
           headers: { 
             "Content-Type": "application/json",
-            "ngrok-skip-browser-warning": "true",   // ⭐ TAMBAH INI
+            "ngrok-skip-browser-warning": "true",
           },
           body: JSON.stringify({
             username,
-            target_income: katData.default_income,
-            target_speed: katData.default_speed || null,
+            target_income: katData.default_income || "0",
+            target_speed: katData.default_speed || "0",
+            target_pickaxe: katData.default_pickaxe || "0", // ⭐ TAMBAHIN INI
             input_by: added_by || "system",
           }),
           signal: AbortSignal.timeout(5000),
@@ -311,11 +312,10 @@ export async function POST(req: NextRequest) {
           console.warn(`⚠️ [Auto-Monitor] ${username} gagal — bot return ${botRes.status}`);
         }
       } else {
-        console.log(`⏭️ [Auto-Monitor] ${username} skip — kategori nggak punya default_income`);
+        console.log(`⏭️ [Auto-Monitor] ${username} skip — kategori nggak punya default target`);
       }
     } catch (err: any) {
       console.warn(`⚠️ [Auto-Monitor] ${username} error:`, err.message);
-      // ⚠️ JANGAN throw — biar insert akun tetep sukses
     }
 
     return NextResponse.json({
