@@ -281,7 +281,7 @@ export async function POST(req: NextRequest) {
     try {
       const { data: katData } = await supabase
         .from("kategori_links")
-        .select("default_income, default_speed")
+        .select("default_income, default_speed, default_pickaxe")
         .eq("kategori", (kategori || "").toLowerCase().trim())
         .maybeSingle();
 

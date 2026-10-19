@@ -66,6 +66,7 @@ export async function POST(req: NextRequest) {
       mode,
       default_income,   // ⭐ NEW
       default_speed,    // ⭐ NEW
+      default_pickaxe,
     } = body;
 
     if (!kategori || !link) {
@@ -111,6 +112,7 @@ export async function POST(req: NextRequest) {
           image_url,
           default_income: default_income?.trim() || null,   // ⭐ NEW
           default_speed: default_speed?.trim() || null,     // ⭐ NEW
+          default_pickaxe: default_pickaxe?.trim() || null,
           active: true,
         })
         .select()
@@ -154,6 +156,9 @@ export async function POST(req: NextRequest) {
       }
       if (default_speed !== undefined) {
         updateData.default_speed = default_speed?.trim() || null;
+      }
+      if (default_pickaxe !== undefined) {
+        updateData.default_pickaxe = default_pickaxe?.trim() || null;
       }
 
       const { data, error } = await supabase
@@ -202,6 +207,9 @@ export async function POST(req: NextRequest) {
       }
       if (default_speed !== undefined) {
         updateData.default_speed = default_speed?.trim() || null;
+      }
+      if (default_pickaxe !== undefined) {
+        updateData.default_pickaxe = default_pickaxe?.trim() || null;
       }
 
       const { data, error } = await supabase

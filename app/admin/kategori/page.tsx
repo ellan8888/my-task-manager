@@ -15,6 +15,7 @@ type KategoriLink = {
   image_url?: string | null;
   default_income?: string | null;   // ⭐ NEW
   default_speed?: string | null;    // ⭐ NEW
+  default_pickaxe?: string | null;
 };
 
 type EditMode = "add" | "edit_link" | "edit_product";
@@ -27,6 +28,7 @@ export default function KategoriPage() {
   const { sidebarOpen, toggleSidebar } = useSidebar();
   const [defaultIncome, setDefaultIncome] = useState("");
 const [defaultSpeed, setDefaultSpeed] = useState("");
+const [defaultPickaxe, setDefaultPickaxe] = useState(""); // ⭐ NEW
 
   // Form state
   const [kategori, setKategori] = useState("");
@@ -94,6 +96,7 @@ const [defaultSpeed, setDefaultSpeed] = useState("");
     setProductPreview(null);
     setDefaultIncome("");   // ⭐ NEW
     setDefaultSpeed("");    // ⭐ NEW
+    setDefaultPickaxe("");
     if (productInputRef.current) productInputRef.current.value = "";
     setEditMode("add");
     setEditingKategori(null);
@@ -152,6 +155,7 @@ const [defaultSpeed, setDefaultSpeed] = useState("");
         mode: editMode,
         default_income: defaultIncome,   // ⭐ NEW
         default_speed: defaultSpeed,     // ⭐ NEW
+        default_pickaxe: defaultPickaxe,
       };
 
       if (imageUrl) {
@@ -233,6 +237,7 @@ const [defaultSpeed, setDefaultSpeed] = useState("");
     setProductPreview(null);
     setDefaultIncome(item.default_income || "");   // ⭐ NEW
     setDefaultSpeed(item.default_speed || "");     // ⭐ NEW
+    setDefaultPickaxe(item.default_pickaxe || ""); // ⭐ NEW
     if (productInputRef.current) productInputRef.current.value = "";
     setEditMode("edit_link");
     setEditingKategori(item.kategori);
@@ -250,6 +255,7 @@ const [defaultSpeed, setDefaultSpeed] = useState("");
     setProductPreview(null);
     setDefaultIncome(item.default_income || "");   // ⭐ NEW
     setDefaultSpeed(item.default_speed || "");     // ⭐ NEW
+    setDefaultPickaxe(item.default_pickaxe || ""); // ⭐ NEW
     if (productInputRef.current) productInputRef.current.value = "";
     setEditMode("edit_product");
     setEditingKategori(item.kategori);
@@ -507,6 +513,19 @@ const [defaultSpeed, setDefaultSpeed] = useState("");
           value={defaultSpeed}
           onChange={(e) => setDefaultSpeed(e.target.value)}
           placeholder="100B, 50B"
+          className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm text-slate-900 dark:text-white focus:outline-none focus:border-amber-500"
+        />
+      </div>
+      {/* ⭐ NEW: Input Default Pickaxe */}
+      <div>
+        <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-2">
+          Default Pickaxe <span className="text-slate-400">(opsional)</span>
+        </label>
+        <input
+          type="text"
+          value={defaultPickaxe}
+          onChange={(e) => setDefaultPickaxe(e.target.value)}
+          placeholder="1, 5, 10"
           className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm text-slate-900 dark:text-white focus:outline-none focus:border-amber-500"
         />
       </div>
