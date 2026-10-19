@@ -525,7 +525,7 @@ const [defaultPickaxe, setDefaultPickaxe] = useState(""); // ⭐ NEW
           type="text"
           value={defaultPickaxe}
           onChange={(e) => setDefaultPickaxe(e.target.value)}
-          placeholder="1, 5, 10"
+          placeholder="Enchanted, Sci Fi, dll"
           className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm text-slate-900 dark:text-white focus:outline-none focus:border-amber-500"
         />
       </div>
