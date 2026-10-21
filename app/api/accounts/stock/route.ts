@@ -435,6 +435,9 @@ export async function PATCH(req: NextRequest) {
 // ============================================================
 // DELETE — Soft delete stock
 // ============================================================
+// ============================================================
+// DELETE — Soft delete stock → trigger bot hapus di Itemku
+// ============================================================
 export async function DELETE(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
@@ -447,17 +450,54 @@ export async function DELETE(req: NextRequest) {
       );
     }
 
-    const { error } = await supabase
+    // ⭐ 1. Cek akun ada & status sekarang
+    const { data: existing, error: fetchErr } = await supabase
+      .from("accounts_stock")
+      .select("id, username, deleted, delete_status")
+      .eq("username", username)
+      .maybeSingle();
+
+    if (fetchErr) {
+      return NextResponse.json(
+        { success: false, message: fetchErr.message },
+        { status: 500 }
+      );
+    }
+
+    if (!existing) {
+      return NextResponse.json(
+        { success: false, message: "Akun nggak ditemukan" },
+        { status: 404 }
+      );
+    }
+
+    // ⭐ 2. Idempotent — kalau udah di antrian, nggak perlu update lagi
+    if (existing.deleted) {
+      return NextResponse.json({
+        success: true,
+        message: `Akun ${username} udah dalam antrian hapus`,
+        already_requested: true,
+        delete_status: existing.delete_status,
+      });
+    }
+
+    // ⭐ 3. Soft delete + set antrian untuk bot
+    const now = new Date().toISOString();
+    const { error: updErr } = await supabase
       .from("accounts_stock")
       .update({
         deleted: true,
-        deleted_at: new Date().toISOString(),
+        deleted_at: now,
+        delete_status: "pending",         // ← KUNCI UTAMA
+        delete_attempts: 0,
+        delete_last_error: null,
+        delete_requested_at: now,
       })
-      .eq("username", username);
+      .eq("id", existing.id);
 
-    if (error) {
+    if (updErr) {
       return NextResponse.json(
-        { success: false, message: error.message },
+        { success: false, message: updErr.message },
         { status: 500 }
       );
     }
