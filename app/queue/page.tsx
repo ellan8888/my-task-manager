@@ -21,6 +21,7 @@ type QueueOrder = {
   progress_keyword: string | null;
   progress_count: number | null;
   target_count: number | null;
+  target_unit: string | null;
 };
 
 export default function QueuePage() {
@@ -115,6 +116,14 @@ const updateMaxParallel = async (newValue: number) => {
   const isProgressOrder = (o: QueueOrder) =>
     o.order_type === "progress" ||
     (o.progress_keyword != null && (o.target_count ?? 0) > 0);
+
+  // ⭐ HELPER BARU: Nentuin teks target (misal "1T" atau "10")
+  const getDisplayTarget = (o: QueueOrder) => {
+    if (o.target_unit && o.target_unit !== "Joki") {
+      return o.target_unit; // Hasilnya "1T" / "5T"
+    }
+    return o.target_count?.toString() ?? "0";
+  };
 
   // ⭐ Processing — split jadi countdown & progress
   const processingAll = orders.filter((o) => o.queue_status === "processing");
@@ -475,6 +484,12 @@ function ProcessingCard({ order, now }: { order: QueueOrder; now: number }) {
   // ⭐ Overdue cuma buat countdown order
   const isOverdue = !isProgressOrder && remaining === 0;
 
+  // ⭐ Ambil display target (1T atau angka)
+  const displayTarget = 
+    order.target_unit && order.target_unit !== "Joki" 
+      ? order.target_unit 
+      : (order.target_count?.toString() ?? "0");
+
   // ⭐ Progress percentage
   const progressPercent =
     isProgressOrder && order.target_count
@@ -523,7 +538,7 @@ function ProcessingCard({ order, now }: { order: QueueOrder; now: number }) {
               Progress {(order.progress_keyword || "Egg").toUpperCase()}
             </span>
             <span className="text-sm font-black text-violet-300 font-mono">
-              {order.progress_count ?? 0} / {order.target_count ?? 0}
+              {order.progress_count ?? 0} / {displayTarget}
             </span>
           </div>
           <div className="w-full h-2 bg-slate-950 rounded-full overflow-hidden border border-slate-800">

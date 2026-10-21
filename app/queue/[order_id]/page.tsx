@@ -52,6 +52,7 @@ type QueueOrder = {
   progress_count: number | null;        // ← TAMBAH
   progress_keyword: string | null;      // ← TAMBAH
   target_count: number | null;          // ← TAMBAH
+  target_unit: string | null;
 };
 
 export default function QueueDetailPage() {
@@ -283,6 +284,12 @@ useEffect(() => {
   const isProgressOrder = 
     (order as any).order_type === "progress" ||
     (order.progress_keyword != null && (order.target_count ?? 0) > 0);
+  
+  // ⭐ HELPER BARU: Nentuin display target (1T atau angka)
+  const displayTarget = 
+    order.target_unit && order.target_unit !== "Joki" 
+      ? order.target_unit 
+      : (order.target_count?.toString() ?? "0");
   
   // Progress order: nggak ada countdown, jadi force remaining = 0 tapi jangan trigger overdue
   const effectiveEstimatedEnd = isProgressOrder ? null : order.estimated_end_at;
@@ -569,7 +576,7 @@ useEffect(() => {
           Target Counted Egg
         </span>
         <span className="text-sm font-black text-violet-300 font-mono">
-          {eternalData.order.progress_count} / {eternalData.order.target_count}
+          {eternalData.order.progress_count} / {displayTarget}
         </span>
       </div>
       <div className="w-full h-3 bg-slate-950 rounded-full overflow-hidden border border-slate-800">
@@ -678,14 +685,14 @@ const rarityIconClass = isTargetRarity ? "fa-solid fa-star" : "fa-solid fa-gem";
               value={order.joki_name || "Ellan"}
             />
             {isProgressOrder ? (
-  <DetailRow
-    icon="fa-solid fa-egg"
-    label="Progress"
-    value={`${order.progress_count ?? 0} / ${order.target_count ?? 0} ${
-      (order.progress_keyword || "egg").toUpperCase()
-    }`}
-  />
-) : (
+              <DetailRow
+                icon="fa-solid fa-egg"
+                label="Progress"
+                value={`${order.progress_count ?? 0} / ${displayTarget} ${
+                  (order.progress_keyword || "egg").toUpperCase()
+                }`}
+              />
+            ) : (
   <DetailRow
     icon="fa-regular fa-calendar"
     label="Jadwal"
