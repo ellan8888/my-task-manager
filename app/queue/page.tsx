@@ -490,11 +490,25 @@ function ProcessingCard({ order, now }: { order: QueueOrder; now: number }) {
       ? order.target_unit 
       : (order.target_count?.toString() ?? "0");
 
-  // ⭐ Progress percentage
-  const progressPercent =
-    isProgressOrder && order.target_count
-      ? Math.min(100, ((order.progress_count ?? 0) / order.target_count) * 100)
-      : 0;
+  // ⭐ Progress percentage — hitung pake target_unit asli (biar akurat buat Income)
+  let progressPercent = 0;
+  if (isProgressOrder) {
+    let realTarget = order.target_count || 1;
+
+    // Kalau target_unit ada isinya (misal "1T"), hitung target asli
+    if (order.target_unit && order.target_unit !== "Joki") {
+      const match = order.target_unit.match(/^(\d+(?:\.\d+)?)([TBMK]?)$/i);
+      if (match) {
+        const num = parseFloat(match[1]);
+        const suffix = match[2].toUpperCase();
+        const multiplier = suffix === "T" ? 1e12 : suffix === "B" ? 1e9 : suffix === "M" ? 1e6 : suffix === "K" ? 1e3 : 1;
+        realTarget = num * multiplier;
+      }
+    }
+
+    // Hitung persentase (max 100%)
+    progressPercent = Math.min(100, ((order.progress_count ?? 0) / realTarget) * 100);
+  }
 
   return (
     <Link

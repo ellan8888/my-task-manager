@@ -2735,11 +2735,26 @@ const isProcessingCard = isChecked;
             <div
               className="h-full bg-linear-to-r from-violet-500 to-indigo-500 transition-all duration-500"
               style={{
-                width: `${
-                  order.target_count
-                    ? Math.min(100, ((order.progress_count ?? 0) / order.target_count) * 100)
-                    : 0
-                }%`,
+                width: `${(() => {
+                  let realTarget = order.target_count || 1;
+
+                  // Kalau target_unit ada isinya (misal "1T"), hitung target asli
+                  if ((order as any).target_unit && (order as any).target_unit !== "Joki") {
+                    const match = (order as any).target_unit.match(/^(\d+(?:\.\d+)?)([TBMK]?)$/i);
+                    if (match) {
+                      const num = parseFloat(match[1]);
+                      const suffix = match[2].toUpperCase();
+                      const multiplier =
+                        suffix === "T" ? 1e12 :
+                        suffix === "B" ? 1e9 :
+                        suffix === "M" ? 1e6 :
+                        suffix === "K" ? 1e3 : 1;
+                      realTarget = num * multiplier;
+                    }
+                  }
+
+                  return Math.min(100, ((order.progress_count ?? 0) / realTarget) * 100);
+                })()}%`,
               }}
             />
           </div>

@@ -25,6 +25,7 @@ type EternalProgressData = {
     progress_keyword: string;
     progress_count: number;
     target_count: number;
+    target_unit: string | null;
     is_complete: boolean;
   };
   eggs: {
@@ -54,6 +55,14 @@ type QueueOrder = {
   target_count: number | null;          // ← TAMBAH
   target_unit: string | null;
 };
+
+function formatShortNumber(n: number): string {
+  if (n >= 1e12) return `${(n / 1e12).toFixed(1)}T`.replace(".0T", "T");
+  if (n >= 1e9) return `${(n / 1e9).toFixed(1)}B`.replace(".0B", "B");
+  if (n >= 1e6) return `${(n / 1e6).toFixed(1)}M`.replace(".0M", "M");
+  if (n >= 1e3) return `${(n / 1e3).toFixed(1)}K`.replace(".0K", "K");
+  return `${n}`;
+}
 
 export default function QueueDetailPage() {
   // === ROUTING & STATE DULU ===
@@ -584,16 +593,31 @@ useEffect(() => {
                         Target Counted {unitLabel}
                       </span>
                       <span className="text-sm font-black text-violet-300 font-mono">
-                        {eternalData.order.progress_count} / {displayTarget}
+                        {formatShortNumber(eternalData.order.progress_count)} / {displayTarget}
                       </span>
                     </div>
                     <div className="w-full h-3 bg-slate-950 rounded-full overflow-hidden border border-slate-800">
                       <div
                         className="h-full bg-linear-to-r from-violet-500 to-indigo-500 transition-all duration-500"
                         style={{
-                          width: `${
-                            (eternalData.order.progress_count / eternalData.order.target_count) * 100
-                          }%`,
+                          width: `${(() => {
+                            // ⭐ Hitung target asli dari target_unit (misal "1T" -> 1000000000000)
+                            let realTarget = eternalData.order.target_count || 1;
+                            
+                            // Kalau target_unit ada isinya (misal "1T" atau "500B"), ambil angkanya
+                            if (order.target_unit && order.target_unit !== "Joki") {
+                              const match = order.target_unit.match(/^(\d+(?:\.\d+)?)([TBMK]?)$/i);
+                              if (match) {
+                                const num = parseFloat(match[1]);
+                                const suffix = match[2].toUpperCase();
+                                const multiplier = suffix === "T" ? 1e12 : suffix === "B" ? 1e9 : suffix === "M" ? 1e6 : suffix === "K" ? 1e3 : 1;
+                                realTarget = num * multiplier;
+                              }
+                            }
+
+                            const percent = Math.min(100, ((eternalData.order.progress_count ?? 0) / realTarget) * 100);
+                            return percent;
+                          })()}%`,
                         }}
                       />
                     </div>
