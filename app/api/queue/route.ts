@@ -55,10 +55,12 @@ export async function GET(request: Request) {
     }
 
     // Order
+        // Order
     if (status === "queued") {
-      query = query.order("queue_position", { ascending: true });
+      query = query.order("queue_position", { ascending: true, nullsFirst: false });
     } else if (status === "processing") {
-      query = query.order("processing_started_at", { ascending: true });
+      // ⭐ FIX: nullsFirst: false, biar order yang processing_started_at = NULL tetap muncul
+      query = query.order("processing_started_at", { ascending: true, nullsFirst: false });
     } else {
       query = query.order("created_at", { ascending: true });
     }

@@ -33,9 +33,7 @@ export async function POST() {
     const now = new Date().toISOString();
     const completedIds: string[] = [];
 
-    // ══════════════════════════════════════════════════════════
-    // 1. Cek COUNTDOWN ORDER — yang estimated_end_at udah lewat
-    // ══════════════════════════════════════════════════════════
+    // 1. Cek COUNTDOWN ORDER
     const { data: expiredCountdown, error: countdownError } = await supabaseAdmin
       .from("joki_orders")
       .select("*")
@@ -44,36 +42,19 @@ export async function POST() {
       .not("estimated_end_at", "is", null)
       .lte("estimated_end_at", now);
 
-    if (countdownError) {
-      console.error("[CheckCompleted] Countdown query error:", countdownError);
-    }
+    if (countdownError) console.error("[CheckCompleted] Countdown error:", countdownError);
 
     if (expiredCountdown && expiredCountdown.length > 0) {
       const countdownIds = expiredCountdown.map((o) => o.order_id);
-      
-      const { error: updateErr } = await supabaseAdmin
+      await supabaseAdmin
         .from("joki_orders")
-        .update({
-          queue_status: "completed",
-          // ❌ JANGAN set completed_by_bot — biar buram nunggu bot klik tombol
-        })
+        .update({ queue_status: "completed" })
         .in("order_id", countdownIds);
-
-      if (updateErr) {
-        console.error("[CheckCompleted] Update countdown error:", updateErr);
-      } else {
-        console.log(
-          `[CheckCompleted] ✅ ${countdownIds.length} countdown auto-completed:`,
-          countdownIds
-        );
-        completedIds.push(...countdownIds);
-      }
+        
+      completedIds.push(...countdownIds);
     }
 
-    // ══════════════════════════════════════════════════════════
-    // 2. Cek PROGRESS ORDER — yang progress_count >= real_target
-    //    ⭐ INI YANG FIX BUG ORDER 1T NYANGKUT
-    // ══════════════════════════════════════════════════════════
+    // 2. Cek PROGRESS ORDER
     const { data: processingProgress, error: progressError } = await supabaseAdmin
       .from("joki_orders")
       .select("*")
@@ -81,9 +62,7 @@ export async function POST() {
       .eq("completed", false)
       .eq("order_type", "progress");
 
-    if (progressError) {
-      console.error("[CheckCompleted] Progress query error:", progressError);
-    }
+    if (progressError) console.error("[CheckCompleted] Progress error:", progressError);
 
     if (processingProgress && processingProgress.length > 0) {
       const reachedIds: string[] = [];
@@ -92,46 +71,28 @@ export async function POST() {
         const progressCount = order.progress_count || 0;
         const realTarget = parseRealTarget(order.target_count, order.target_unit);
 
-        // ⭐ Cek: apakah progress udah >= target asli?
-        if (progressCount >= realTarget) {
-          console.log(
-            `[CheckCompleted] 🎯 Order ${order.order_id} target reached: ` +
-            `${progressCount.toLocaleString()} / ${realTarget.toLocaleString()} ` +
-            `(${order.target_unit || order.target_count})`
-          );
+        // ⭐ FIX: Jangan sampai target 0 atau negatif dianggap selesai!
+        // Pastikan target > 0 dan progress beneran nyampe target.
+        if (realTarget > 0 && progressCount > 0 && progressCount >= realTarget) {
+          console.log(`[CheckCompleted] 🎯 Target reached: ${order.order_id} (${progressCount} >= ${realTarget})`);
           reachedIds.push(order.order_id);
         }
       }
 
       if (reachedIds.length > 0) {
-        const { error: updateProgErr } = await supabaseAdmin
+        await supabaseAdmin
           .from("joki_orders")
-          .update({
-            queue_status: "completed",
-            // ❌ JANGAN set completed_by_bot — biar bot yang handle kirim chat + klik tombol
-          })
+          .update({ queue_status: "completed" })
           .in("order_id", reachedIds);
-
-        if (updateProgErr) {
-          console.error("[CheckCompleted] Update progress error:", updateProgErr);
-        } else {
-          console.log(
-            `[CheckCompleted] ✅ ${reachedIds.length} progress auto-completed:`,
-            reachedIds
-          );
-          completedIds.push(...reachedIds);
-        }
+          
+        completedIds.push(...reachedIds);
       }
     }
 
-    // ══════════════════════════════════════════════════════════
-    // 3. Kalau ada yang selesai → promote antrian
-    // ══════════════════════════════════════════════════════════
+    // 3. Promote antrian kalau ada yang selesai
     if (completedIds.length > 0) {
       const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
-      fetch(`${baseUrl}/api/queue/promote`, { method: "POST" }).catch((err) =>
-        console.error("[CheckCompleted] Promote error:", err)
-      );
+      fetch(`${baseUrl}/api/queue/promote`, { method: "POST" }).catch(console.error);
     }
 
     return NextResponse.json({
