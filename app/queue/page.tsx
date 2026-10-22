@@ -715,3 +715,14 @@ function QueueCard({ order }: { order: QueueOrder }) {
     </Link>
   );
 }
+
+// ============================
+// HELPER: format angka singkat (100000000000 -> "100B")
+// ============================
+function formatShortNumber(n: number): string {
+  if (n >= 1e12) return `${(n / 1e12).toFixed(1)}T`.replace(".0T", "T");
+  if (n >= 1e9) return `${(n / 1e9).toFixed(1)}B`.replace(".0B", "B");
+  if (n >= 1e6) return `${(n / 1e6).toFixed(1)}M`.replace(".0M", "M");
+  if (n >= 1e3) return `${(n / 1e3).toFixed(1)}K`.replace(".0K", "K");
+  return `${n}`;
+}

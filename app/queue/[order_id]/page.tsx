@@ -331,9 +331,17 @@ useEffect(() => {
         title: "SELESAI",
         subtitle: "Jokian sudah selesai, terimakasih!",
       }
-    // ⭐ PROGRESS ORDER — ada section khusus, tampilin status "PROGRESS"
+    : isProgressOrder && isProcessing
+    ? {
+        bg: "bg-violet-500/10",
+        border: "border-violet-500/40",
+        text: "text-violet-300",
+        iconBg: "bg-violet-500/20",
+        iconColor: "text-violet-400",
+        icon: "fa-solid fa-egg",
+        title: "SEDANG DIPROSES",
         subtitle: `Progress: ${formatShortNumber(order.progress_count ?? 0)}/${displayTarget} ${(order.progress_keyword || "egg").toUpperCase()}`,
-    // Countdown order (existing logic)
+      }
     : isProcessing && isOverdue
     ? {
         bg: "bg-emerald-500/10",
