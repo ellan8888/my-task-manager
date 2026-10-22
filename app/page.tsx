@@ -2728,7 +2728,7 @@ const isProcessingCard = isChecked;
               Progress {(order.progress_keyword || "Egg").toUpperCase()}
             </span>
             <span className="text-sm font-black text-violet-600 dark:text-violet-400 font-mono">
-              {order.progress_count ?? 0} / {order.target_count ?? 0}
+              {order.progress_count ?? 0} / {displayTarget}
             </span>
           </div>
           <div className="w-full h-2 bg-slate-100 dark:bg-slate-950 rounded-full overflow-hidden border border-slate-200 dark:border-slate-800">
