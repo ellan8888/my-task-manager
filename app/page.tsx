@@ -2354,6 +2354,14 @@ const { error } = await supabase.from("tasks").insert([newTask]);
   );
 }
 
+function formatShortNumber(n: number): string {
+  if (n >= 1e12) return `${(n / 1e12).toFixed(1)}T`.replace(".0T", "T");
+  if (n >= 1e9) return `${(n / 1e9).toFixed(1)}B`.replace(".0B", "B");
+  if (n >= 1e6) return `${(n / 1e6).toFixed(1)}M`.replace(".0M", "M");
+  if (n >= 1e3) return `${(n / 1e3).toFixed(1)}K`.replace(".0K", "K");
+  return `${n}`;
+}
+
 // ══════════════════════════════════════════════════════════════
 // JOKI ORDER CARD COMPONENT — di-extract biar gak duplikat
 // ══════════════════════════════════════════════════════════════
@@ -2693,8 +2701,7 @@ const isProcessingCard = isChecked;
           ) : isProgressOrder ? (
             <span className="bg-violet-100 dark:bg-violet-500/20 text-violet-700 dark:text-violet-300 border border-violet-200 dark:border-violet-500/30 text-[11px] font-bold px-3 py-1.5 rounded-xl flex items-center gap-1.5">
               <i className="fa-solid fa-egg text-xs"></i>
-              {(order.progress_keyword || "Egg").toUpperCase()} {order.progress_count ?? 0}/
-              {displayTarget} {/* <--- PAKE displayTarget */}
+              {(order.progress_keyword || "Egg").toUpperCase()} {formatShortNumber(order.progress_count ?? 0)}/{displayTarget}
             </span>
           ) : isOverdue ? (
             <span className="bg-rose-100 dark:bg-rose-500/20 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-500/30 text-[11px] font-bold px-3 py-1.5 rounded-xl flex items-center gap-1.5">
@@ -2728,7 +2735,7 @@ const isProcessingCard = isChecked;
               Progress {(order.progress_keyword || "Egg").toUpperCase()}
             </span>
             <span className="text-sm font-black text-violet-600 dark:text-violet-400 font-mono">
-              {order.progress_count ?? 0} / {displayTarget}
+              {formatShortNumber(order.progress_count ?? 0)} / {displayTarget}
             </span>
           </div>
           <div className="w-full h-2 bg-slate-100 dark:bg-slate-950 rounded-full overflow-hidden border border-slate-200 dark:border-slate-800">

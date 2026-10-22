@@ -552,7 +552,7 @@ function ProcessingCard({ order, now }: { order: QueueOrder; now: number }) {
               Progress {(order.progress_keyword || "Egg").toUpperCase()}
             </span>
             <span className="text-sm font-black text-violet-300 font-mono">
-              {order.progress_count ?? 0} / {displayTarget}
+              {formatShortNumber(order.progress_count ?? 0)} / {displayTarget}
             </span>
           </div>
           <div className="w-full h-2 bg-slate-950 rounded-full overflow-hidden border border-slate-800">
