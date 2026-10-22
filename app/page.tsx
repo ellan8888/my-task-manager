@@ -2404,6 +2404,12 @@ function JokiOrderCard({
     order.order_type === "progress" ||
     (order.progress_keyword != null && (order.target_count ?? 0) > 0);
 
+  // ⭐ TAMBAHKAN INI: Ambil display target (1T atau angka)
+  const displayTarget = 
+    (order as any).target_unit && (order as any).target_unit !== "Joki" 
+      ? (order as any).target_unit 
+      : (order.target_count?.toString() ?? "0");
+
   const endDate = order.estimated_end_at
     ? new Date(order.estimated_end_at)
     : null;
@@ -2688,7 +2694,7 @@ const isProcessingCard = isChecked;
             <span className="bg-violet-100 dark:bg-violet-500/20 text-violet-700 dark:text-violet-300 border border-violet-200 dark:border-violet-500/30 text-[11px] font-bold px-3 py-1.5 rounded-xl flex items-center gap-1.5">
               <i className="fa-solid fa-egg text-xs"></i>
               {(order.progress_keyword || "Egg").toUpperCase()} {order.progress_count ?? 0}/
-              {order.target_count ?? 0}
+              {displayTarget} {/* <--- PAKE displayTarget */}
             </span>
           ) : isOverdue ? (
             <span className="bg-rose-100 dark:bg-rose-500/20 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-500/30 text-[11px] font-bold px-3 py-1.5 rounded-xl flex items-center gap-1.5">
