@@ -37,6 +37,32 @@ export default function AkunLakuPage() {
   const [searchQuery, setSearchQuery] = useState("");
 
   // ══════════════════════════════════════════════════════
+// CEK APAKAH TANGGAL = HARI INI
+// ══════════════════════════════════════════════════════
+const isToday = (dateStr: string | null) => {
+  if (!dateStr) return false;
+  const date = new Date(dateStr);
+  const now = new Date();
+  return (
+    date.getDate() === now.getDate() &&
+    date.getMonth() === now.getMonth() &&
+    date.getFullYear() === now.getFullYear()
+  );
+};
+
+// ══════════════════════════════════════════════════════
+// FILTER AKUN YANG LAKU HARI INI
+// ══════════════════════════════════════════════════════
+const todayAccounts = accounts.filter((acc) =>
+  isToday(acc.logged_out_at)
+);
+
+const todayIncome = todayAccounts.reduce(
+  (sum, acc) => sum + (acc.income_amount || 0),
+  0
+);
+
+  // ══════════════════════════════════════════════════════
   // LOAD DATA — cuma akun yang logged_out = true
   // ══════════════════════════════════════════════════════
   const loadAccounts = async () => {
@@ -163,6 +189,93 @@ export default function AkunLakuPage() {
                 <i className="fa-solid fa-trophy text-2xl"></i>
               </div>
             </div>
+          </div>
+
+          {/* ══════════════════════════════════════════════════════ */}
+          {/* SECTION: AKUN LAKU HARI INI                          */}
+          {/* ══════════════════════════════════════════════════════ */}
+          <div className="bg-white dark:bg-slate-900/60 rounded-2xl p-6 border border-slate-200 dark:border-slate-800 shadow-sm mb-6">
+            {/* Header Section */}
+            <div className="flex items-start justify-between mb-4">
+              <div>
+                <p className="text-xs font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider flex items-center gap-1.5">
+                  <i className="fa-solid fa-calendar-day text-xs"></i>
+                  <span>Laku Hari Ini</span>
+                </p>
+                <div className="flex items-baseline gap-2 mt-1">
+                  <h3 className="text-3xl md:text-4xl font-black text-emerald-600 dark:text-emerald-400">
+                    {todayAccounts.length}
+                  </h3>
+                  <span className="text-xs text-slate-500 dark:text-slate-400">
+                    akun terjual
+                  </span>
+                </div>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                  Income hari ini:{" "}
+                  <span className="font-bold text-emerald-600 dark:text-emerald-400 font-mono">
+                    Rp {todayIncome.toLocaleString("id-ID")}
+                  </span>
+                </p>
+              </div>
+              <div className="w-14 h-14 rounded-2xl bg-emerald-100 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center border border-emerald-200 dark:border-emerald-500/20">
+                <i className="fa-solid fa-fire text-2xl"></i>
+              </div>
+            </div>
+
+            {/* List akun laku hari ini */}
+            {todayAccounts.length === 0 ? (
+              <div className="text-center py-6 bg-slate-50 dark:bg-slate-950/50 rounded-xl border border-dashed border-slate-200 dark:border-slate-800">
+                <i className="fa-solid fa-moon text-3xl text-slate-300 dark:text-slate-700 mb-2"></i>
+                <p className="text-sm text-slate-500 dark:text-slate-400 font-medium">
+                  Belum ada akun yang laku hari ini
+                </p>
+                <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">
+                  Akun yang terjual hari ini akan muncul di sini
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-2 max-h-80 overflow-y-auto custom-scrollbar pr-1">
+                {todayAccounts.map((acc) => (
+                  <div
+                    key={acc.id}
+                    className="bg-slate-50 dark:bg-slate-950/50 rounded-xl px-3 py-2.5 border border-slate-200 dark:border-slate-800 hover:border-emerald-300 dark:hover:border-emerald-500/40 transition flex items-center justify-between gap-2"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span
+                          className="font-mono font-bold text-xs text-slate-900 dark:text-white truncate max-w-40"
+                          title={acc.username}
+                        >
+                          {acc.username}
+                        </span>
+                        <span className="px-1.5 py-0.5 bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 text-[9px] font-bold rounded-md whitespace-nowrap">
+                          {acc.kategori || "—"}
+                        </span>
+                      </div>
+                      <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5 flex items-center gap-1">
+                        <i className="fa-solid fa-clock text-[9px] text-emerald-500"></i>
+                        <span>{formatDateTime(acc.logged_out_at)}</span>
+                        {acc.added_by && (
+                          <>
+                            <span className="text-slate-300 dark:text-slate-600">•</span>
+                            <span>by {acc.added_by}</span>
+                          </>
+                        )}
+                      </p>
+                    </div>
+                    <div className="text-right shrink-0">
+                      {acc.income_amount ? (
+                        <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 font-mono whitespace-nowrap">
+                          Rp {acc.income_amount.toLocaleString("id-ID")}
+                        </span>
+                      ) : (
+                        <span className="text-[10px] text-slate-400">—</span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* List Akun Laku */}
