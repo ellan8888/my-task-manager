@@ -556,111 +556,121 @@ useEffect(() => {
         </div>
 
         {/* ═══════════════════════════════════════════════ */}
-{/* ETERNAL PROGRESS SECTION — cuma kalau order progress */}
-{/* ═══════════════════════════════════════════════ */}
-{eternalData && eternalData.order.target_count > 0 && (
-  <div className="bg-slate-900/70 backdrop-blur-xl rounded-2xl p-5 md:p-6 border border-violet-500/30 mb-6">
-    <div className="flex items-center gap-2 mb-5">
-      <div className="w-9 h-9 rounded-xl bg-violet-500/20 border border-violet-500/30 flex items-center justify-center">
-        <i className="fa-solid fa-egg text-violet-400 text-sm"></i>
-      </div>
-      <h3 className="font-extrabold text-white">
-        Progress {eternalData.order.progress_keyword.toUpperCase()}
-      </h3>
-    </div>
-
-    {/* PROGRESS BAR */}
-    <div className="mb-6">
-      <div className="flex items-center justify-between mb-2">
-        <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">
-          Target Counted Egg
-        </span>
-        <span className="text-sm font-black text-violet-300 font-mono">
-          {eternalData.order.progress_count} / {displayTarget}
-        </span>
-      </div>
-      <div className="w-full h-3 bg-slate-950 rounded-full overflow-hidden border border-slate-800">
-        <div
-          className="h-full bg-linear-to-r from-violet-500 to-indigo-500 transition-all duration-500"
-          style={{
-            width: `${
-              (eternalData.order.progress_count / eternalData.order.target_count) * 100
-            }%`,
-          }}
-        />
-      </div>
-      <p className="text-[11px] text-slate-500 mt-2">
-        {eternalData.eggs.total} egg terkumpul · {eternalData.eggs.counted} masuk hitungan target
-      </p>
-    </div>
-
-    {/* EGG BREAKDOWN PER RARITY */}
-    <div className="space-y-4">
-      <p className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2">
-        <i className="fa-solid fa-list text-[10px]"></i>
-        Egg yang Didapat
-      </p>
-
-      {Object.keys(eternalData.eggs.by_rarity).length === 0 ? (
-        <p className="text-xs text-slate-500 italic text-center py-4">
-          Belum ada egg yang didapat
-        </p>
-      ) : (
-        Object.entries(eternalData.eggs.by_rarity)
-          .sort(([a], [b]) => {
-            // Tampilkan rarity target duluan
-            if (a === eternalData.order.progress_keyword) return -1;
-            if (b === eternalData.order.progress_keyword) return 1;
-            return 0;
-          })
-          .map(([rarity, eggs]) => {
-            const isTargetRarity = rarity === eternalData.order.progress_keyword;
-            const rarityColor = isTargetRarity
-  ? "text-violet-300 border-violet-500/40 bg-violet-500/10"
-  : "text-slate-300 border-slate-700 bg-slate-800/40";
-
-// ⭐ Icon class untuk rarity — target rarity pakai "star", lainnya pakai "gem"
-const rarityIconClass = isTargetRarity ? "fa-solid fa-star" : "fa-solid fa-gem";
-
-            return (
-              <div
-                key={rarity}
-                className={`rounded-xl border ${rarityColor} p-4`}
-              >
-                <div className="flex items-center justify-between mb-3">
-                  <span className="text-sm font-extrabold capitalize flex items-center gap-2">
-  <i className={`${rarityIconClass} text-xs ${isTargetRarity ? "text-violet-400" : "text-sky-400"}`}></i>
-  {rarity}
-</span>
-                  <span className="text-xs font-mono text-slate-400">
-                    {eggs.length} egg
-                  </span>
-                </div>
-                <ul className="space-y-1.5">
-                  {eggs.map((egg, idx) => (
-                    <li
-                      key={idx}
-                      className="text-xs text-slate-300 flex items-start gap-2"
-                    >
-                      <span className="text-slate-500 font-mono shrink-0">
-                        {idx + 1}.
-                      </span>
-                      <span className="flex-1">
-                        <span className="font-semibold">{egg.egg_name}</span>
-                        {egg.area && (
-                          <span className="text-slate-500"> · {egg.area}</span>
-                        )}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
+        {/* ETERNAL PROGRESS SECTION — cuma kalau order progress */}
+        {/* ═══════════════════════════════════════════════ */}
+        {eternalData && eternalData.order.target_count > 0 && (
+          <div className="bg-slate-900/70 backdrop-blur-xl rounded-2xl p-5 md:p-6 border border-violet-500/30 mb-6">
+            <div className="flex items-center gap-2 mb-5">
+              <div className="w-9 h-9 rounded-xl bg-violet-500/20 border border-violet-500/30 flex items-center justify-center">
+                <i className="fa-solid fa-egg text-violet-400 text-sm"></i>
               </div>
-            );
-          })
-      )}
-    </div>
-  </div>
-)}
+              <h3 className="font-extrabold text-white">
+                Progress {eternalData.order.progress_keyword.toUpperCase()}
+              </h3>
+            </div>
+
+            {/* ⭐ LOGIKA DINAMIS: Cek apakah ini Joki Income atau Egg */}
+            {(() => {
+              const isIncome = eternalData.order.progress_keyword.toLowerCase().includes("income");
+              const unitLabel = isIncome ? "Income" : "Egg";
+              const unitLabelLower = isIncome ? "income" : "egg";
+
+              return (
+                <>
+                  {/* PROGRESS BAR */}
+                  <div className="mb-6">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+                        Target Counted {unitLabel}
+                      </span>
+                      <span className="text-sm font-black text-violet-300 font-mono">
+                        {eternalData.order.progress_count} / {displayTarget}
+                      </span>
+                    </div>
+                    <div className="w-full h-3 bg-slate-950 rounded-full overflow-hidden border border-slate-800">
+                      <div
+                        className="h-full bg-linear-to-r from-violet-500 to-indigo-500 transition-all duration-500"
+                        style={{
+                          width: `${
+                            (eternalData.order.progress_count / eternalData.order.target_count) * 100
+                          }%`,
+                        }}
+                      />
+                    </div>
+                    <p className="text-[11px] text-slate-500 mt-2">
+                      {eternalData.eggs.total} {unitLabelLower} terkumpul · {eternalData.eggs.counted} masuk hitungan target
+                    </p>
+                  </div>
+
+                  {/* BREAKDOWN SECTION */}
+                  <div className="space-y-4">
+                    <p className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2">
+                      <i className="fa-solid fa-list text-[10px]"></i>
+                      {unitLabel} yang Didapat
+                    </p>
+
+                    {Object.keys(eternalData.eggs.by_rarity).length === 0 ? (
+                      <p className="text-xs text-slate-500 italic text-center py-4">
+                        Belum ada {unitLabelLower} yang didapat
+                      </p>
+                    ) : (
+                      Object.entries(eternalData.eggs.by_rarity)
+                        .sort(([a], [b]) => {
+                          // Tampilkan rarity target duluan
+                          if (a === eternalData.order.progress_keyword) return -1;
+                          if (b === eternalData.order.progress_keyword) return 1;
+                          return 0;
+                        })
+                        .map(([rarity, eggs]) => {
+                          const isTargetRarity = rarity === eternalData.order.progress_keyword;
+                          const rarityColor = isTargetRarity
+                            ? "text-violet-300 border-violet-500/40 bg-violet-500/10"
+                            : "text-slate-300 border-slate-700 bg-slate-800/40";
+
+                          const rarityIconClass = isTargetRarity ? "fa-solid fa-star" : "fa-solid fa-gem";
+
+                          return (
+                            <div
+                              key={rarity}
+                              className={`rounded-xl border ${rarityColor} p-4`}
+                            >
+                              <div className="flex items-center justify-between mb-3">
+                                <span className="text-sm font-extrabold capitalize flex items-center gap-2">
+                                  <i className={`${rarityIconClass} text-xs ${isTargetRarity ? "text-violet-400" : "text-sky-400"}`}></i>
+                                  {rarity}
+                                </span>
+                                <span className="text-xs font-mono text-slate-400">
+                                  {eggs.length} {unitLabelLower}
+                                </span>
+                              </div>
+                              <ul className="space-y-1.5">
+                                {eggs.map((egg, idx) => (
+                                  <li
+                                    key={idx}
+                                    className="text-xs text-slate-300 flex items-start gap-2"
+                                  >
+                                    <span className="text-slate-500 font-mono shrink-0">
+                                      {idx + 1}.
+                                    </span>
+                                    <span className="flex-1">
+                                      <span className="font-semibold">{egg.egg_name}</span>
+                                      {egg.area && (
+                                        <span className="text-slate-500"> · {egg.area}</span>
+                                      )}
+                                    </span>
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          );
+                        })
+                    )}
+                  </div>
+                </>
+              );
+            })()}
+          </div>
+        )}
 
         {/* DETAIL ORDER */}
         <div className="bg-slate-900/70 backdrop-blur-xl rounded-2xl p-5 md:p-6 border border-slate-800/80">
