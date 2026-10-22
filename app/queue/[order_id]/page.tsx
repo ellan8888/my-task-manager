@@ -565,7 +565,7 @@ useEffect(() => {
         <i className="fa-solid fa-egg text-violet-400 text-sm"></i>
       </div>
       <h3 className="font-extrabold text-white">
-        Progress {eternalData.order.progress_keyword.toUpperCase()} Egg
+        Progress {eternalData.order.progress_keyword.toUpperCase()}
       </h3>
     </div>
 
