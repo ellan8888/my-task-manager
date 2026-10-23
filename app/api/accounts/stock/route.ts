@@ -277,16 +277,21 @@ export async function POST(req: NextRequest) {
       );
     }
 
-            // ⭐ AUTO-ADD KE MONITOR
+            // ⭐     // ⭐ AUTO-ADD KE MONITOR
     try {
       const { data: katData } = await supabase
         .from("kategori_links")
-        .select("default_income, default_speed, default_pickaxe")
+        .select("default_income, default_speed, default_pickaxe, default_egg") // ⭐ TAMBAH default_egg
         .eq("kategori", (kategori || "").toLowerCase().trim())
         .maybeSingle();
 
-      // ⭐ Cek apakah ada income, speed, ATAU pickaxe
-      if (katData?.default_income || katData?.default_speed || katData?.default_pickaxe) {
+      // ⭐ Cek apakah ada income, speed, pickaxe, ATAU egg
+      if (
+        katData?.default_income ||
+        katData?.default_speed ||
+        katData?.default_pickaxe ||
+        katData?.default_egg // ⭐ TAMBAH INI
+      ) {
         const BOT_API_URL = process.env.BOT_API_URL || "http://localhost:5001";
         
         const botRes = await fetch(`${BOT_API_URL}/api/monitor/add`, {
@@ -299,7 +304,8 @@ export async function POST(req: NextRequest) {
             username,
             target_income: katData.default_income || "0",
             target_speed: katData.default_speed || "0",
-            target_pickaxe: katData.default_pickaxe || "0", // ⭐ TAMBAHIN INI
+            target_pickaxe: katData.default_pickaxe || "0",
+            target_egg: katData.default_egg || "0", // ⭐ TAMBAH INI
             input_by: added_by || "system",
           }),
           signal: AbortSignal.timeout(5000),

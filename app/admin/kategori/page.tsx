@@ -16,6 +16,7 @@ type KategoriLink = {
   default_income?: string | null;   // ⭐ NEW
   default_speed?: string | null;    // ⭐ NEW
   default_pickaxe?: string | null;
+  default_egg?: string | null;
 };
 
 type EditMode = "add" | "edit_link" | "edit_product";
@@ -28,7 +29,8 @@ export default function KategoriPage() {
   const { sidebarOpen, toggleSidebar } = useSidebar();
   const [defaultIncome, setDefaultIncome] = useState("");
 const [defaultSpeed, setDefaultSpeed] = useState("");
-const [defaultPickaxe, setDefaultPickaxe] = useState(""); // ⭐ NEW
+const [defaultPickaxe, setDefaultPickaxe] = useState("");
+const [defaultEgg, setDefaultEgg] = useState("");// ⭐ NEW
 
   // Form state
   const [kategori, setKategori] = useState("");
@@ -97,6 +99,7 @@ const [defaultPickaxe, setDefaultPickaxe] = useState(""); // ⭐ NEW
     setDefaultIncome("");   // ⭐ NEW
     setDefaultSpeed("");    // ⭐ NEW
     setDefaultPickaxe("");
+    setDefaultEgg("");
     if (productInputRef.current) productInputRef.current.value = "";
     setEditMode("add");
     setEditingKategori(null);
@@ -156,6 +159,7 @@ const [defaultPickaxe, setDefaultPickaxe] = useState(""); // ⭐ NEW
         default_income: defaultIncome,   // ⭐ NEW
         default_speed: defaultSpeed,     // ⭐ NEW
         default_pickaxe: defaultPickaxe,
+        default_egg: defaultEgg,
       };
 
       if (imageUrl) {
@@ -237,7 +241,8 @@ const [defaultPickaxe, setDefaultPickaxe] = useState(""); // ⭐ NEW
     setProductPreview(null);
     setDefaultIncome(item.default_income || "");   // ⭐ NEW
     setDefaultSpeed(item.default_speed || "");     // ⭐ NEW
-    setDefaultPickaxe(item.default_pickaxe || ""); // ⭐ NEW
+    setDefaultPickaxe(item.default_pickaxe || "");
+    setDefaultEgg(item.default_egg || ""); // ⭐ NEW
     if (productInputRef.current) productInputRef.current.value = "";
     setEditMode("edit_link");
     setEditingKategori(item.kategori);
@@ -255,7 +260,8 @@ const [defaultPickaxe, setDefaultPickaxe] = useState(""); // ⭐ NEW
     setProductPreview(null);
     setDefaultIncome(item.default_income || "");   // ⭐ NEW
     setDefaultSpeed(item.default_speed || "");     // ⭐ NEW
-    setDefaultPickaxe(item.default_pickaxe || ""); // ⭐ NEW
+    setDefaultPickaxe(item.default_pickaxe || "");
+    setDefaultEgg(item.default_egg || ""); // ⭐ NEW
     if (productInputRef.current) productInputRef.current.value = "";
     setEditMode("edit_product");
     setEditingKategori(item.kategori);
@@ -526,6 +532,20 @@ const [defaultPickaxe, setDefaultPickaxe] = useState(""); // ⭐ NEW
           value={defaultPickaxe}
           onChange={(e) => setDefaultPickaxe(e.target.value)}
           placeholder="Enchanted, Sci Fi, dll"
+          className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm text-slate-900 dark:text-white focus:outline-none focus:border-amber-500"
+        />
+      </div>
+
+            {/* ⭐ NEW: Input Default Egg */}
+      <div>
+        <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-2">
+          Default Egg <span className="text-slate-400">(opsional)</span>
+        </label>
+        <input
+          type="text"
+          value={defaultEgg}
+          onChange={(e) => setDefaultEgg(e.target.value)}
+          placeholder="100, 50, dll"
           className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm text-slate-900 dark:text-white focus:outline-none focus:border-amber-500"
         />
       </div>
