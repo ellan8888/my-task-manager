@@ -18,6 +18,7 @@ type MenuItemBelow = {
   badgeColor?: "red" | "emerald";
   superadminOnly?: boolean;
   ellanOnly?: boolean;        // ⭐ NEW — cuma ellan
+  migrasiOnly?: boolean;
 };
 
 export default function AdminSidebar({ sidebarOpen, setSidebarOpen }: Props) {
@@ -67,7 +68,8 @@ useEffect(() => {
   if (
     pathname.startsWith("/admin/stok-pribadi") ||
     pathname.startsWith("/admin/stock") ||
-    pathname.startsWith("/admin/akun-laku")
+    pathname.startsWith("/admin/akun-laku") ||
+    pathname.startsWith("/admin/migrate") // ⭐ Tambahkan ini
   ) {
     setOpenDropdown("akun");
   }
@@ -120,6 +122,15 @@ const isEllan = currentUser?.username?.toLowerCase() === "ellan";
   // ══════════════════════════════════════════════════════
   // SUB-MENU UNTUK DROPDOWN "AKUN"
   // ══════════════════════════════════════════════════════
+    // ══════════════════════════════════════════════════════
+  // SUB-MENU UNTUK DROPDOWN "AKUN"
+  // ══════════════════════════════════════════════════════
+  
+  // ⭐ Hanya ellan / superadmin yang bisa akses menu migrasi
+  const canAccessMigrasi = 
+    currentUser?.role === "superadmin" || 
+    currentUser?.username?.toLowerCase() === "ellan";
+
   const akunSubMenu = [
     {
       href: "/admin/stok-pribadi",
@@ -139,6 +150,13 @@ const isEllan = currentUser?.username?.toLowerCase() === "ellan";
       label: "Akun Laku",
       active: pathname === "/admin/akun-laku",
     },
+    // ⭐ MENU BARU: Migrasi Massal (Hanya muncul untuk ellan/superadmin)
+    ...(canAccessMigrasi ? [{
+      href: "/admin/migrate",
+      icon: "fa-people-carry-box",
+      label: "Migrasi Massal",
+      active: pathname === "/admin/migrate",
+    }] : []),
   ];
 
   const isAkunActive = akunSubMenu.some((item) => item.active);
