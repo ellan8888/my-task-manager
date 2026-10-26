@@ -9,8 +9,6 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-const BOT_API_URL = process.env.BOT_API_URL || "http://localhost:5001";
-
 // ⏳ Polling sampai bot selesai hapus di Itemku
 async function waitForDelete(
   accountId: number,
@@ -77,7 +75,7 @@ export async function PUT(req: NextRequest) {
     }
 
     // ═══════════════════════════════════════════════
-    // STEP 1: Tandai hapus (sama seperti DELETE biasa)
+    // STEP 1: Tandai hapus + simpan target kategori
     // ═══════════════════════════════════════════════
     const now = new Date().toISOString();
     const { error: markErr } = await supabase
@@ -89,6 +87,8 @@ export async function PUT(req: NextRequest) {
         delete_attempts: 0,
         delete_last_error: null,
         delete_requested_at: now,
+        pending_move_to: targetKategori,
+        pending_move_added_by: addedBy,
       })
       .eq("id", account.id);
 
@@ -102,7 +102,7 @@ export async function PUT(req: NextRequest) {
     // ═══════════════════════════════════════════════
     // STEP 2: Tunggu bot hapus di Itemku
     // ═══════════════════════════════════════════════
-    const delResult = await waitForDelete(account.id); // ⬅️ FIX: pakai account.id
+    const delResult = await waitForDelete(account.id);
 
     if (delResult === "failed") {
       await supabase
@@ -112,8 +112,10 @@ export async function PUT(req: NextRequest) {
           deleted_at: null,
           delete_status: null,
           delete_last_error: null,
-          delete_attempts: 0,          // ⬅️ reset
-          delete_requested_at: null,   // ⬅️ reset
+          delete_attempts: 0,
+          delete_requested_at: null,
+          pending_move_to: null,
+          pending_move_added_by: null,
         })
         .eq("id", account.id);
 
@@ -140,42 +142,14 @@ export async function PUT(req: NextRequest) {
     }
 
     // ═══════════════════════════════════════════════
-    // STEP 3: Restore row lama dengan kategori baru
-    //         → bot OTOMATIS input ke Itemku
-    //           (karena status = "queued_for_sale",
-    //            sama seperti alur Tambah Stock manual)
+    // STEP 3: Ambil data terbaru (yang sudah di-update oleh /delete-result)
+    //         — TIDAK perlu update row lagi di sini
     // ═══════════════════════════════════════════════
-    const { data: created, error: restoreErr } = await supabase
+    const { data: updatedRow } = await supabase
       .from("accounts_stock")
-      .update({
-        deleted: false,
-        deleted_at: null,
-        delete_status: null,
-        delete_last_error: null,
-        delete_attempts: 0,
-        delete_requested_at: null,
-        kategori: targetKategori,
-        added_by: addedBy || account.added_by || "system",
-        used: false,
-        logged_out: false,
-        idle: false,
-        status: "queued_for_sale",
-        updated_at: new Date().toISOString(),
-      })
+      .select("*")
       .eq("id", account.id)
-      .select()
-      .single();
-
-    if (restoreErr) {
-      return NextResponse.json(
-        {
-          success: false,
-          message: `Hapus di Itemku OK, tapi restore DB gagal: ${restoreErr.message}. Cek manual.`,
-          partial: true,
-        },
-        { status: 500 }
-      );
-    }
+      .maybeSingle();
 
     // ═══════════════════════════════════════════════
     // STEP 4: Auto-add ke monitor (SAMA seperti POST)
@@ -183,9 +157,7 @@ export async function PUT(req: NextRequest) {
     try {
       const { data: katData } = await supabase
         .from("kategori_links")
-        .select(
-          "default_income, default_speed, default_pickaxe, default_egg"
-        )
+        .select("default_income, default_speed, default_pickaxe, default_egg")
         .eq("kategori", targetKategori.toLowerCase().trim())
         .maybeSingle();
 
@@ -195,6 +167,7 @@ export async function PUT(req: NextRequest) {
         katData?.default_pickaxe ||
         katData?.default_egg
       ) {
+        const BOT_API_URL = process.env.BOT_API_URL || "http://localhost:5001";
         await fetch(`${BOT_API_URL}/api/monitor/add`, {
           method: "POST",
           headers: {
@@ -219,7 +192,7 @@ export async function PUT(req: NextRequest) {
     return NextResponse.json({
       success: true,
       message: `Akun ${username} berhasil dipindah ke ${targetKategori}`,
-      data: created,
+      data: updatedRow,
     });
   } catch (err: any) {
     console.error("[MOVE ERROR]", err);
