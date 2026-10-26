@@ -37,6 +37,11 @@ export default function StockPage() {
   const [loadingKategori, setLoadingKategori] = useState(true);
   const { sidebarOpen, toggleSidebar } = useSidebar();
   const [searchQuery, setSearchQuery] = useState("");
+    // State untuk Modal Pindah Kategori
+  const [moveModalOpen, setMoveModalOpen] = useState(false);
+  const [accountToMove, setAccountToMove] = useState<StockAccount | null>(null);
+  const [targetKategori, setTargetKategori] = useState("");
+  const [isMoving, setIsMoving] = useState(false);
 
   // Form state
   const [username, setUsername] = useState("");
@@ -227,6 +232,57 @@ export default function StockPage() {
       }
     } catch {
       toast.error("Gagal hapus");
+    }
+  };
+
+  const handleMoveAccount = async () => {
+    if (!accountToMove || !targetKategori) {
+      toast.warning("Pilih kategori tujuan terlebih dahulu");
+      return;
+    }
+
+    if (
+      accountToMove.kategori?.toLowerCase() === targetKategori.toLowerCase()
+    ) {
+      toast.warning("Akun sudah berada di kategori ini");
+      return;
+    }
+
+    const ok = window.confirm(
+      `Yakin pindahkan akun "${accountToMove.username}"?\n\n` +
+        `Dari: ${accountToMove.kategori}\n` +
+        `Ke: ${targetKategori}\n\n` +
+        `Akun akan DIHAPUS dari Itemku kategori lama, lalu diinput ulang ke kategori baru.`
+    );
+    if (!ok) return;
+
+    setIsMoving(true);
+    try {
+      const res = await fetch("/api/accounts/stock/move", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          username: accountToMove.username,
+          targetKategori,
+          addedBy: currentUser?.username || accountToMove.added_by,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (data.success) {
+        toast.success(data.message);
+        setMoveModalOpen(false);
+        setAccountToMove(null);
+        setTargetKategori("");
+        loadAccounts();
+      } else {
+        toast.error(data.message || "Gagal memindahkan akun");
+      }
+    } catch (err) {
+      toast.error("Terjadi kesalahan saat memindahkan akun");
+    } finally {
+      setIsMoving(false);
     }
   };
 
@@ -648,13 +704,29 @@ export default function StockPage() {
                                 </span>
                               </td>
                               <td className="px-3 py-2.5 w-[10%] text-right">
-                                <button
-                                  onClick={() => handleDelete(acc.username)}
-                                  className="w-7 h-7 inline-flex items-center justify-center bg-red-100 dark:bg-red-500/20 text-red-600 dark:text-red-300 rounded-lg hover:bg-red-500/40 transition"
-                                  title="Hapus"
-                                >
-                                  <i className="fa-solid fa-trash-can text-xs"></i>
-                                </button>
+                                <div className="flex items-center justify-end gap-1">
+                                  {/* Tombol Pindah Kategori */}
+                                  <button
+                                    onClick={() => {
+                                      setAccountToMove(acc);
+                                      setTargetKategori(""); // Reset pilihan
+                                      setMoveModalOpen(true);
+                                    }}
+                                    className="w-7 h-7 inline-flex items-center justify-center bg-indigo-100 dark:bg-indigo-500/20 text-indigo-600 dark:text-indigo-300 rounded-lg hover:bg-indigo-500/40 transition"
+                                    title="Pindah Kategori"
+                                  >
+                                    <i className="fa-solid fa-arrow-right-arrow-left text-xs"></i>
+                                  </button>
+
+                                  {/* Tombol Hapus */}
+                                  <button
+                                    onClick={() => handleDelete(acc.username)}
+                                    className="w-7 h-7 inline-flex items-center justify-center bg-red-100 dark:bg-red-500/20 text-red-600 dark:text-red-300 rounded-lg hover:bg-red-500/40 transition"
+                                    title="Hapus"
+                                  >
+                                    <i className="fa-solid fa-trash-can text-xs"></i>
+                                  </button>
+                                </div>
                               </td>
                             </tr>
                           ))}
@@ -668,6 +740,96 @@ export default function StockPage() {
           </div>
         </div>
       </div>
+            {/* ══════════════════════════════════════════════════
+          MODAL PINDAH KATEGORI
+         ══════════════════════════════════════════════════ */}
+      {moveModalOpen && accountToMove && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
+          <div className="bg-white dark:bg-slate-900 w-full max-w-md rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xl">
+            <div className="p-5 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center">
+              <h3 className="font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                <i className="fa-solid fa-arrow-right-arrow-left text-indigo-500"></i>
+                Pindah Kategori Akun
+              </h3>
+              <button 
+                onClick={() => setMoveModalOpen(false)}
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                disabled={isMoving}
+              >
+                <i className="fa-solid fa-xmark"></i>
+              </button>
+            </div>
+            
+            <div className="p-5 space-y-4">
+              <div className="bg-slate-50 dark:bg-slate-950 p-3 rounded-xl border border-slate-200 dark:border-slate-800">
+                <p className="text-xs text-slate-500 mb-1">Akun yang dipindah:</p>
+                <p className="font-mono font-bold text-sm text-slate-900 dark:text-white">
+                  {accountToMove.username}
+                </p>
+                <p className="text-xs text-slate-500 mt-1">
+                  Dari: <span className="font-bold text-violet-600 dark:text-violet-400">{accountToMove.kategori}</span>
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-2">
+                  Pilih Kategori Tujuan
+                </label>
+                <KategoriDropdown
+                  value={targetKategori}
+                  onChange={setTargetKategori}
+                  options={kategoriList
+                    .filter(
+                      (k) =>
+                        k.kategori.toLowerCase() !==
+                        (accountToMove.kategori || "").toLowerCase()
+                    ) // Jangan tampilkan kategori asal
+                    .map((k) => ({
+                      id: k.id,
+                      kategori: k.kategori,
+                    }))}
+                  placeholder="Pilih kategori tujuan..."
+                  hideLabel={true}
+                />
+              </div>
+              
+              <div className="bg-amber-50 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400 p-3 rounded-xl text-xs flex gap-2">
+                <i className="fa-solid fa-triangle-exclamation mt-0.5"></i>
+                <p>
+                  Akun akan <strong>dihapus dari Itemku</strong> kategori lama, lalu diinput ulang secara otomatis ke kategori baru.
+                </p>
+              </div>
+            </div>
+
+            <div className="p-5 border-t border-slate-100 dark:border-slate-800 flex gap-3 justify-end bg-slate-50 dark:bg-slate-900/50">
+              <button
+                onClick={() => setMoveModalOpen(false)}
+                disabled={isMoving}
+                className="px-4 py-2 text-sm font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-xl transition"
+              >
+                Batal
+              </button>
+              <button
+                onClick={handleMoveAccount}
+                disabled={isMoving || !targetKategori}
+                className="px-4 py-2 text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 rounded-xl transition flex items-center gap-2"
+              >
+                {isMoving ? (
+                  <>
+                    <i className="fa-solid fa-spinner fa-spin"></i>
+                    Memproses...
+                  </>
+                ) : (
+                  <>
+                    <i className="fa-solid fa-check"></i>
+                    Pindahkan
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }
