@@ -252,7 +252,7 @@ export default function StockPage() {
       `Yakin pindahkan akun "${accountToMove.username}"?\n\n` +
         `Dari: ${accountToMove.kategori}\n` +
         `Ke: ${targetKategori}\n\n` +
-        `Akun akan DIHAPUS dari Itemku kategori lama, lalu diinput ulang ke kategori baru.`
+        `Proses pindah akan memakan waktu beberapa saat di belakang layar.`
     );
     if (!ok) return;
 
@@ -269,6 +269,16 @@ export default function StockPage() {
       });
 
       const data = await res.json();
+
+      // ⭐ TANGKAP STATUS 202 (ANTREAN BERJALAN)
+      if (res.status === 202 || data.partial) {
+        toast.success(data.message + " (Cek list secara berkala)");
+        setMoveModalOpen(false);
+        setAccountToMove(null);
+        setTargetKategori("");
+        loadAccounts(); // Akun akan hilang sementara dari list (karena deleted=true)
+        return;
+      }
 
       if (data.success) {
         toast.success(data.message);

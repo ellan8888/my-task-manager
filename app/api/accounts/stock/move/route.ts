@@ -2,36 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
 export const runtime = "nodejs";
-export const maxDuration = 60;
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
-
-// ⏳ Polling sampai bot selesai hapus di Itemku
-async function waitForDelete(
-  accountId: number,
-  maxMs = 45000
-): Promise<"done" | "failed" | "timeout"> {
-  const started = Date.now();
-  const interval = 1500;
-
-  while (Date.now() - started < maxMs) {
-    const { data, error } = await supabase
-      .from("accounts_stock")
-      .select("delete_status")
-      .eq("id", accountId)
-      .maybeSingle();
-
-    if (error || !data) return "failed";
-    if (data.delete_status === "done") return "done";
-    if (data.delete_status === "failed") return "failed";
-
-    await new Promise((r) => setTimeout(r, interval));
-  }
-  return "timeout";
-}
 
 export async function PUT(req: NextRequest) {
   try {
@@ -75,7 +50,7 @@ export async function PUT(req: NextRequest) {
     }
 
     // ═══════════════════════════════════════════════
-    // STEP 1: Tandai hapus + simpan target kategori
+    // Tandai hapus + simpan target kategori (PENDING)
     // ═══════════════════════════════════════════════
     const now = new Date().toISOString();
     const { error: markErr } = await supabase
@@ -100,104 +75,20 @@ export async function PUT(req: NextRequest) {
     }
 
     // ═══════════════════════════════════════════════
-    // STEP 2: Tunggu bot hapus di Itemku
+    // LANGSUNG RETURN — Bot akan proses hapus di latar belakang
     // ═══════════════════════════════════════════════
-    const delResult = await waitForDelete(account.id);
-
-    if (delResult === "failed") {
-      await supabase
-        .from("accounts_stock")
-        .update({
-          deleted: false,
-          deleted_at: null,
-          delete_status: null,
-          delete_last_error: null,
-          delete_attempts: 0,
-          delete_requested_at: null,
-          pending_move_to: null,
-          pending_move_added_by: null,
-        })
-        .eq("id", account.id);
-
-      return NextResponse.json(
-        {
-          success: false,
-          message:
-            "Bot gagal hapus di Itemku. Akun dibatalkan pindah, tetap di kategori lama.",
-        },
-        { status: 500 }
-      );
-    }
-
-    if (delResult === "timeout") {
-      return NextResponse.json(
-        {
-          success: false,
-          message:
-            "Bot belum selesai hapus di Itemku (timeout). Akun ditandai hapus, cek manual nanti.",
-          partial: true,
-        },
-        { status: 202 }
-      );
-    }
-
-    // ═══════════════════════════════════════════════
-    // STEP 3: Ambil data terbaru (yang sudah di-update oleh /delete-result)
-    //         — TIDAK perlu update row lagi di sini
-    // ═══════════════════════════════════════════════
-    const { data: updatedRow } = await supabase
-      .from("accounts_stock")
-      .select("*")
-      .eq("id", account.id)
-      .maybeSingle();
-
-    // ═══════════════════════════════════════════════
-    // STEP 4: Auto-add ke monitor (SAMA seperti POST)
-    // ═══════════════════════════════════════════════
-    try {
-      const { data: katData } = await supabase
-        .from("kategori_links")
-        .select("default_income, default_speed, default_pickaxe, default_egg")
-        .eq("kategori", targetKategori.toLowerCase().trim())
-        .maybeSingle();
-
-      if (
-        katData?.default_income ||
-        katData?.default_speed ||
-        katData?.default_pickaxe ||
-        katData?.default_egg
-      ) {
-        const BOT_API_URL = process.env.BOT_API_URL || "http://localhost:5001";
-        await fetch(`${BOT_API_URL}/api/monitor/add`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "ngrok-skip-browser-warning": "true",
-          },
-          body: JSON.stringify({
-            username,
-            target_income: katData.default_income || "0",
-            target_speed: katData.default_speed || "0",
-            target_pickaxe: katData.default_pickaxe || "0",
-            target_egg: katData.default_egg || "0",
-            input_by: addedBy || "system",
-          }),
-          signal: AbortSignal.timeout(5000),
-        });
-      }
-    } catch (e: any) {
-      console.warn("[MOVE] Auto-monitor gagal:", e.message);
-    }
-
-    return NextResponse.json({
-      success: true,
-      message: `Akun ${username} berhasil dipindah ke ${targetKategori}`,
-      data: updatedRow,
-    });
+    return NextResponse.json(
+      {
+        success: true,
+        message: `Akun ${username} sedang diproses pindah ke ${targetKategori}.`,
+        partial: true,
+      },
+      { status: 202 }
+    );
   } catch (err: any) {
     console.error("[MOVE ERROR]", err);
     return NextResponse.json(
-      { success: false, message: err.message || "Gagal memindahkan akun" },
+      { success: false, message: err.message || "Gagal" },
       { status: 500 }
     );
   }
