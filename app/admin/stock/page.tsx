@@ -567,7 +567,7 @@ export default function StockPage() {
           {/* ══════════════════════════════════════════════════
               LIST STOCK — GROUPED PER KATEGORI
              ══════════════════════════════════════════════════ */}
-          <div className="bg-white dark:bg-slate-900/60 rounded-2xl p-6 border border-slate-200 dark:border-slate-800 shadow-sm">
+          <div className="bg-white dark:bg-slate-900/60 rounded-2xl p-4 md:p-6 border border-slate-200 dark:border-slate-800 shadow-sm">
             {/* Header + Search */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-6">
               <h2 className="font-bold text-slate-900 dark:text-white flex items-center gap-2">
@@ -627,21 +627,21 @@ export default function StockPage() {
                 {groupedAccounts.map((group) => (
                   <div key={group.kategori}>
                     {/* Group Header */}
-                    <div className="flex items-center justify-between mb-3 pb-2 border-b-2 border-slate-100 dark:border-slate-800">
-                      <div className="flex items-center gap-2">
-                        <div className="w-8 h-8 rounded-lg bg-linear-to-tr from-violet-600 to-indigo-600 flex items-center justify-center text-white shadow-md">
+                    <div className="mb-3 pb-3 border-b-2 border-slate-100 dark:border-slate-800 flex flex-col md:flex-row md:items-center md:justify-between gap-2.5">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div className="w-8 h-8 shrink-0 rounded-lg bg-linear-to-tr from-violet-600 to-indigo-600 flex items-center justify-center text-white shadow-md">
                           <i className="fa-solid fa-tag text-xs"></i>
                         </div>
-                        <div>
-                          <h3 className="font-bold text-slate-900 dark:text-white text-sm capitalize">
+                        <div className="min-w-0">
+                          <h3 className="font-bold text-slate-900 dark:text-white text-sm capitalize leading-snug">
                             {group.kategori}
                           </h3>
-                          <p className="text-[10px] text-slate-500 dark:text-slate-400">
+                          <p className="text-[11px] text-slate-500 dark:text-slate-400">
                             {group.accounts.length} akun
                           </p>
                         </div>
                       </div>
-                      <div className="flex items-center gap-1.5">
+                      <div className="flex items-center gap-1.5 shrink-0">
                         <span className="px-2 py-1 bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 text-[10px] font-bold rounded-lg">
                           {group.accounts.filter((a) => a.used).length} Ready
                         </span>
@@ -652,7 +652,7 @@ export default function StockPage() {
                     </div>
 
                     {/* Table */}
-                    <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800">
+                    <div className="hidden md:block overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800">
                       <table className="w-full text-sm table-fixed">
                         <thead className="bg-slate-50 dark:bg-slate-950/50">
                           <tr className="text-left text-[10px] uppercase text-slate-500 dark:text-slate-400 font-bold">
@@ -742,6 +742,63 @@ export default function StockPage() {
                           ))}
                         </tbody>
                       </table>
+                    </div>
+
+                    {/* Mobile: list dua tingkat */}
+                    <div className="md:hidden">
+                      {group.accounts.map((acc) => (
+                        <div
+                          key={acc.id}
+                          className="py-3 border-t border-slate-100 dark:border-slate-800 first:border-t-0"
+                        >
+                          {/* Baris 1: username penuh + status */}
+                          <div className="flex items-start justify-between gap-3">
+                            <span className="font-mono font-bold text-sm text-slate-900 dark:text-white break-all leading-snug">
+                              {acc.username}
+                            </span>
+                            {acc.used ? (
+                              <span className="shrink-0 px-2 py-1 bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 text-[10px] font-bold rounded-md inline-flex items-center gap-1 whitespace-nowrap">
+                                <i className="fa-solid fa-rocket text-[9px]"></i>
+                                READY
+                              </span>
+                            ) : (
+                              <span className="shrink-0 px-2 py-1 bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-300 text-[10px] font-bold rounded-md inline-flex items-center gap-1 whitespace-nowrap">
+                                <i className="fa-solid fa-clock text-[9px]"></i>
+                                PROGRESS
+                              </span>
+                            )}
+                          </div>
+
+                          {/* Baris 2: added by + tombol aksi */}
+                          <div className="flex items-center justify-between mt-2">
+                            <span className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1.5 min-w-0">
+                              <i className="fa-solid fa-user text-[10px]"></i>
+                              <span className="truncate">{acc.added_by || "—"}</span>
+                            </span>
+
+                            <div className="flex items-center gap-2 shrink-0">
+                              <button
+                                onClick={() => {
+                                  setAccountToMove(acc);
+                                  setTargetKategori("");
+                                  setMoveModalOpen(true);
+                                }}
+                                className="w-9 h-9 inline-flex items-center justify-center bg-indigo-100 dark:bg-indigo-500/20 text-indigo-600 dark:text-indigo-300 rounded-xl hover:bg-indigo-500/40 transition"
+                                title="Pindah Kategori"
+                              >
+                                <i className="fa-solid fa-arrow-right-arrow-left text-sm"></i>
+                              </button>
+                              <button
+                                onClick={() => handleDelete(acc.username)}
+                                className="w-9 h-9 inline-flex items-center justify-center bg-red-100 dark:bg-red-500/20 text-red-600 dark:text-red-300 rounded-xl hover:bg-red-500/40 transition"
+                                title="Hapus"
+                              >
+                                <i className="fa-solid fa-trash-can text-sm"></i>
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   </div>
                 ))}

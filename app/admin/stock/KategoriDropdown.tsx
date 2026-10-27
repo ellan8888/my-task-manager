@@ -142,7 +142,7 @@ export default function KategoriDropdown({
       {/* ⭐ Dropdown Panel — Pake FIXED biar tembus ke atas */}
       {open && (
         <div
-          className="fixed z-[9999] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-2xl shadow-slate-950/20 dark:shadow-slate-950/50 overflow-hidden animate-[dropdown-in_0.15s_ease-out]"
+          className="fixed z-9999 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-2xl shadow-slate-950/20 dark:shadow-slate-950/50 overflow-hidden animate-[dropdown-in_0.15s_ease-out]"
           style={{
             top: `${coords.top}px`,
             left: `${coords.left}px`,
