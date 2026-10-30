@@ -23,16 +23,10 @@ export default function AdminPage() {
   // ★ State buat show/hide pendapatan
   const [showIncome, setShowIncome] = useState(true);
 
-  // ⭐ State user & bank accounts
-  const [currentUser, setCurrentUser] = useState<{
-    username: string;
-    role: string;
-    display_name: string;
-  } | null>(null);
-
-  // Load preferensi dari localStorage
+  // Load preferensi dari localStorage (setelah mount, biar nggak hydration mismatch)
   useEffect(() => {
     const saved = localStorage.getItem("showIncome");
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (saved !== null) setShowIncome(saved === "true");
   }, []);
 
@@ -43,17 +37,6 @@ export default function AdminPage() {
       return next;
     });
   };
-
-  // ⭐ Fetch user
-  useEffect(() => {
-    fetch("/api/auth/me")
-      .then((r) => r.json())
-      .then((data) => {
-        if (data.success && data.user) setCurrentUser(data.user);
-      })
-      .catch(console.error);
-  }, []);
-
 
   // ══════════════════════════════════════════════════════
   // FETCH STATS
