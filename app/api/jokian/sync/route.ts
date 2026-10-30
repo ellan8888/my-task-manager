@@ -24,6 +24,12 @@ export async function POST(request: Request) {
       progress_count,
       confirmed_by,
       webhook_url,
+      // ⭐ DETAIL PESANAN ITEMKU (opsional)
+      buyer_name,
+      quantity,
+      total_income,
+      detail_url,
+      response_deadline,
     } = body;
 
     // Validasi data wajib
@@ -45,7 +51,7 @@ export async function POST(request: Request) {
       .maybeSingle();
 
     // ⭐ SUSUN PAYLOAD — cuma tambah field progress kalau order_type = "progress"
-    const upsertData: Record<string, any> = {
+    const upsertData: Record<string, unknown> = {
       order_id: cleanedOrderId,
       roblox_username: roblox_username || null,
       product: product || null,
@@ -80,6 +86,32 @@ export async function POST(request: Request) {
     }
     // Kalau order_type nggak dikirim, biarin default dari DB
 
+    // ⭐ Detail pesanan — HANYA ditulis kalau dikirim & ada isinya.
+    //    Bot memanggil sync 2x (order masuk + set jadwal). Panggilan kedua
+    //    nggak bawa field ini, jadi jangan sampai nilainya ketimpa null.
+    const cleanText = (v: unknown) => {
+      if (typeof v !== "string") return null;
+      const t = v.trim();
+      return t && t !== "-" ? t : null;
+    };
+
+    const buyerName = cleanText(buyer_name);
+    if (buyerName) upsertData.buyer_name = buyerName;
+
+    const qty = cleanText(quantity);
+    if (qty) upsertData.quantity = qty;
+
+    const income = Number(total_income);
+    if (Number.isFinite(income) && income > 0) upsertData.total_income = Math.round(income);
+
+    const url = cleanText(detail_url);
+    if (url && url.startsWith("http")) upsertData.detail_url = url;
+
+    const deadline = cleanText(response_deadline);
+    if (deadline && !Number.isNaN(new Date(deadline).getTime())) {
+      upsertData.response_deadline = deadline;
+    }
+
     // Upsert berdasarkan order_id
     const { data, error } = await supabaseAdmin
       .from("joki_orders")
@@ -109,12 +141,12 @@ export async function POST(request: Request) {
       message: "Jokian berhasil disinkronkan.",
       data,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("❌ API Jokian error:", error);
     return NextResponse.json(
       {
         success: false,
-        error: error.message || "Terjadi kesalahan pada API.",
+        error: (error instanceof Error && error.message) || "Terjadi kesalahan pada API.",
       },
       { status: 500 }
     );

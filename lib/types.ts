@@ -38,6 +38,12 @@ export type JokiOrder = {
   bot_process_failed: boolean | null;
   bot_failed_reason: string | null;
   bot_failed_at: string | null;
+  // Detail pesanan Itemku (bisa kosong untuk order lama)
+  buyer_name?: string | null;
+  quantity?: string | null;
+  total_income?: number | null;
+  detail_url?: string | null;
+  response_deadline?: string | null;
 };
 
 export type CurrentUser = {
