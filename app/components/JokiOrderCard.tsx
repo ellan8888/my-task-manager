@@ -33,16 +33,6 @@ const formatDateTime = (iso: string) =>
     minute: "2-digit",
   });
 
-const formatDuration = (ms: number) => {
-  const totalMin = Math.floor(ms / 60000);
-  const d = Math.floor(totalMin / 1440);
-  const h = Math.floor((totalMin % 1440) / 60);
-  const m = totalMin % 60;
-  if (d > 0) return `${d}h ${h}j`;
-  if (h > 0) return `${h}j ${m}m`;
-  return `${m}m`;
-};
-
 const hasText = (v?: string | null) => !!v && v.trim() !== "" && v.trim() !== "-";
 
 /** "Joki AFK Treadmill 12 Jam | Joki AFK | Steal An Egg" → "Steal An Egg" */
@@ -177,10 +167,6 @@ export default function JokiOrderCard({
   const isToday = daysLeft === 0;
   const status = getStatus(order, { isChecked, isProgress, daysLeft });
 
-  // ── Respons sebelum (deadline Itemku) ───────────────────────
-  const deadlineMs = order.response_deadline ? new Date(order.response_deadline).getTime() - now : null;
-  const deadlineUrgent = deadlineMs !== null && deadlineMs < 2 * 3600000; // < 2 jam
-
   // ── Progress egg ────────────────────────────────────────────
   const displayTarget =
     order.target_unit && order.target_unit !== "Joki" ? order.target_unit : order.target_count?.toString() ?? "0";
@@ -244,8 +230,8 @@ export default function JokiOrderCard({
           : "border-slate-200 dark:border-slate-800 hover:border-violet-300 dark:hover:border-violet-500/40"
       }`}
     >
-      {/* ═══ HEADER: status · nomor · masuk · respons sebelum ═══ */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 px-4 md:px-5 py-3.5 border-b border-slate-200 dark:border-slate-800/80">
+      {/* ═══ HEADER: status · nomor · masuk ═══ */}
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-4 px-4 md:px-5 py-3.5 border-b border-slate-200 dark:border-slate-800/80">
         <div>
           <Label>Status</Label>
           <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-bold border ${status.className}`}>
@@ -269,22 +255,6 @@ export default function JokiOrderCard({
         <div>
           <Label>Masuk</Label>
           <p className="text-sm text-slate-700 dark:text-slate-300">{formatDateTime(order.created_at)}</p>
-        </div>
-
-        <div>
-          <Label>Respons sebelum</Label>
-          {order.response_deadline ? (
-            <>
-              <p className="text-sm font-bold text-slate-900 dark:text-white">{formatDateTime(order.response_deadline)}</p>
-              {!isCompletedByBot && deadlineMs !== null && (
-                <p className={`text-[11px] font-semibold ${deadlineUrgent ? "text-rose-600 dark:text-rose-400" : "text-slate-500 dark:text-slate-400"}`}>
-                  {deadlineMs > 0 ? `sisa ${formatDuration(deadlineMs)}` : "lewat batas"}
-                </p>
-              )}
-            </>
-          ) : (
-            <p className="text-sm text-slate-400 dark:text-slate-500">-</p>
-          )}
         </div>
       </div>
 
@@ -346,13 +316,6 @@ export default function JokiOrderCard({
               </button>
             </div>
             {order.roblox_username && <CopyLink value={order.roblox_username} />}
-          </div>
-
-          <div className="col-span-2 min-w-0">
-            <Label>Catatan</Label>
-            <p className="text-sm text-slate-700 dark:text-slate-300 wrap-break-word">
-              {hasText(order.note) ? order.note : <span className="text-slate-400 dark:text-slate-500">-</span>}
-            </p>
           </div>
         </div>
       </div>
