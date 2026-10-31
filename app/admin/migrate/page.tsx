@@ -149,10 +149,12 @@ export default function BulkMigratePage() {
         <div className="max-w-5xl mx-auto space-y-6">
           
           {/* Card Form */}
-          <div className="bg-white dark:bg-slate-900/60 rounded-2xl p-6 md:p-8 border border-slate-200 dark:border-slate-800 shadow-sm relative overflow-hidden">
+          <div className="bg-white dark:bg-slate-900/60 rounded-2xl p-6 md:p-8 border border-slate-200 dark:border-slate-800 shadow-sm relative">
             
-            {/* Ornamen Background */}
-            <div className="absolute -top-10 -right-10 w-40 h-40 bg-orange-500/10 dark:bg-orange-500/5 rounded-full blur-2xl pointer-events-none"></div>
+            {/* Ornamen Background — dipotong di lapisan sendiri, supaya dropdown kategori tidak ikut terpotong */}
+            <div className="absolute inset-0 overflow-hidden rounded-2xl pointer-events-none">
+              <div className="absolute -top-10 -right-10 w-40 h-40 bg-orange-500/10 dark:bg-orange-500/5 rounded-full blur-2xl"></div>
+            </div>
 
             <div className="relative z-10">
               

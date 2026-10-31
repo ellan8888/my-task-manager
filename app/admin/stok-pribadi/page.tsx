@@ -7,6 +7,7 @@ import { useToast } from "@/app/components/ToastProvider";
 import { SkeletonList } from "@/app/components/Skeleton";
 
 import AdminHeader from "@/app/components/AdminHeader";
+import { generatePassword, generateUsername } from "@/lib/accountGenerator";
 type StockAccount = {
   id: number;
   username: string;
@@ -39,7 +40,6 @@ const [idleLoading, setIdleLoading] = useState<Set<number>>(new Set());
 // Form tambah
 const [username, setUsername] = useState("");
 const [password, setPassword] = useState("");
-const [cookie, setCookie] = useState("");
 const [kategori, setKategori] = useState("");
 const [addedBy, setAddedBy] = useState("lan4337");
 const [saving, setSaving] = useState(false);
@@ -135,6 +135,30 @@ useEffect(() => {
 }, []);
 
   // Submit — tambah akun
+  // ══════════════════════════════════════════════════════
+  // GENERATE USERNAME & PASSWORD ACAK
+  // ══════════════════════════════════════════════════════
+  const copyText = async (value: string, label: string) => {
+    if (!value) {
+      toast.warning(`${label} masih kosong`);
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(value);
+      toast.success(`${label} disalin`);
+    } catch {
+      toast.error("Gagal menyalin — salin manual dari kolomnya");
+    }
+  };
+
+  const handleGenerateUsername = () => setUsername(generateUsername());
+  const handleGeneratePassword = () => setPassword(generatePassword(username));
+  const handleGenerateBoth = () => {
+    const u = generateUsername();
+    setUsername(u);
+    setPassword(generatePassword(u));
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
   e.preventDefault();
 
@@ -151,7 +175,6 @@ useEffect(() => {
       body: JSON.stringify({
         username,
         password,
-        roblox_cookie: cookie,
         kategori,
         added_by: addedBy,
         status: "personal",
@@ -170,7 +193,6 @@ useEffect(() => {
 
       setUsername("");
       setPassword("");
-      setCookie("");
       loadAccounts();
     } else {
       // ⭐ Handle kalau duplikat aktif
@@ -423,50 +445,92 @@ const idleCount = accounts.filter((a) => a.idle && !a.logged_out).length;
             onSubmit={handleSubmit}
             className="bg-white dark:bg-slate-900/60 rounded-2xl p-6 border border-slate-200 dark:border-slate-800 mb-6 shadow-sm"
           >
-            <h2 className="font-bold mb-4 flex items-center gap-2 text-slate-900 dark:text-white">
-              <i className="fa-solid fa-plus text-blue-600 dark:text-blue-400"></i>
-              <span>Tambah Akun ke Stok Pribadi</span>
-            </h2>
+            <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+              <h2 className="font-bold flex items-center gap-2 text-slate-900 dark:text-white">
+                <i className="fa-solid fa-plus text-blue-600 dark:text-blue-400"></i>
+                <span>Tambah Akun ke Stok Pribadi</span>
+              </h2>
+              <button
+                type="button"
+                onClick={handleGenerateBoth}
+                className="px-3 py-2 rounded-xl text-xs font-bold text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/30 hover:bg-blue-100 dark:hover:bg-blue-500/20 transition flex items-center gap-1.5"
+                title="Isi username & password acak sekaligus"
+              >
+                <i className="fa-solid fa-dice text-[11px]"></i>
+                Acak keduanya
+              </button>
+            </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
               <div>
                 <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-2">
                   Username *
                 </label>
-                <input
-                  type="text"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  placeholder="Patryarla827"
-                  required
-                  className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm text-slate-900 dark:text-white focus:outline-none focus:border-blue-500"
-                />
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value)}
+                    placeholder="Patryarla827"
+                    required
+                    className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl pl-4 pr-22 py-3 text-sm font-mono text-slate-900 dark:text-white focus:outline-none focus:border-blue-500"
+                  />
+                  <div className="absolute inset-y-0 right-2 flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={handleGenerateUsername}
+                      className="w-8 h-8 rounded-lg text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition flex items-center justify-center"
+                      title="Acak username"
+                      aria-label="Acak username"
+                    >
+                      <i className="fa-solid fa-dice text-sm"></i>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => copyText(username, "Username")}
+                      className="w-8 h-8 rounded-lg text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition flex items-center justify-center"
+                      title="Salin username"
+                      aria-label="Salin username"
+                    >
+                      <i className="fa-regular fa-copy text-sm"></i>
+                    </button>
+                  </div>
+                </div>
               </div>
               <div>
                 <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-2">
                   Password
                 </label>
-                <input
-                  type="text"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="opsional"
-                  className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm text-slate-900 dark:text-white focus:outline-none focus:border-blue-500"
-                />
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="opsional"
+                    className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl pl-4 pr-22 py-3 text-sm font-mono text-slate-900 dark:text-white focus:outline-none focus:border-blue-500"
+                  />
+                  <div className="absolute inset-y-0 right-2 flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={handleGeneratePassword}
+                      className="w-8 h-8 rounded-lg text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition flex items-center justify-center"
+                      title="Acak password"
+                      aria-label="Acak password"
+                    >
+                      <i className="fa-solid fa-dice text-sm"></i>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => copyText(password, "Password")}
+                      className="w-8 h-8 rounded-lg text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition flex items-center justify-center"
+                      title="Salin password"
+                      aria-label="Salin password"
+                    >
+                      <i className="fa-regular fa-copy text-sm"></i>
+                    </button>
+                  </div>
+                </div>
               </div>
-            </div>
-
-            <div className="mb-4">
-              <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-2">
-                Cookie (.ROBLOSECURITY) — Opsional
-              </label>
-              <textarea
-                value={cookie}
-                onChange={(e) => setCookie(e.target.value)}
-                placeholder="_|WARNING...|_ (boleh dikosongin)"
-                rows={2}
-                className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm font-mono text-slate-900 dark:text-white resize-none focus:outline-none focus:border-blue-500"
-              />
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
