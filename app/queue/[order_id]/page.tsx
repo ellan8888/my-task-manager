@@ -5,6 +5,8 @@ import { supabase } from "@/lib/supabase";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
+import { useToast } from "@/app/components/ToastProvider";
+import { getRealTarget } from "@/lib/queueUtils";
 
 type EternalEggLog = {
   egg_name: string;
@@ -69,6 +71,7 @@ export default function QueueDetailPage() {
   const params = useParams();
   const orderId = params?.order_id as string | undefined;
   const searchParams = useSearchParams();
+  const toast = useToast();
   const token = searchParams.get("token");
   const [eternalData, setEternalData] = useState<EternalProgressData | null>(null);
 
@@ -221,14 +224,14 @@ useEffect(() => {
       });
       const data = await res.json();
       if (!res.ok) {
-        alert(data.message || "Gagal menambah waktu");
+        toast.error(data.message || "Gagal menambah waktu");
         return;
       }
       setShowAddTime(false);
       setAddValue("");
     } catch (err) {
       console.error(err);
-      alert("Terjadi kesalahan");
+      toast.error("Terjadi kesalahan saat menambah waktu");
     } finally {
       setSaving(false);
     }
@@ -237,7 +240,7 @@ useEffect(() => {
   const handleCustomAdd = () => {
     const val = parseFloat(addValue);
     if (isNaN(val) || val <= 0) {
-      alert("Masukkan angka yang valid (lebih dari 0)");
+      toast.warning("Masukkan angka yang valid (lebih dari 0)");
       return;
     }
     const minutes = addUnit === "hours" ? val * 60 : val;
@@ -599,19 +602,12 @@ useEffect(() => {
                         className="h-full bg-linear-to-r from-violet-500 to-indigo-500 transition-all duration-500"
                         style={{
                           width: `${(() => {
-                            // ⭐ Hitung target asli dari target_unit (misal "1T" -> 1000000000000)
-                            let realTarget = eternalData.order.target_count || 1;
-                            
-                            // Kalau target_unit ada isinya (misal "1T" atau "500B"), ambil angkanya
-                            if (order.target_unit && order.target_unit !== "Joki") {
-                              const match = order.target_unit.match(/^(\d+(?:\.\d+)?)([TBMK]?)$/i);
-                              if (match) {
-                                const num = parseFloat(match[1]);
-                                const suffix = match[2].toUpperCase();
-                                const multiplier = suffix === "T" ? 1e12 : suffix === "B" ? 1e9 : suffix === "M" ? 1e6 : suffix === "K" ? 1e3 : 1;
-                                realTarget = num * multiplier;
-                              }
-                            }
+                            // ⭐ Target asli dari target_unit ("1T", "200Qa", ...) atau target_count
+                            const realTarget = getRealTarget({
+                              progress_count: eternalData.order.progress_count,
+                              target_count: eternalData.order.target_count || order.target_count,
+                              target_unit: order.target_unit,
+                            });
 
                             const percent = Math.min(100, ((eternalData.order.progress_count ?? 0) / realTarget) * 100);
                             return percent;
