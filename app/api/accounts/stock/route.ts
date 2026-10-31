@@ -29,6 +29,13 @@ function verifySession(
   }
 }
 
+// ⭐ Kolom `note` (catatan staff) baru ada setelah SQL 004 dijalankan.
+//    Kalau kolomnya belum ada, simpan tanpa catatan supaya tambah/edit akun tetap jalan.
+const isMissingNoteColumn = (err: { message?: string } | null) =>
+  !!err && /note/i.test(err.message || "") && /(column|schema cache)/i.test(err.message || "");
+
+const cleanNote = (v: unknown) => (typeof v === "string" ? v.trim() || null : undefined);
+
 // ============================================================
 // GET — List stock
 // ⭐ Support 2 mode auth:
@@ -165,6 +172,7 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     const { username, password, roblox_cookie, kategori, added_by, status } = body;
+    const note = cleanNote(body.note);
 
     if (!username) {
       return NextResponse.json(
@@ -200,9 +208,7 @@ export async function POST(req: NextRequest) {
     if (existing && existing.deleted) {
       console.log(`[Stock POST] Restore akun "${username}" (id=${existing.id})`);
 
-      const { data: restored, error: restoreError } = await supabase
-        .from("accounts_stock")
-        .update({
+      const restorePayload: Record<string, unknown> = {
           deleted: false,
           deleted_at: null,
           password: password || null,
@@ -215,10 +221,25 @@ export async function POST(req: NextRequest) {
           idle_marked_at: null,
           status: status || "personal",
           updated_at: new Date().toISOString(),
-        })
+      };
+      if (note !== undefined) restorePayload.note = note;
+
+      let { data: restored, error: restoreError } = await supabase
+        .from("accounts_stock")
+        .update(restorePayload)
         .eq("id", existing.id)
         .select()
         .single();
+      if (isMissingNoteColumn(restoreError)) {
+        delete restorePayload.note;
+        if (note && !roblox_cookie) restorePayload.roblox_cookie = note; // simpan di kolom lama seperti dulu
+        ({ data: restored, error: restoreError } = await supabase
+          .from("accounts_stock")
+          .update(restorePayload)
+          .eq("id", existing.id)
+          .select()
+          .single());
+      }
 
       if (restoreError) {
         console.error("[Stock POST] Restore error:", restoreError);
@@ -253,21 +274,25 @@ export async function POST(req: NextRequest) {
     // ══════════════════════════════════════════════════════════
     // ⭐ CASE 3: Row nggak ada → INSERT BARU
     // ══════════════════════════════════════════════════════════
-    const { data, error } = await supabase
-      .from("accounts_stock")
-      .insert({
-        username,
-        password: password || null,
-        roblox_cookie: roblox_cookie || null,
-        kategori: kategori || "akun",
-        added_by: added_by || "lan4337",
-        used: false,
-        logged_out: false,
-        idle: false,
-        status: status || "personal",
-      })
-      .select()
-      .single();
+    const insertPayload: Record<string, unknown> = {
+      username,
+      password: password || null,
+      roblox_cookie: roblox_cookie || null,
+      kategori: kategori || "akun",
+      added_by: added_by || "lan4337",
+      used: false,
+      logged_out: false,
+      idle: false,
+      status: status || "personal",
+    };
+    if (note !== undefined) insertPayload.note = note;
+
+    let { data, error } = await supabase.from("accounts_stock").insert(insertPayload).select().single();
+    if (isMissingNoteColumn(error)) {
+      delete insertPayload.note;
+      if (note && !roblox_cookie) insertPayload.roblox_cookie = note; // simpan di kolom lama seperti dulu
+      ({ data, error } = await supabase.from("accounts_stock").insert(insertPayload).select().single());
+    }
 
     if (error) {
       console.error("[Stock POST] Insert error:", error);
@@ -346,6 +371,7 @@ export async function PATCH(req: NextRequest) {
   try {
     const body = await req.json();
     const { username, password, roblox_cookie, kategori, added_by } = body;
+    const note = cleanNote(body.note);
     const { searchParams } = new URL(req.url);
     const targetUsername = searchParams.get("username");
 
@@ -410,13 +436,25 @@ export async function PATCH(req: NextRequest) {
     if (roblox_cookie !== undefined) updateData.roblox_cookie = roblox_cookie || null;
     if (kategori !== undefined) updateData.kategori = kategori;
     if (added_by !== undefined) updateData.added_by = added_by;
+    if (note !== undefined) updateData.note = note;
 
-    const { data, error } = await supabase
+    let { data, error } = await supabase
       .from("accounts_stock")
       .update(updateData)
       .eq("username", targetUsername)
       .select()
       .single();
+    if (isMissingNoteColumn(error)) {
+      // Kolom note belum ada → simpan catatan di kolom lama (Cookie) seperti dulu
+      delete updateData.note;
+      if (note !== undefined && roblox_cookie === undefined) updateData.roblox_cookie = note;
+      ({ data, error } = await supabase
+        .from("accounts_stock")
+        .update(updateData)
+        .eq("username", targetUsername)
+        .select()
+        .single());
+    }
 
     if (error) {
       return NextResponse.json(

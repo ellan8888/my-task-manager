@@ -13,6 +13,8 @@ type StockAccount = {
   username: string;
   password: string | null;
   roblox_cookie: string | null;
+  /** Catatan staff (kolom baru — SQL 004) */
+  note?: string | null;
   kategori: string | null;
   added_by: string | null;
   status: string;
@@ -24,6 +26,17 @@ type StockAccount = {
   idle: boolean | null;              // ⭐ NEW
   idle_marked_at: string | null;
 };
+
+/**
+ * Catatan akun. Dulu staff menulis catatan di kolom Cookie, jadi kalau kolom
+ * `note` belum terisi, ambil dari situ — kecuali isinya memang cookie Roblox asli.
+ */
+function getNote(acc: StockAccount): string {
+  if (acc.note != null) return acc.note;
+  const legacy = (acc.roblox_cookie || "").trim();
+  if (!legacy || legacy.startsWith("_|WARNING")) return "";
+  return legacy;
+}
 
 export default function StokPribadiPage() {
   const toast = useToast();
@@ -42,6 +55,7 @@ const [username, setUsername] = useState("");
 const [password, setPassword] = useState("");
 const [kategori, setKategori] = useState("");
 const [addedBy, setAddedBy] = useState("lan4337");
+const [note, setNote] = useState("");
 const [saving, setSaving] = useState(false);
 
 // ⭐ State current user
@@ -58,7 +72,7 @@ const [currentUserLoading, setCurrentUserLoading] = useState(true);
   const [editingAccount, setEditingAccount] = useState<StockAccount | null>(null);
   const [editUsername, setEditUsername] = useState("");
   const [editPassword, setEditPassword] = useState("");
-  const [editCookie, setEditCookie] = useState("");
+  const [editNote, setEditNote] = useState("");
   const [editKategori, setEditKategori] = useState("");
   const [editAddedBy, setEditAddedBy] = useState("");
   const [editSaving, setEditSaving] = useState(false);
@@ -178,6 +192,7 @@ useEffect(() => {
         kategori,
         added_by: addedBy,
         status: "personal",
+        note: note.trim(),
       }),
     });
 
@@ -193,6 +208,7 @@ useEffect(() => {
 
       setUsername("");
       setPassword("");
+      setNote("");
       loadAccounts();
     } else {
       // ⭐ Handle kalau duplikat aktif
@@ -328,7 +344,7 @@ const handleToggleIdle = async (acc: StockAccount) => {
     setEditingAccount(acc);
     setEditUsername(acc.username);
     setEditPassword(acc.password || "");
-    setEditCookie(acc.roblox_cookie || "");
+    setEditNote(getNote(acc));
     setEditKategori(acc.kategori || "");
     setEditAddedBy(acc.added_by || "lan4337");
   };
@@ -338,7 +354,7 @@ const handleToggleIdle = async (acc: StockAccount) => {
     setEditingAccount(null);
     setEditUsername("");
     setEditPassword("");
-    setEditCookie("");
+    setEditNote("");
     setEditKategori("");
     setEditAddedBy("");
   };
@@ -364,7 +380,7 @@ const handleToggleIdle = async (acc: StockAccount) => {
           body: JSON.stringify({
             username: editUsername,
             password: editPassword,
-            roblox_cookie: editCookie,
+            note: editNote.trim(),
             kategori: editKategori,
             added_by: editAddedBy,
           }),
@@ -393,7 +409,9 @@ const handleToggleIdle = async (acc: StockAccount) => {
   const groupedAccounts = (() => {
   const filtered = accounts.filter((acc) => {
     if (acc.logged_out) return false;
-    if (!acc.username.toLowerCase().includes(searchQuery.toLowerCase())) return false;
+    // ⭐ Cari di username ATAU catatan
+    const q = searchQuery.toLowerCase();
+    if (q && !acc.username.toLowerCase().includes(q) && !getNote(acc).toLowerCase().includes(q)) return false;
 
     // ⭐ Filter idle
     if (filterIdle === "idle" && !acc.idle) return false;
@@ -564,6 +582,20 @@ const idleCount = accounts.filter((a) => a.idle && !a.logged_out).length;
 </div>
             </div>
 
+            <div className="mb-4">
+              <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-2">
+                <i className="fa-regular fa-note-sticky text-[10px] mr-1"></i>
+                Catatan
+              </label>
+              <textarea
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                placeholder="opsional — misalnya: sudah rebirth 3x, pakai pet X, dll."
+                rows={2}
+                className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm text-slate-900 dark:text-white resize-y focus:outline-none focus:border-blue-500"
+              />
+            </div>
+
             <button
               type="submit"
               disabled={saving}
@@ -636,7 +668,7 @@ const idleCount = accounts.filter((a) => a.idle && !a.logged_out).length;
         type="text"
         value={searchQuery}
         onChange={(e) => setSearchQuery(e.target.value)}
-        placeholder="Cari username..."
+        placeholder="Cari username atau catatan..."
         className="w-full md:w-56 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl pl-9 pr-3 py-2 text-sm text-slate-900 dark:text-white focus:outline-none focus:border-blue-500"
       />
     </div>
@@ -723,6 +755,15 @@ const idleCount = accounts.filter((a) => a.idle && !a.logged_out).length;
                   {acc.username}
                 </span>
               </div>
+              {getNote(acc) && (
+                <p
+                  className="mt-1 text-[11px] text-slate-500 dark:text-slate-400 flex items-start gap-1 min-w-0"
+                  title={getNote(acc)}
+                >
+                  <i className="fa-regular fa-note-sticky text-[10px] mt-0.5 shrink-0 text-blue-500 dark:text-blue-400"></i>
+                  <span className="line-clamp-2 wrap-break-word whitespace-pre-line">{getNote(acc)}</span>
+                </p>
+              )}
             </td>
             <td data-label="Password" className="px-3 py-2.5">
               <span className="font-mono text-[11px] text-slate-500 dark:text-slate-400">
@@ -887,6 +928,17 @@ const idleCount = accounts.filter((a) => a.idle && !a.logged_out).length;
               {acc.password ? "••••••••" : "—"}
             </p>
           </div>
+          {getNote(acc) && (
+            <div className="col-span-2 rounded-lg bg-blue-50 dark:bg-blue-500/10 border border-blue-100 dark:border-blue-500/20 px-2.5 py-2">
+              <p className="text-[9px] uppercase text-blue-600 dark:text-blue-300 font-bold tracking-wider flex items-center gap-1">
+                <i className="fa-regular fa-note-sticky text-[9px]"></i>
+                Catatan
+              </p>
+              <p className="text-slate-700 dark:text-slate-200 mt-0.5 whitespace-pre-line wrap-break-word">
+                {getNote(acc)}
+              </p>
+            </div>
+          )}
           <div className="col-span-2">
             <p className="text-[9px] uppercase text-slate-400 font-bold tracking-wider">
               Created
@@ -1093,14 +1145,15 @@ const idleCount = accounts.filter((a) => a.idle && !a.logged_out).length;
 
               <div>
                 <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-2">
-                  Cookie (.ROBLOSECURITY)
+                  <i className="fa-regular fa-note-sticky text-[10px] mr-1"></i>
+                  Catatan
                 </label>
                 <textarea
-                  value={editCookie}
-                  onChange={(e) => setEditCookie(e.target.value)}
+                  value={editNote}
+                  onChange={(e) => setEditNote(e.target.value)}
                   placeholder="opsional"
-                  rows={2}
-                  className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm font-mono text-slate-900 dark:text-white resize-none focus:outline-none focus:border-blue-500"
+                  rows={3}
+                  className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm text-slate-900 dark:text-white resize-y focus:outline-none focus:border-blue-500"
                 />
               </div>
 

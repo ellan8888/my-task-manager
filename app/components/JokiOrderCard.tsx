@@ -1,6 +1,6 @@
 "use client";
 
-import type { KeyboardEvent, MouseEvent, ReactNode } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent, type MouseEvent, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import type { JokiOrder, RamAccount } from "@/lib/types";
 
@@ -89,14 +89,208 @@ function Label({ children }: { children: ReactNode }) {
   return <p className="text-[11px] font-medium text-slate-500 dark:text-slate-400 mb-1">{children}</p>;
 }
 
+/** Salin teks — pakai cara cadangan kalau clipboard API tidak tersedia (HP lama / non-HTTPS) */
+async function copyText(value: string): Promise<boolean> {
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(value);
+      return true;
+    }
+  } catch {
+    /* lanjut ke cara cadangan */
+  }
+  try {
+    const ta = document.createElement("textarea");
+    ta.value = value;
+    ta.setAttribute("readonly", "");
+    ta.style.position = "fixed";
+    ta.style.opacity = "0";
+    document.body.appendChild(ta);
+    ta.select();
+    const ok = document.execCommand("copy");
+    document.body.removeChild(ta);
+    return ok;
+  } catch {
+    return false;
+  }
+}
+
+/** Status tombol salin: "idle" → "copied" / "failed" selama 1,5 detik */
+function useCopyFeedback() {
+  const [state, setState] = useState<"idle" | "copied" | "failed">("idle");
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => () => {
+    if (timer.current) clearTimeout(timer.current);
+  }, []);
+
+  const copy = async (value: string) => {
+    const ok = await copyText(value);
+    setState(ok ? "copied" : "failed");
+    if (ok) navigator.vibrate?.(15); // getar singkat di HP (kalau didukung)
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = setTimeout(() => setState("idle"), 1500);
+  };
+
+  return { state, copy };
+}
+
 function CopyLink({ value, label = "Salin" }: { value: string; label?: string }) {
+  const { state, copy } = useCopyFeedback();
   return (
     <button
-      onClick={() => navigator.clipboard.writeText(value)}
-      className="mt-1 inline-flex items-center gap-1 text-xs font-semibold text-violet-600 dark:text-violet-400 hover:underline"
+      type="button"
+      onClick={() => copy(value)}
+      aria-live="polite"
+      className={`mt-1 inline-flex items-center gap-1 px-2 py-0.5 -ml-2 rounded-md text-xs font-semibold transition-all duration-150 active:scale-90 active:bg-violet-100 dark:active:bg-violet-500/20 ${
+        state === "copied"
+          ? "text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-500/10"
+          : state === "failed"
+            ? "text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-500/10"
+            : "text-violet-600 dark:text-violet-400 hover:bg-violet-50 dark:hover:bg-violet-500/10"
+      }`}
     >
-      <i className="fa-regular fa-copy text-[11px]"></i>
-      {label}
+      <i
+        className={`text-[11px] ${
+          state === "copied" ? "fa-solid fa-check copy-pop" : state === "failed" ? "fa-solid fa-xmark" : "fa-regular fa-copy"
+        }`}
+      ></i>
+      {state === "copied" ? "Tersalin" : state === "failed" ? "Gagal" : label}
+    </button>
+  );
+}
+
+/** Catatan pribadi penjoki — klik untuk tulis / ubah, tersimpan di joki_orders.my_note */
+function MyNote({ order }: { order: JokiOrder }) {
+  const saved = order.my_note ?? "";
+  // Nilai yang baru disimpan dipakai sampai data dari server ikut berubah
+  const [local, setLocal] = useState<{ base: string; value: string } | null>(null);
+  const current = local && local.base === saved ? local.value : saved;
+
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const startEdit = () => {
+    setDraft(current);
+    setError(null);
+    setEditing(true);
+  };
+
+  const save = async () => {
+    const value = draft.trim();
+    if (value === current) {
+      setEditing(false);
+      return;
+    }
+    setSaving(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/jokian/note", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ order_id: order.order_id, my_note: value }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.success) {
+        setError(data.message || "Gagal menyimpan catatan");
+        return;
+      }
+      setLocal({ base: saved, value: data.my_note ?? "" });
+      setEditing(false);
+    } catch {
+      setError("Gagal menyimpan catatan — cek koneksi");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (editing) {
+    return (
+      <div className="mx-4 md:mx-5 mb-3 mt-1 rounded-xl border border-violet-300 dark:border-violet-500/40 bg-violet-50/60 dark:bg-violet-500/10 p-2.5">
+        <textarea
+          autoFocus
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Escape") setEditing(false);
+            if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) save();
+          }}
+          rows={2}
+          maxLength={1000}
+          placeholder="Tulis catatan kamu untuk order ini..."
+          className="w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-white resize-y focus:outline-none focus:border-violet-500"
+        />
+        {error && <p className="mt-1.5 text-[11px] text-rose-600 dark:text-rose-400">{error}</p>}
+        <div className="mt-2 flex items-center justify-between gap-2">
+          <span className="text-[10px] text-slate-400 hidden sm:inline">Ctrl+Enter simpan · Esc batal</span>
+          <div className="flex gap-2 ml-auto">
+            <button
+              type="button"
+              onClick={() => setEditing(false)}
+              disabled={saving}
+              className="px-3 py-1.5 rounded-lg text-xs font-bold text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition disabled:opacity-50"
+            >
+              Batal
+            </button>
+            <button
+              type="button"
+              onClick={save}
+              disabled={saving}
+              className="px-3 py-1.5 rounded-lg text-xs font-bold text-white bg-violet-600 hover:bg-violet-500 transition disabled:opacity-50 flex items-center gap-1.5"
+            >
+              <i className={`fa-solid ${saving ? "fa-spinner fa-spin" : "fa-check"} text-[10px]`}></i>
+              Simpan
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={startEdit}
+      title={current ? "Klik untuk ubah catatan" : "Klik untuk tambah catatan"}
+      className={`group/note mx-4 md:mx-5 mb-3 mt-1 w-[calc(100%-2rem)] md:w-[calc(100%-2.5rem)] text-left px-3.5 py-2.5 rounded-xl border flex items-start gap-2 text-sm transition active:scale-[0.99] ${
+        current
+          ? "bg-violet-50 dark:bg-violet-500/10 border-violet-100 dark:border-violet-500/20 text-violet-800 dark:text-violet-200 hover:border-violet-300 dark:hover:border-violet-500/40"
+          : "border-dashed border-slate-300 dark:border-slate-700 text-slate-400 dark:text-slate-500 hover:border-violet-400 hover:text-violet-500 dark:hover:text-violet-400"
+      }`}
+    >
+      <i className={`fa-regular fa-note-sticky text-xs mt-1 shrink-0`}></i>
+      <span className={`flex-1 min-w-0 whitespace-pre-line wrap-break-word ${current ? "" : "italic"}`}>
+        {current || "Tambah catatan..."}
+      </span>
+      <i className="fa-solid fa-pen text-[10px] mt-1 shrink-0 opacity-50 group-hover/note:opacity-100 transition"></i>
+    </button>
+  );
+}
+
+function CopyOrderId({ value }: { value: string }) {
+  const { state, copy } = useCopyFeedback();
+  return (
+    <button
+      type="button"
+      onClick={() => copy(value)}
+      title="Salin nomor pesanan"
+      className={`max-w-full inline-flex items-center gap-1.5 px-2 py-0.5 -ml-2 rounded-md font-mono text-[13px] font-bold transition-all duration-150 active:scale-95 active:bg-violet-100 dark:active:bg-violet-500/20 ${
+        state === "copied"
+          ? "text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-500/10"
+          : state === "failed"
+            ? "text-rose-600 dark:text-rose-400"
+            : "text-violet-600 dark:text-violet-400 hover:bg-violet-50 dark:hover:bg-violet-500/10"
+      }`}
+    >
+      <span className="truncate">{value}</span>
+      <i
+        className={`text-[11px] shrink-0 ${
+          state === "copied" ? "fa-solid fa-check copy-pop" : state === "failed" ? "fa-solid fa-xmark" : "fa-regular fa-copy"
+        }`}
+      ></i>
+      {state === "copied" && <span className="font-sans text-[11px] shrink-0">Tersalin</span>}
     </button>
   );
 }
@@ -284,14 +478,7 @@ export default function JokiOrderCard({
 
         <div className="min-w-0">
           <Label>Nomor pesanan</Label>
-          <button
-            onClick={() => navigator.clipboard.writeText(order.order_id)}
-            className="max-w-full inline-flex items-center gap-1.5 font-mono text-[13px] font-bold text-violet-600 dark:text-violet-400 hover:underline"
-            title="Salin nomor pesanan"
-          >
-            <span className="truncate">{order.order_id}</span>
-            <i className="fa-regular fa-copy text-[11px] shrink-0"></i>
-          </button>
+          <CopyOrderId value={order.order_id} />
         </div>
 
         <div>
@@ -489,20 +676,8 @@ export default function JokiOrderCard({
         </div>
       )}
 
-      {/* ═══ BAR JADWAL ═══ */}
-      {(order.schedule_time || order.schedule_date) && (
-        <div className="mx-4 md:mx-5 mb-3 mt-1 px-3.5 py-2.5 rounded-xl bg-violet-50 dark:bg-violet-500/10 border border-violet-100 dark:border-violet-500/20 flex items-center gap-2 text-sm text-violet-700 dark:text-violet-300">
-          <i className="fa-regular fa-calendar text-xs"></i>
-          <span className="font-semibold">{order.schedule_time ? order.schedule_time.slice(0, 5) : "--:--"}</span>
-          <span className="text-violet-400 dark:text-violet-500">·</span>
-          <span>{order.joki_name || "ellan"}</span>
-          {order.schedule_date && (
-            <span className="ml-auto text-xs text-violet-500 dark:text-violet-400">
-              {new Date(`${order.schedule_date}T00:00:00`).toLocaleDateString("id-ID", { day: "numeric", month: "short" })}
-            </span>
-          )}
-        </div>
-      )}
+      {/* ═══ CATATAN SAYA (bisa diedit, bukan dari Itemku) ═══ */}
+      {!isCompletedByBot && <MyNote order={order} />}
 
       {/* ═══ BOT SEDANG PROSES ═══ */}
       {isChecked && (

@@ -48,6 +48,8 @@ export type JokiOrder = {
   bot_refetch_requested?: boolean | null;
   bot_refetch_at?: string | null;
   bot_refetch_error?: string | null;
+  // Catatan pribadi penjoki di card (bukan dari Itemku)
+  my_note?: string | null;
 };
 
 export type CurrentUser = {
