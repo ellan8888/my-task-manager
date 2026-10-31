@@ -31,7 +31,7 @@ export default function RootLayout({
         <ThemeScript />
       </head>
       <body>
-        <LoadingScreen duration={2000} />
+        <LoadingScreen duration={1500} />
         <ToastProvider>{children}</ToastProvider>
       </body>
     </html>

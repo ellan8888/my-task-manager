@@ -98,6 +98,11 @@ export async function POST(request: Request) {
     baseTime = Date.now();
   }
 
+  // ⭐ Kalau waktu selesai sudah lewat (order telat), tambahan dihitung
+  //    dari SEKARANG — bukan dari jam lama — supaya jam selesai benar-benar maju.
+  //    Contoh: selesai 12.00, sekarang 12.30, +30 menit → 13.00 (bukan 12.30).
+  baseTime = Math.max(baseTime, Date.now());
+
   // 5. Hitung waktu baru
   const newEndTimeMs = baseTime + add_minutes * 60 * 1000;
 

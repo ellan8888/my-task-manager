@@ -1,6 +1,7 @@
 "use client";
 
-import type { ReactNode } from "react";
+import type { KeyboardEvent, MouseEvent, ReactNode } from "react";
+import { useRouter } from "next/navigation";
 import type { JokiOrder, RamAccount } from "@/lib/types";
 
 // ══════════════════════════════════════════════════════════════
@@ -215,6 +216,30 @@ export default function JokiOrderCard({
 
   const game = gameFromTitle(order.product);
 
+  // ── Klik card → buka status order di halaman queue ─────────
+  const router = useRouter();
+  const queueHref = `/queue/${encodeURIComponent(order.order_id.replace(/\s*\([A-Z]{2}\)\s*$/, "").trim())}`;
+  const canOpenQueue = !isEditing && !isDeleting && !isProcessing;
+
+  const handleCardClick = (e: MouseEvent<HTMLDivElement>) => {
+    if (!canOpenQueue) return;
+    // Klik tombol, link, atau kolom isian di dalam card → jangan pindah halaman
+    const target = e.target as HTMLElement;
+    if (target.closest("button, a, input, select, textarea, label, [data-no-card-nav]")) return;
+    // Lagi blok/seleksi teks (misalnya mau copy) → jangan pindah halaman
+    if (window.getSelection()?.toString()) return;
+    if (e.ctrlKey || e.metaKey) {
+      window.open(queueHref, "_blank", "noopener");
+      return;
+    }
+    router.push(queueHref);
+  };
+
+  const handleCardKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
+    if (!canOpenQueue || e.target !== e.currentTarget) return;
+    if (e.key === "Enter") router.push(queueHref);
+  };
+
   const submitUsername = () => {
     if (!editingUsername) return;
     const trimmed = editingUsername.value.trim();
@@ -227,7 +252,13 @@ export default function JokiOrderCard({
 
   return (
     <div
-      className={`bg-white dark:bg-slate-900/60 border rounded-2xl overflow-hidden transition-all duration-300 ease-out ${
+      tabIndex={canOpenQueue ? 0 : -1}
+      title={canOpenQueue ? "Klik untuk lihat status order di Jokian Queue" : undefined}
+      onClick={handleCardClick}
+      onKeyDown={handleCardKeyDown}
+      className={`bg-white dark:bg-slate-900/60 border rounded-2xl overflow-hidden transition-all duration-300 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500/60 ${
+        canOpenQueue ? "cursor-pointer hover:-translate-y-0.5 hover:shadow-lg hover:shadow-violet-500/5" : ""
+      } ${
         isDeleting
           ? "opacity-0 scale-90 -translate-x-8 blur-sm"
           : isProcessing
@@ -447,7 +478,7 @@ export default function JokiOrderCard({
                 <span className="font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
                   <i className="fa-solid fa-flag-checkered"></i>
                   Selesai{" "}
-                  {new Date(order.estimated_end_at!).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })} WIB
+                  {new Date(order.estimated_end_at!).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Jakarta" })} WIB
                 </span>
               </div>
               <div className="w-full h-2 bg-slate-100 dark:bg-slate-950 rounded-full overflow-hidden border border-slate-200 dark:border-slate-800">

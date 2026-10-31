@@ -227,6 +227,25 @@ useEffect(() => {
         toast.error(data.message || "Gagal menambah waktu");
         return;
       }
+
+      // ⭐ Langsung perbarui jam selesai di layar (tidak menunggu realtime),
+      //    lalu ambil ulang data dari server supaya pasti sama.
+      if (data.new_estimated_end_at) {
+        setOrder((prev) =>
+          prev
+            ? {
+                ...prev,
+                estimated_end_at: data.new_estimated_end_at,
+                schedule_date: data.new_schedule_date ?? prev.schedule_date,
+                schedule_time: data.new_schedule_time ?? prev.schedule_time,
+                queue_status: "processing",
+              }
+            : prev
+        );
+        toast.success(`Waktu ditambah — selesai jadi ${formatEndWIB(data.new_estimated_end_at)} WIB`);
+      }
+      loadOrder();
+
       setShowAddTime(false);
       setAddValue("");
     } catch (err) {
@@ -236,6 +255,18 @@ useEffect(() => {
       setSaving(false);
     }
   };
+
+  // ⭐ Perkiraan jam selesai baru (sama dengan perhitungan server):
+  //    dari jam selesai sekarang, atau dari SEKARANG kalau sudah lewat.
+  const previewEnd = (addMinutes: number) => {
+    const current = order?.estimated_end_at ? new Date(order.estimated_end_at).getTime() : now;
+    return Math.max(current, now) + addMinutes * 60_000;
+  };
+  const customMinutes = (() => {
+    const val = parseFloat(addValue);
+    if (isNaN(val) || val <= 0) return null;
+    return Math.round(addUnit === "hours" ? val * 60 : val);
+  })();
 
   const handleCustomAdd = () => {
     const val = parseFloat(addValue);
@@ -457,6 +488,7 @@ useEffect(() => {
                 <p className="text-xs text-slate-400 text-center mt-3 flex items-center justify-center gap-1.5">
                   <i className="fa-regular fa-calendar text-[10px]"></i>
                   {new Date(order.estimated_end_at).toLocaleString("id-ID", {
+                    timeZone: "Asia/Jakarta",
                     day: "numeric",
                     month: "short",
                     hour: "2-digit",
@@ -769,6 +801,7 @@ useEffect(() => {
                   <p className="text-slate-500">Selesai saat ini:</p>
                   <p className="text-slate-200 font-mono font-bold">
                     {new Date(order.estimated_end_at).toLocaleString("id-ID", {
+                    timeZone: "Asia/Jakarta",
                       day: "numeric",
                       month: "short",
                       hour: "2-digit",
@@ -799,6 +832,9 @@ useEffect(() => {
                   className="px-3 py-2.5 rounded-xl text-xs font-bold text-slate-200 bg-slate-800 hover:bg-slate-700 hover:text-amber-300 border border-slate-700 hover:border-amber-500/50 transition disabled:opacity-50"
                 >
                   {preset.label}
+                  <span className="block mt-0.5 text-[10px] font-semibold text-slate-500 font-mono">
+                    → {formatEndWIB(previewEnd(preset.mins))}
+                  </span>
                 </button>
               ))}
             </div>
@@ -845,6 +881,13 @@ useEffect(() => {
                 )}
               </button>
             </div>
+            {customMinutes != null && (
+              <p className="-mt-3 mb-5 text-xs text-slate-400 flex items-center gap-1.5">
+                <i className="fa-regular fa-clock text-amber-400 text-[11px]"></i>
+                Selesai jadi{" "}
+                <span className="font-mono font-bold text-amber-300">{formatEndWIB(previewEnd(customMinutes))} WIB</span>
+              </p>
+            )}
 
             <button
               onClick={() => {
@@ -861,6 +904,17 @@ useEffect(() => {
       )}
     </div>
   );
+}
+
+/** Jam selesai dalam WIB, contoh "31 Okt, 13.00" */
+function formatEndWIB(value: string | number): string {
+  return new Date(value).toLocaleString("id-ID", {
+    timeZone: "Asia/Jakarta",
+    day: "numeric",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
 function DetailRow({

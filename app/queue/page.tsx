@@ -278,14 +278,22 @@ export default function QueuePage() {
 
         /* Kilau sekali lewat saat kartu muncul / pindah status */
         @keyframes queue-shine {
-          from { transform: translateX(-120%) skewX(-20deg); }
-          to   { transform: translateX(220%) skewX(-20deg); }
+          from { transform: translateX(-160%) skewX(-20deg); }
+          to   { transform: translateX(360%) skewX(-20deg); }
         }
+        /* Posisi diam: di luar kiri kartu (tidak terlihat).
+           Kilau lewat sampai keluar penuh di kanan, lalu kartu kembali normal. */
         .queue-shine {
           position: absolute; inset: 0 auto 0 0; width: 40%;
-          background: linear-gradient(90deg, transparent, rgba(255,255,255,0.07), transparent);
-          animation: queue-shine 1.1s ease-out 0.15s both;
+          background: linear-gradient(90deg, transparent, rgba(255,255,255,0.08), transparent);
+          transform: translateX(-160%) skewX(-20deg);
+          animation: queue-shine 1.1s ease-out 0.15s;
           pointer-events: none;
+        }
+        /* Mouse di atas kartu → kilau lewat lagi. Mouse keluar → langsung balik diam-diam. */
+        .group:hover .queue-shine {
+          transform: translateX(360%) skewX(-20deg);
+          transition: transform 0.9s ease-out;
         }
 
         /* Sorotan hasil "Cari order kamu" */
@@ -297,6 +305,7 @@ export default function QueuePage() {
 
         @media (prefers-reduced-motion: reduce) {
           .queue-card-in, .queue-shine, .queue-highlight, .pulse-dot { animation: none; }
+          .queue-shine, .group:hover .queue-shine { display: none; }
         }
       `}</style>
 
