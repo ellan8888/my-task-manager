@@ -44,6 +44,10 @@ export type JokiOrder = {
   total_income?: number | null;
   detail_url?: string | null;
   response_deadline?: string | null;
+  // Ambil ulang data dari Itemku (diproses bot)
+  bot_refetch_requested?: boolean | null;
+  bot_refetch_at?: string | null;
+  bot_refetch_error?: string | null;
 };
 
 export type CurrentUser = {

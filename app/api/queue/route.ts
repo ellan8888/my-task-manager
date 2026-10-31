@@ -14,6 +14,7 @@ export async function GET(request: Request) {
     const orderType = searchParams.get("order_type");
     const manualComplete = searchParams.get("manual_complete_triggered");
     const botRetryRequested = searchParams.get("bot_retry_requested"); // ⭐ BARU
+    const botRefetchRequested = searchParams.get("bot_refetch_requested"); // ⭐ ambil ulang data
     let order_id = searchParams.get("order_id");
 
     // ✅ CLEAN ORDER ID
@@ -38,6 +39,9 @@ export async function GET(request: Request) {
     } else if (botRetryRequested === "true") {
       query = query.eq("bot_retry_requested", true); // ⭐ FIX
       // ⚠️ JANGAN filter completed (order retry bisa ada yang completed)
+    } else if (botRefetchRequested === "true") {
+      // ⭐ Order yang minta bot ambil ulang datanya dari Itemku
+      query = query.eq("bot_refetch_requested", true).eq("completed", false);
     } else {
       query = query.eq("completed", false);
     }

@@ -7,6 +7,7 @@ import type { JokiOrder, RamAccount } from "@/lib/types";
 import AppShell from "@/app/components/AppShell";
 import { ConfirmDialog, useConfirm } from "@/app/components/ConfirmDialog";
 import JokiOrderCard, { isProgressOrder, isDoneByBot } from "@/app/components/JokiOrderCard";
+import { useToast } from "@/app/components/ToastProvider";
 import {
   StatCard,
   FilterPill,
@@ -72,6 +73,8 @@ export default function JokiPage() {
   const [startingOrders, setStartingOrders] = useState<Set<number>>(new Set());
   const [checkedOrders, setCheckedOrders] = useState<Set<number>>(new Set());
   const [deletingOrders, setDeletingOrders] = useState<Set<number>>(new Set());
+  const [refetchingOrders, setRefetchingOrders] = useState<Set<number>>(new Set());
+  const toast = useToast();
 
   const [editingUsername, setEditingUsername] = useState<{ orderId: number; value: string } | null>(null);
   const [ramAccounts, setRamAccounts] = useState<RamAccount[]>([]);
@@ -151,6 +154,35 @@ export default function JokiPage() {
         }
       }
     );
+  };
+
+  // ⭐ Minta bot ambil ulang data order dari link Itemku.
+  //    Hasilnya masuk lewat realtime → card ter-update sendiri.
+  const handleRefetchOrder = async (order: JokiOrder) => {
+    setRefetchingOrders((prev) => withId(prev, order.id, true));
+    try {
+      const res = await fetch("/api/queue/refetch", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ order_id: order.order_id }),
+      });
+      const data = await res.json().catch(() => null);
+
+      if (!data?.success) {
+        toast.error(data?.message || "Gagal meminta ambil ulang data");
+        return;
+      }
+
+      setJokiOrders((cur) =>
+        cur.map((o) => (o.id === order.id ? { ...o, bot_refetch_requested: true, bot_refetch_error: null } : o))
+      );
+      toast.info(data.message || "Bot akan mengambil ulang data sebentar lagi");
+    } catch (err) {
+      console.error(err);
+      toast.error("Terjadi kesalahan");
+    } finally {
+      setRefetchingOrders((prev) => withId(prev, order.id, false));
+    }
   };
 
   const handleForceDelete = (order: JokiOrder) => {
@@ -410,6 +442,8 @@ export default function JokiPage() {
       handleStartProgressOrder={handleStartProgressOrder}
       handleForceDelete={handleForceDelete}
       isUsernameUsedInOtherCards={isUsernameUsedInOtherCards}
+      handleRefetchOrder={handleRefetchOrder}
+      isRefetching={refetchingOrders.has(order.id)}
     />
   );
 

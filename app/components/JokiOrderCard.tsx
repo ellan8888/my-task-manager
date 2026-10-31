@@ -130,6 +130,9 @@ type Props = {
   handleStartProgressOrder: (order: JokiOrder) => void;
   handleForceDelete: (order: JokiOrder) => void;
   isUsernameUsedInOtherCards: (username: string, currentOrderId: number) => boolean;
+  /** Minta bot ambil ulang data order dari link Itemku */
+  handleRefetchOrder?: (order: JokiOrder) => void;
+  isRefetching?: boolean;
 };
 
 export default function JokiOrderCard({
@@ -149,11 +152,19 @@ export default function JokiOrderCard({
   handleStartProgressOrder,
   handleForceDelete,
   isUsernameUsedInOtherCards,
+  handleRefetchOrder,
+  isRefetching = false,
 }: Props) {
   const isCompletedByBot = isDoneByBot(order);
   const isProgress = isProgressOrder(order);
   const isFailed = order.bot_process_failed === true && !isCompletedByBot;
   const isEditing = editingUsername?.orderId === order.id;
+
+  // ── Ambil ulang data dari Itemku ────────────────────────────
+  const isIncomplete = !hasText(order.product) || !hasText(order.roblox_username) || !hasText(order.buyer_name);
+  const refetchPending = isRefetching || order.bot_refetch_requested === true;
+  const canRefetch = !!order.detail_url && !isCompletedByBot && !!handleRefetchOrder;
+  const showRefetch = canRefetch && (isIncomplete || refetchPending);
 
   // ── Jadwal ──────────────────────────────────────────────────
   let daysLeft: number | null = null;
@@ -497,6 +508,25 @@ export default function JokiOrderCard({
         </div>
       )}
 
+      {/* ═══ AMBIL ULANG DATA: status ═══ */}
+      {canRefetch && refetchPending && (
+        <div className="mx-4 md:mx-5 mb-3 flex items-start gap-2 p-2.5 rounded-lg bg-violet-50 dark:bg-violet-500/10 border border-violet-200 dark:border-violet-500/20">
+          <i className="fa-solid fa-circle-notch fa-spin text-violet-600 dark:text-violet-400 text-xs mt-0.5 shrink-0"></i>
+          <p className="text-[11px] text-violet-700 dark:text-violet-300">
+            Bot sedang mengambil ulang data dari Itemku. Card akan terisi otomatis setelah selesai (biasanya kurang dari 1 menit).
+          </p>
+        </div>
+      )}
+      {canRefetch && !refetchPending && order.bot_refetch_error && (
+        <div className="mx-4 md:mx-5 mb-3 flex items-start gap-2 p-2.5 rounded-lg bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/20">
+          <i className="fa-solid fa-triangle-exclamation text-rose-600 dark:text-rose-400 text-xs mt-0.5 shrink-0"></i>
+          <div className="min-w-0">
+            <p className="text-[11px] font-bold text-rose-700 dark:text-rose-300">Gagal mengambil ulang data</p>
+            <p className="text-[11px] text-rose-600 dark:text-rose-400 mt-0.5">{order.bot_refetch_error}</p>
+          </div>
+        </div>
+      )}
+
       {/* ═══ FOOTER: pendapatan + aksi ═══ */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-4 md:px-5 py-3.5 border-t border-slate-200 dark:border-slate-800/80 bg-slate-50/60 dark:bg-slate-950/30">
         <div>
@@ -507,6 +537,18 @@ export default function JokiOrderCard({
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          {showRefetch && (
+            <button
+              onClick={() => handleRefetchOrder?.(order)}
+              disabled={refetchPending}
+              title="Bot membuka link Itemku pesanan ini dan mengisi ulang datanya"
+              className="px-3.5 py-2 rounded-xl text-xs font-bold text-violet-700 dark:text-violet-300 border border-violet-300 dark:border-violet-500/40 hover:bg-violet-50 dark:hover:bg-violet-500/10 disabled:opacity-60 disabled:cursor-wait transition flex items-center gap-1.5"
+            >
+              <i className={`fa-solid fa-rotate-right text-[11px] ${refetchPending ? "fa-spin" : ""}`}></i>
+              {refetchPending ? "Mengambil data..." : "Ambil ulang data"}
+            </button>
+          )}
+
           {order.detail_url && (
             <a
               href={order.detail_url}
