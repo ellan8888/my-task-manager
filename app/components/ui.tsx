@@ -1,6 +1,6 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useRef, type PointerEvent, type ReactNode } from "react";
 
 // ══════════════════════════════════════════════════════════════
 // STAT CARD
@@ -9,7 +9,8 @@ import type { ReactNode } from "react";
 const STAT_COLORS = {
   violet: {
     hover: "hover:border-violet-500/50",
-    blob: "bg-violet-500/10 dark:bg-violet-600/10",
+    /** warna spotlight (R G B) */
+    spot: "139 92 246",
     label: "text-slate-500 dark:text-slate-400",
     value: "text-slate-900 dark:text-white",
     iconBox: "bg-violet-100 dark:bg-violet-500/10 text-violet-600 dark:text-violet-400 border-violet-200 dark:border-violet-500/20",
@@ -17,7 +18,8 @@ const STAT_COLORS = {
   },
   amber: {
     hover: "hover:border-amber-500/50",
-    blob: "bg-amber-500/10 dark:bg-amber-600/10",
+    /** warna spotlight (R G B) */
+    spot: "245 158 11",
     label: "text-amber-600 dark:text-amber-400",
     value: "text-amber-600 dark:text-amber-300",
     iconBox: "bg-amber-100 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-200 dark:border-amber-500/20",
@@ -25,7 +27,8 @@ const STAT_COLORS = {
   },
   indigo: {
     hover: "hover:border-indigo-500/50",
-    blob: "bg-indigo-500/10 dark:bg-indigo-600/10",
+    /** warna spotlight (R G B) */
+    spot: "99 102 241",
     label: "text-indigo-600 dark:text-indigo-400",
     value: "text-indigo-600 dark:text-indigo-300",
     iconBox: "bg-indigo-100 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-200 dark:border-indigo-500/20",
@@ -33,7 +36,8 @@ const STAT_COLORS = {
   },
   emerald: {
     hover: "hover:border-emerald-500/50",
-    blob: "bg-emerald-500/10 dark:bg-emerald-600/10",
+    /** warna spotlight (R G B) */
+    spot: "16 185 129",
     label: "text-emerald-600 dark:text-emerald-400",
     value: "text-emerald-600 dark:text-emerald-400",
     iconBox: "bg-emerald-100 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-500/20",
@@ -41,7 +45,8 @@ const STAT_COLORS = {
   },
   rose: {
     hover: "hover:border-rose-500/50",
-    blob: "bg-rose-500/10 dark:bg-rose-600/10",
+    /** warna spotlight (R G B) */
+    spot: "244 63 94",
     label: "text-rose-600 dark:text-rose-400",
     value: "text-rose-600 dark:text-rose-300",
     iconBox: "bg-rose-100 dark:bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-200 dark:border-rose-500/20",
@@ -70,12 +75,32 @@ export function StatCard({
   compact?: boolean;
 }) {
   const c = STAT_COLORS[color];
+  const cardRef = useRef<HTMLDivElement>(null);
+
+  // ⭐ Spotlight ikut posisi mouse — langsung ubah CSS variable, tanpa re-render
+  const handlePointerMove = (e: PointerEvent<HTMLDivElement>) => {
+    const el = cardRef.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    el.style.setProperty("--spot-x", `${e.clientX - r.left}px`);
+    el.style.setProperty("--spot-y", `${e.clientY - r.top}px`);
+  };
+
   return (
     <div
+      ref={cardRef}
+      onPointerMove={handlePointerMove}
       className={`bg-white dark:bg-slate-900/50 backdrop-blur-xl border border-slate-200 dark:border-slate-800 rounded-2xl p-4 md:p-5 relative overflow-hidden group transition-all duration-300 ${c.hover}`}
     >
-      <div className={`absolute -right-4 -bottom-4 w-20 h-20 rounded-full blur-xl transition ${c.blob}`}></div>
-      <div className="flex justify-between items-start">
+      {/* ⭐ Spotlight — hanya muncul saat mouse di atas kartu (layar sentuh tetap polos) */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-300 group-hover:opacity-100"
+        style={{
+          background: `radial-gradient(220px circle at var(--spot-x, 50%) var(--spot-y, 50%), rgb(${c.spot} / 0.16), transparent 70%)`,
+        }}
+      ></div>
+      <div className="relative flex justify-between items-start">
         <div className="min-w-0">
           <p className={`text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 ${c.label}`}>
             <span>{label}</span>
@@ -88,7 +113,7 @@ export function StatCard({
           <i className={`fa-solid ${icon} text-base`}></i>
         </div>
       </div>
-      <div className={`mt-3 flex items-center text-[11px] font-semibold ${c.footer}`}>
+      <div className={`relative mt-3 flex items-center text-[11px] font-semibold ${c.footer}`}>
         <i className={`fa-solid ${footerIcon} mr-1.5`}></i>
         <span>{footerText}</span>
       </div>
