@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import crypto from "crypto";
+import { startOfTodayWIB, startOfMonthWIB } from "@/lib/auth";
 
 export const runtime = "nodejs";
 
@@ -44,13 +45,13 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    // ⭐ Batas waktu pakai jam WIB (server Vercel jalan di UTC — sebelumnya
+    //    "hari ini" baru mulai jam 07.00 WIB)
+    const today = startOfTodayWIB();
 
-    const weekAgo = new Date(today);
-    weekAgo.setDate(weekAgo.getDate() - 7);
+    const weekAgo = new Date(today.getTime() - 7 * 24 * 3600_000);
 
-    const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+    const monthStart = startOfMonthWIB();
 
     // ⭐ 2. Query + FILTER by joki_name = user yang login
     const { data, error } = await supabaseAdmin

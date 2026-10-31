@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useSidebar } from "../../SidebarContext";
+import AdminHeader from "@/app/components/AdminHeader";
+import { useToast } from "@/app/components/ToastProvider";
 
 export default function MyCodesPage() {
-  const { sidebarOpen, toggleSidebar } = useSidebar();
+  const toast = useToast();
   const [user, setUser] = useState<any>(null);
   const [codes, setCodes] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -27,17 +28,12 @@ export default function MyCodesPage() {
 
   return (
     <>
-      <header className="h-16 border-b border-slate-200 dark:border-slate-800/80 bg-white/80 dark:bg-slate-950/60 backdrop-blur-md px-4 md:px-8 flex items-center z-20 shrink-0">
-        <button
-          onClick={toggleSidebar}
-          className="w-10 h-10 flex items-center justify-center rounded-xl bg-slate-100 dark:bg-slate-900 mr-3"
-        >
-          <i className={`fa-solid ${sidebarOpen ? "fa-bars-staggered" : "fa-bars"}`}></i>
-        </button>
-        <h2 className="text-xl font-extrabold text-slate-900 dark:text-white">
-          Kode Saya
-        </h2>
-      </header>
+      <AdminHeader
+        icon="fa-ticket"
+        iconClassName="from-violet-600 via-indigo-600 to-purple-500 shadow-violet-600/30"
+        title="Kode Saya"
+        subtitle="Kode Redfinger yang sudah kamu beli"
+      />
 
       <div className="flex-1 overflow-y-auto p-4 md:p-8">
         {loading ? (
@@ -68,7 +64,7 @@ export default function MyCodesPage() {
                 <button
                   onClick={() => {
                     navigator.clipboard.writeText(c.code);
-                    alert("Code dicopy!");
+                    toast.success("Code dicopy!");
                   }}
                   className="w-9 h-9 rounded-lg bg-violet-100 dark:bg-violet-500/10 text-violet-600 flex items-center justify-center"
                 >

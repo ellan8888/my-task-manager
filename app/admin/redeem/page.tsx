@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useSidebar } from "../SidebarContext";
 
+import AdminHeader from "@/app/components/AdminHeader";
 type RedeemCode = {
   id: number;
   code: string;
@@ -39,7 +39,7 @@ type ConfirmState = {
 } | null;
 
 export default function RedeemPage() {
-  const { sidebarOpen, toggleSidebar } = useSidebar();
+
   const [user, setUser] = useState<any>(null);
   const [sisa, setSisa] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -391,28 +391,12 @@ export default function RedeemPage() {
   return (
     <>
       {/* HEADER — sama kayak withdrawals */}
-      <header className="h-16 border-b border-slate-200 dark:border-slate-800/80 bg-white/80 dark:bg-slate-950/60 backdrop-blur-md px-4 md:px-8 flex items-center justify-between z-20 shrink-0">
-        <div className="flex items-center space-x-3">
-          <button
-            onClick={toggleSidebar}
-            className="w-10 h-10 flex items-center justify-center rounded-xl bg-slate-100 dark:bg-slate-900 hover:bg-slate-200 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition"
-          >
-            <i className={`fa-solid ${sidebarOpen ? "fa-bars-staggered" : "fa-bars"} text-base`}></i>
-          </button>
-
-          <div className="w-10 h-10 rounded-2xl bg-linear-to-tr from-violet-600 via-indigo-600 to-purple-500 flex items-center justify-center text-white shadow-lg shadow-violet-600/30">
-            <i className="fa-solid fa-ticket text-base"></i>
-          </div>
-
-          <div>
-            <h2 className="text-base md:text-xl font-extrabold text-slate-900 dark:text-white tracking-tight">
-              Redeem Code
-            </h2>
-            <p className="text-xs text-slate-500 dark:text-slate-400 hidden sm:block">
-              Beli code & lihat hasilnya
-            </p>
-          </div>
-        </div>
+      <AdminHeader
+        icon="fa-ticket"
+        iconClassName="from-violet-600 via-indigo-600 to-purple-500 shadow-violet-600/30"
+        title="Redeem Code"
+        subtitle="Beli code & lihat hasilnya"
+      >
 
         {isOwner && (
           <span className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-violet-100 dark:bg-violet-500/10 border border-violet-200 dark:border-violet-500/20 text-violet-700 dark:text-violet-400 text-xs font-bold">
@@ -420,7 +404,7 @@ export default function RedeemPage() {
             Owner Mode
           </span>
         )}
-      </header>
+      </AdminHeader>
 
       {/* CONTENT */}
       <div className="flex-1 overflow-y-auto scrollbar-hide p-4 md:p-8">

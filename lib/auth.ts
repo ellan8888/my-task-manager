@@ -46,6 +46,12 @@ export function getSession(req: Request & { cookies?: { get(name: string): { val
 
 export const isSuperadmin = (s: Session | null) => s?.role === "superadmin";
 
+/** Awal hari ini dalam WIB (UTC+7), dikembalikan sebagai Date UTC. */
+export function startOfTodayWIB(now = new Date()): Date {
+  const wib = new Date(now.getTime() + 7 * 3600_000);
+  return new Date(Date.UTC(wib.getUTCFullYear(), wib.getUTCMonth(), wib.getUTCDate()) - 7 * 3600_000);
+}
+
 /** Awal bulan ini dalam WIB (UTC+7), dikembalikan sebagai Date UTC. */
 export function startOfMonthWIB(now = new Date()): Date {
   const wib = new Date(now.getTime() + 7 * 3600_000);

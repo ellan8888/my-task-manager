@@ -2,12 +2,11 @@
 
 import { useEffect, useState } from "react";
 import { useToast } from "@/app/components/ToastProvider";
+import AdminHeader from "@/app/components/AdminHeader";
 import KategoriDropdown from "../stock/KategoriDropdown"; // ⚠️ Sesuaikan path jika berbeda
-import { useSidebar } from "../SidebarContext"; // ⚠️ Sesuaikan path jika berbeda
 
 export default function BulkMigratePage() {
   const toast = useToast();
-  const { sidebarOpen, toggleSidebar } = useSidebar();
 
   // ⭐ State user & akses
   const [user, setUser] = useState<any>(null);
@@ -93,16 +92,12 @@ export default function BulkMigratePage() {
   if (loadingUser) {
     return (
       <>
-        <header className="h-16 border-b border-slate-200 dark:border-slate-800/80 bg-white/80 dark:bg-slate-950/60 backdrop-blur-md px-4 md:px-8 flex items-center justify-between z-20 shrink-0">
-          <div className="flex items-center space-x-3">
-            <button
-              onClick={toggleSidebar}
-              className="w-10 h-10 flex items-center justify-center rounded-xl bg-slate-100 dark:bg-slate-900 hover:bg-slate-200 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 transition"
-            >
-              <i className={`fa-solid ${sidebarOpen ? "fa-bars-staggered" : "fa-bars"} text-base`}></i>
-            </button>
-          </div>
-        </header>
+        <AdminHeader
+          icon="fa-people-carry-box"
+          iconClassName="from-orange-500 to-amber-500 shadow-orange-500/30"
+          title="Migrasi Massal"
+          subtitle="Pindahkan semua akun antar kategori sekaligus"
+        />
         <div className="flex-1 flex items-center justify-center">
           <i className="fa-solid fa-spinner fa-spin text-3xl text-orange-500"></i>
         </div>
@@ -113,16 +108,12 @@ export default function BulkMigratePage() {
   if (user?.username !== "ellan" && user?.role !== "superadmin") {
     return (
       <>
-        <header className="h-16 border-b border-slate-200 dark:border-slate-800/80 bg-white/80 dark:bg-slate-950/60 backdrop-blur-md px-4 md:px-8 flex items-center justify-between z-20 shrink-0">
-          <div className="flex items-center space-x-3">
-            <button
-              onClick={toggleSidebar}
-              className="w-10 h-10 flex items-center justify-center rounded-xl bg-slate-100 dark:bg-slate-900 hover:bg-slate-200 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 transition"
-            >
-              <i className={`fa-solid ${sidebarOpen ? "fa-bars-staggered" : "fa-bars"} text-base`}></i>
-            </button>
-          </div>
-        </header>
+        <AdminHeader
+          icon="fa-people-carry-box"
+          iconClassName="from-orange-500 to-amber-500 shadow-orange-500/30"
+          title="Migrasi Massal"
+          subtitle="Pindahkan semua akun antar kategori sekaligus"
+        />
         <div className="flex-1 flex items-center justify-center p-8">
           <div className="text-center max-w-sm">
             <div className="w-16 h-16 rounded-2xl bg-rose-100 dark:bg-rose-500/10 text-rose-600 dark:text-rose-400 flex items-center justify-center mx-auto mb-4 border border-rose-200 dark:border-rose-500/20">
@@ -146,28 +137,12 @@ export default function BulkMigratePage() {
   return (
     <>
       {/* Header Utama */}
-      <header className="h-16 border-b border-slate-200 dark:border-slate-800/80 bg-white/80 dark:bg-slate-950/60 backdrop-blur-md px-4 md:px-8 flex items-center justify-between z-20 shrink-0">
-        <div className="flex items-center space-x-3">
-          <button
-            onClick={toggleSidebar}
-            className="w-10 h-10 flex items-center justify-center rounded-xl bg-slate-100 dark:bg-slate-900 hover:bg-slate-200 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 transition"
-            title={sidebarOpen ? "Tutup Sidebar" : "Buka Sidebar"}
-          >
-            <i className={`fa-solid ${sidebarOpen ? "fa-bars-staggered" : "fa-bars"} text-base`}></i>
-          </button>
-          <div className="w-10 h-10 rounded-2xl bg-linear-to-tr from-orange-500 to-amber-500 flex items-center justify-center text-white shadow-lg shadow-orange-500/30">
-            <i className="fa-solid fa-people-carry-box text-base"></i>
-          </div>
-          <div>
-            <h2 className="text-base md:text-xl font-extrabold text-slate-900 dark:text-white tracking-tight">
-              Migrasi Massal
-            </h2>
-            <p className="text-xs text-slate-500 dark:text-slate-400 hidden sm:block">
-              Pindahkan semua akun antar kategori sekaligus
-            </p>
-          </div>
-        </div>
-      </header>
+      <AdminHeader
+        icon="fa-people-carry-box"
+        iconClassName="from-orange-500 to-amber-500 shadow-orange-500/30"
+        title="Migrasi Massal"
+        subtitle="Pindahkan semua akun antar kategori sekaligus"
+      />
 
       {/* Konten */}
       <div className="flex-1 overflow-y-auto scrollbar-hide p-4 md:p-8">

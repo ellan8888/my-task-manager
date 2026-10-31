@@ -21,6 +21,14 @@ type MenuItemBelow = {
   migrasiOnly?: boolean;
 };
 
+function GroupLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <p className="px-4 pt-4 pb-1 text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">
+      {children}
+    </p>
+  );
+}
+
 export default function AdminSidebar({ sidebarOpen, setSidebarOpen }: Props) {
   const [isDark, setIsDark] = useState(true);
   const pathname = usePathname();
@@ -162,86 +170,112 @@ const isEllan = currentUser?.username?.toLowerCase() === "ellan";
   const isAkunActive = akunSubMenu.some((item) => item.active);
 
   // ══════════════════════════════════════════════════════
-  // MENU ITEMS — menu utama
   // ══════════════════════════════════════════════════════
-  const menuItems = [
+  // MENU — dikelompokkan per bagian
+  // Aturan akses TIDAK berubah: ellanOnly / superadminOnly
+  // ══════════════════════════════════════════════════════
+  const menuGroups: { key: string; label?: string; items: MenuItemBelow[] }[] = [
     {
-      href: "/",
-      icon: "fa-house",
-      label: "Task Manager",
-      active: pathname === "/",
+      key: "utama",
+      items: [
+        { href: "/", icon: "fa-book-open", label: "Tugas Kuliah", active: pathname === "/" },
+        { href: "/admin", icon: "fa-chart-line", label: "Dashboard Admin", active: pathname === "/admin" },
+      ],
     },
     {
-      href: "/admin",
-      icon: "fa-chart-line",
-      label: "Dashboard Admin",
-      active: pathname === "/admin",
+      key: "operasional",
+      label: "Operasional",
+      items: [
+        { href: "/joki", icon: "fa-list-check", label: "Daftar Order Jokian", active: pathname === "/joki" },
+        { href: "/queue", icon: "fa-list-ol", label: "Queue Jokian", active: pathname === "/queue", badge: "Live" },
+        {
+          href: "/admin/order-gagal",
+          icon: "fa-triangle-exclamation",
+          label: "Order Gagal",
+          active: pathname === "/admin/order-gagal",
+          badge: failedCount > 0 ? String(failedCount) : undefined,
+          badgeColor: "red",
+          superadminOnly: true,
+        },
+      ],
+    },
+    // (dropdown "Akun" dirender di antara Operasional dan Toko — isinya tidak diubah)
+    {
+      key: "toko",
+      label: "Toko",
+      items: [
+        { href: "/admin/kategori", icon: "fa-folder-tree", label: "Kategori Link", active: pathname === "/admin/kategori" },
+        { href: "/admin/redeem", icon: "fa-ticket", label: "Code Redfinger", active: pathname === "/admin/redeem" },
+      ],
+    },
+    {
+      key: "keuangan",
+      label: "Keuangan",
+      items: [
+        { href: "/admin/withdrawals", icon: "fa-wallet", label: "Penarikan", active: pathname === "/admin/withdrawals" },
+        {
+          href: "/admin/fee-report",
+          icon: "fa-money-bill-trend-up",
+          label: "Laporan Fee",
+          active: pathname === "/admin/fee-report",
+          ellanOnly: true,
+        },
+      ],
     },
   ];
 
-  // ══════════════════════════════════════════════════════
-  // MENU ITEMS BAWAH
-  // ══════════════════════════════════════════════════════
-  // Hapus dropdown Redeem sepenuhnya
-// Cukup 1 menu biasa di allMenuItemsBelow:
+  // ⭐ Filter menu berdasarkan role (sama seperti sebelumnya)
+  const canSee = (item: MenuItemBelow) => {
+    if (item.ellanOnly) return isEllan; // menu khusus ellan
+    if (item.superadminOnly) return isSuperadmin; // menu khusus superadmin
+    return true; // menu default — semua role bisa akses
+  };
 
-const allMenuItemsBelow: MenuItemBelow[] = [
-  {
-    href: "/admin/withdrawals",
-    icon: "fa-wallet",
-    label: "Penarikan",
-    active: pathname === "/admin/withdrawals",
-  },
-  {
-    href: "/admin/kategori",
-    icon: "fa-folder-tree",
-    label: "Kategori Link",
-    active: pathname === "/admin/kategori",
-  },
-  {
-    href: "/admin/order-gagal",
-    icon: "fa-triangle-exclamation",
-    label: "Order Gagal",
-    active: pathname === "/admin/order-gagal",
-    badge: failedCount > 0 ? String(failedCount) : undefined,
-    badgeColor: "red",
-    superadminOnly: true,
-  },
-  {
-    href: "/admin/fee-report",
-    icon: "fa-money-bill-trend-up",
-    label: "Laporan Fee",
-    active: pathname === "/admin/fee-report",
-    ellanOnly: true,
-  },
-  {
-    href: "/admin/redeem",
-    icon: "fa-ticket",
-    label: "Code Redfinger",
-    active: pathname === "/admin/redeem",
-  },
-  {
-    href: "/queue",
-    icon: "fa-list-ol",
-    label: "Queue Jokian",
-    active: pathname === "/queue",
-    badge: "Live",
-  },
-];
+  const visibleGroups = menuGroups
+    .map((g) => ({ ...g, items: g.items.filter(canSee) }))
+    .filter((g) => g.items.length > 0);
 
-// ⭐ Cek apakah user ini ellan
+  // Di HP, tutup sidebar setelah klik menu
+  const closeOnMobile = () => {
+    if (window.innerWidth < 768) setSidebarOpen(false);
+  };
 
-// ⭐ Filter menu berdasarkan role
-const menuItemsBelow = allMenuItemsBelow.filter((item) => {
-  // Menu khusus ellan
-  if (item.ellanOnly) return isEllan;
+  const renderItem = (item: MenuItemBelow) => (
+    <Link
+      key={item.href}
+      href={item.href}
+      onClick={closeOnMobile}
+      className={`flex items-center space-x-3.5 px-4 py-3 rounded-2xl text-sm font-semibold transition-all group border ${
+        item.active
+          ? "bg-violet-100 dark:bg-violet-500/15 text-violet-700 dark:text-violet-200 border-violet-200 dark:border-violet-500/40"
+          : "text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800/60 hover:text-slate-900 dark:hover:text-slate-200 border-transparent"
+      }`}
+    >
+      <i
+        className={`fa-solid ${item.icon} w-5 text-center ${
+          item.active
+            ? "text-violet-600 dark:text-violet-300"
+            : "group-hover:text-violet-500 dark:group-hover:text-violet-400"
+        } transition`}
+      ></i>
+      <span>{item.label}</span>
 
-  // Menu khusus superadmin
-  if (item.superadminOnly) return isSuperadmin;
+      {item.badge && (
+        <span
+          className={`ml-auto text-[10px] px-2 py-0.5 rounded font-mono ${
+            item.badgeColor === "red"
+              ? "bg-red-100 dark:bg-red-500/20 text-red-700 dark:text-red-300"
+              : "bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300"
+          }`}
+        >
+          {item.badge}
+        </span>
+      )}
 
-  // Menu default — semua role bisa akses
-  return true;
-});
+      {item.active && !item.badge && <span className="ml-auto w-2 h-2 rounded-full bg-violet-500"></span>}
+    </Link>
+  );
+
 
   return (
     <>
@@ -279,126 +313,73 @@ const menuItemsBelow = allMenuItemsBelow.filter((item) => {
           </div>
 
           {/* Menu */}
-          <nav className="mt-6 space-y-2">
-  {/* MENU ATAS */}
-  {menuItems.map((item) => (
-    <Link
-      key={item.href}
-      href={item.href}
-      className={`flex items-center space-x-3.5 px-4 py-3 rounded-2xl text-sm font-semibold transition-all group ${
-        item.active
-          ? "bg-violet-100 dark:bg-violet-500/15 text-violet-700 dark:text-violet-200 border border-violet-200 dark:border-violet-500/40"
-          : "text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800/60 hover:text-slate-900 dark:hover:text-slate-200"
-      }`}
-    >
-      <i
-        className={`fa-solid ${item.icon} w-5 text-center ${
-          item.active
-            ? "text-violet-600 dark:text-violet-300"
-            : "group-hover:text-violet-500 dark:group-hover:text-violet-400"
-        } transition`}
-      ></i>
-      <span>{item.label}</span>
-      {item.active && (
-        <span className="ml-auto w-2 h-2 rounded-full bg-violet-500"></span>
-      )}
-    </Link>
-  ))}
+          <nav className="mt-6 space-y-1.5">
+            {visibleGroups.map((group) => (
+              <div key={group.key} className="space-y-1.5">
+                {group.label && <GroupLabel>{group.label}</GroupLabel>}
+                {group.items.map(renderItem)}
 
-  {/* ═══════════════════════════════════════════════════════ */}
-  {/* DROPDOWN "AKUN" — SEJAJAR, BUKAN NESTED                 */}
-  {/* ═══════════════════════════════════════════════════════ */}
-  <div>
-    <button
-      onClick={() => toggleDropdown("akun")}
-      className={`w-full flex items-center space-x-3.5 px-4 py-3 rounded-2xl text-sm font-semibold transition-all group ${
-        isAkunActive
-          ? "bg-violet-100 dark:bg-violet-500/15 text-violet-700 dark:text-violet-200 border border-violet-200 dark:border-violet-500/40"
-          : "text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800/60 hover:text-slate-900 dark:hover:text-slate-200"
-      }`}
-    >
-      <i
-        className={`fa-solid fa-user-shield w-5 text-center ${
-          isAkunActive
-            ? "text-violet-600 dark:text-violet-300"
-            : "group-hover:text-violet-500 dark:group-hover:text-violet-400"
-        } transition`}
-      ></i>
-      <span>Akun</span>
-      <i
-        className={`fa-solid fa-chevron-down ml-auto text-xs transition-transform duration-200 ${
-          openDropdown === "akun" ? "rotate-180" : ""
-        }`}
-      ></i>
-    </button>
+                {/* Dropdown "Akun" — isi & perilaku sama seperti sebelumnya */}
+                {group.key === "operasional" && (
+                  <>
+                    <div className="pt-3 mt-3 border-t border-slate-200 dark:border-slate-800/80">
+                      <button
+                        onClick={() => toggleDropdown("akun")}
+                        className={`w-full flex items-center space-x-3.5 px-4 py-3 rounded-2xl text-sm font-semibold transition-all group ${
+                          isAkunActive
+                            ? "bg-violet-100 dark:bg-violet-500/15 text-violet-700 dark:text-violet-200 border border-violet-200 dark:border-violet-500/40"
+                            : "text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800/60 hover:text-slate-900 dark:hover:text-slate-200"
+                        }`}
+                      >
+                        <i
+                          className={`fa-solid fa-user-shield w-5 text-center ${
+                            isAkunActive
+                              ? "text-violet-600 dark:text-violet-300"
+                              : "group-hover:text-violet-500 dark:group-hover:text-violet-400"
+                          } transition`}
+                        ></i>
+                        <span>Akun</span>
+                        <i
+                          className={`fa-solid fa-chevron-down ml-auto text-xs transition-transform duration-200 ${
+                            openDropdown === "akun" ? "rotate-180" : ""
+                          }`}
+                        ></i>
+                      </button>
 
-    {openDropdown === "akun" && (
-      <div className="mt-1 ml-4 pl-4 border-l-2 border-slate-200 dark:border-slate-800 space-y-1">
-        {akunSubMenu.map((item) => (
-          <Link
-            key={item.href}
-            href={item.href}
-            className={`flex items-center space-x-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all group ${
-              item.active
-                ? "bg-violet-50 dark:bg-violet-500/10 text-violet-700 dark:text-violet-200"
-                : "text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800/60 hover:text-slate-900 dark:hover:text-slate-200"
-            }`}
-          >
-            <i
-              className={`fa-solid ${item.icon} w-4 text-center text-xs ${
-                item.active
-                  ? "text-violet-600 dark:text-violet-300"
-                  : "group-hover:text-violet-500 dark:group-hover:text-violet-400"
-              } transition`}
-            ></i>
-            <span>{item.label}</span>
-            {item.active && (
-              <span className="ml-auto w-1.5 h-1.5 rounded-full bg-violet-500"></span>
-            )}
-          </Link>
-        ))}
-      </div>
-    )}
-  </div>
-
-  {/* MENU BAWAH */}
-  {menuItemsBelow.map((item) => (
-    <Link
-      key={item.href}
-      href={item.href}
-      className={`flex items-center space-x-3.5 px-4 py-3 rounded-2xl text-sm font-semibold transition-all group ${
-        item.active
-          ? "bg-violet-100 dark:bg-violet-500/15 text-violet-700 dark:text-violet-200 border border-violet-200 dark:border-violet-500/40"
-          : "text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800/60 hover:text-slate-900 dark:hover:text-slate-200"
-      }`}
-    >
-      <i
-        className={`fa-solid ${item.icon} w-5 text-center ${
-          item.active
-            ? "text-violet-600 dark:text-violet-300"
-            : "group-hover:text-violet-500 dark:group-hover:text-violet-400"
-        } transition`}
-      ></i>
-      <span>{item.label}</span>
-
-      {item.badge && (
-        <span
-          className={`ml-auto text-[10px] px-2 py-0.5 rounded font-mono ${
-            item.badgeColor === "red"
-              ? "bg-red-100 dark:bg-red-500/20 text-red-700 dark:text-red-300"
-              : "bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300"
-          }`}
-        >
-          {item.badge}
-        </span>
-      )}
-
-      {item.active && !item.badge && (
-        <span className="ml-auto w-2 h-2 rounded-full bg-violet-500"></span>
-      )}
-    </Link>
-  ))}
-</nav>
+                      {openDropdown === "akun" && (
+                        <div className="mt-1 ml-4 pl-4 border-l-2 border-slate-200 dark:border-slate-800 space-y-1">
+                          {akunSubMenu.map((item) => (
+                            <Link
+                              key={item.href}
+                              href={item.href}
+                              onClick={closeOnMobile}
+                              className={`flex items-center space-x-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all group ${
+                                item.active
+                                  ? "bg-violet-50 dark:bg-violet-500/10 text-violet-700 dark:text-violet-200"
+                                  : "text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800/60 hover:text-slate-900 dark:hover:text-slate-200"
+                              }`}
+                            >
+                              <i
+                                className={`fa-solid ${item.icon} w-4 text-center text-xs ${
+                                  item.active
+                                    ? "text-violet-600 dark:text-violet-300"
+                                    : "group-hover:text-violet-500 dark:group-hover:text-violet-400"
+                                } transition`}
+                              ></i>
+                              <span>{item.label}</span>
+                              {item.active && (
+                                <span className="ml-auto w-1.5 h-1.5 rounded-full bg-violet-500"></span>
+                              )}
+                            </Link>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </>
+                )}
+              </div>
+            ))}
+          </nav>
         </div>
 
         {/* Bottom: User + Theme */}

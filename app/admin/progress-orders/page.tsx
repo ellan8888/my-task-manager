@@ -3,6 +3,7 @@
 
 import { useEffect, useState } from "react";
 
+import { useToast } from "@/app/components/ToastProvider";
 type ProgressOrder = {
   id: number;
   order_id: string;
@@ -16,6 +17,7 @@ type ProgressOrder = {
 };
 
 export default function ProgressOrdersPage() {
+  const toast = useToast();
   const [orders, setOrders] = useState<ProgressOrder[]>([]);
   const [loading, setLoading] = useState(true);
   const [webhookInput, setWebhookInput] = useState<Record<string, string>>({});
@@ -38,7 +40,7 @@ export default function ProgressOrdersPage() {
   const handleConfirm = async (order_id: string) => {
     const webhook = webhookInput[order_id];
     if (!webhook) {
-      alert("Webhook wajib diisi");
+      toast.warning("Webhook wajib diisi");
       return;
     }
     
@@ -50,10 +52,10 @@ export default function ProgressOrdersPage() {
     
     const data = await res.json();
     if (data.success) {
-      alert("Order confirmed!");
+      toast.success("Order confirmed!");
       loadOrders();
     } else {
-      alert(`Gagal: ${data.message}`);
+      toast.error(`Gagal: ${data.message}`);
     }
   };
   

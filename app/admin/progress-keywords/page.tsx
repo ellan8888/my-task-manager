@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 
+import { useToast } from "@/app/components/ToastProvider";
 type ProgressKeyword = {
   keyword: string;
   label: string;
@@ -11,6 +12,7 @@ type ProgressKeyword = {
 };
 
 export default function ProgressKeywordsPage() {
+  const toast = useToast();
   const [keywords, setKeywords] = useState<Record<string, ProgressKeyword>>({});
   const [loading, setLoading] = useState(true);
   
@@ -36,7 +38,7 @@ export default function ProgressKeywordsPage() {
   
   const handleAdd = async () => {
     if (!newKeyword || !newLabel) {
-      alert("Keyword & label wajib");
+      toast.warning("Keyword & label wajib");
       return;
     }
     
@@ -58,7 +60,7 @@ export default function ProgressKeywordsPage() {
       setNewDescription("");
       load();
     } else {
-      alert(`Gagal: ${data.message}`);
+      toast.error(`Gagal: ${data.message}`);
     }
   };
   

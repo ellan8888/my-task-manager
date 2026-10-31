@@ -2,8 +2,10 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useSidebar } from "../SidebarContext";
 
+import AdminHeader from "@/app/components/AdminHeader";
+import { useToast } from "@/app/components/ToastProvider";
+import { useConfirmAsync } from "@/app/components/ConfirmDialog";
 type FeeDetail = {
   id: number;
   order_id: string;
@@ -33,7 +35,8 @@ type FeeRule = {
 };
 
 export default function FeeReportPage() {
-  const { sidebarOpen, toggleSidebar } = useSidebar();
+  const toast = useToast();
+  const { confirm, confirmDialog } = useConfirmAsync();
 
   const [user, setUser] = useState<any>(null);
   const [summary, setSummary] = useState<FeeSummary[]>([]);
@@ -138,11 +141,11 @@ export default function FeeReportPage() {
         );
         setEditingFee(null);
       } else {
-        alert(data.message || "Gagal update fee");
+        toast.error(data.message || "Gagal update fee");
       }
     } catch (err) {
       console.error(err);
-      alert("Error update fee");
+      toast.error("Error update fee");
     } finally {
       setActionLoading(false);
     }
@@ -171,7 +174,7 @@ export default function FeeReportPage() {
           )
         );
       } else {
-        alert(data.message || "Gagal toggle");
+        toast.error(data.message || "Gagal toggle");
       }
     } catch (err) {
       console.error(err);
@@ -202,7 +205,7 @@ export default function FeeReportPage() {
         setNewFeeAmount(4);
         setShowAddForm(false);
       } else {
-        alert(data.message || "Gagal tambah joki");
+        toast.error(data.message || "Gagal tambah joki");
       }
     } catch (err) {
       console.error(err);
@@ -213,7 +216,15 @@ export default function FeeReportPage() {
 
   const handleDeleteJoki = async (jokiName: string) => {
     if (!user) return;
-    if (!confirm(`Hapus fee rule untuk "${jokiName}"?`)) return;
+    if (
+      !(await confirm({
+        title: "Hapus fee rule?",
+        message: `Fee rule untuk "${jokiName}" akan dihapus.`,
+        variant: "danger",
+        confirmText: "Ya, hapus",
+      }))
+    )
+      return;
     setActionLoading(true);
 
     try {
@@ -226,7 +237,7 @@ export default function FeeReportPage() {
       if (data.success) {
         setFeeRules((prev) => prev.filter((r) => r.joki_name !== jokiName));
       } else {
-        alert(data.message || "Gagal hapus");
+        toast.error(data.message || "Gagal hapus");
       }
     } catch (err) {
       console.error(err);
@@ -281,16 +292,12 @@ export default function FeeReportPage() {
   if (!loading && user?.username !== "ellan") {
     return (
       <>
-        <header className="h-16 border-b border-slate-200 dark:border-slate-800/80 bg-white/80 dark:bg-slate-950/60 backdrop-blur-md px-4 md:px-8 flex items-center justify-between z-20 shrink-0">
-          <div className="flex items-center space-x-3">
-            <button
-              onClick={toggleSidebar}
-              className="w-10 h-10 flex items-center justify-center rounded-xl bg-slate-100 dark:bg-slate-900 hover:bg-slate-200 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 transition"
-            >
-              <i className={`fa-solid ${sidebarOpen ? "fa-bars-staggered" : "fa-bars"} text-base`}></i>
-            </button>
-          </div>
-        </header>
+        <AdminHeader
+          icon="fa-money-bill-trend-up"
+          iconClassName="from-emerald-600 via-green-600 to-teal-500 shadow-emerald-600/30"
+          title="Laporan Fee"
+          subtitle="Data rahasia — cuma owner yang bisa akses"
+        />
         <div className="flex-1 flex items-center justify-center p-8">
           <div className="text-center max-w-sm">
             <div className="w-16 h-16 rounded-2xl bg-rose-100 dark:bg-rose-500/10 text-rose-600 dark:text-rose-400 flex items-center justify-center mx-auto mb-4 border border-rose-200 dark:border-rose-500/20">
@@ -311,16 +318,12 @@ export default function FeeReportPage() {
   if (loading) {
     return (
       <>
-        <header className="h-16 border-b border-slate-200 dark:border-slate-800/80 bg-white/80 dark:bg-slate-950/60 backdrop-blur-md px-4 md:px-8 flex items-center justify-between z-20 shrink-0">
-          <div className="flex items-center space-x-3">
-            <button
-              onClick={toggleSidebar}
-              className="w-10 h-10 flex items-center justify-center rounded-xl bg-slate-100 dark:bg-slate-900 hover:bg-slate-200 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 transition"
-            >
-              <i className={`fa-solid ${sidebarOpen ? "fa-bars-staggered" : "fa-bars"} text-base`}></i>
-            </button>
-          </div>
-        </header>
+        <AdminHeader
+          icon="fa-money-bill-trend-up"
+          iconClassName="from-emerald-600 via-green-600 to-teal-500 shadow-emerald-600/30"
+          title="Laporan Fee"
+          subtitle="Data rahasia — cuma owner yang bisa akses"
+        />
         <div className="flex-1 flex items-center justify-center">
           <i className="fa-solid fa-spinner fa-spin text-3xl text-emerald-600"></i>
         </div>
@@ -334,29 +337,12 @@ export default function FeeReportPage() {
   return (
     <>
       {/* HEADER */}
-      <header className="h-16 border-b border-slate-200 dark:border-slate-800/80 bg-white/80 dark:bg-slate-950/60 backdrop-blur-md px-4 md:px-8 flex items-center justify-between z-20 shrink-0">
-        <div className="flex items-center space-x-3">
-          <button
-            onClick={toggleSidebar}
-            className="w-10 h-10 flex items-center justify-center rounded-xl bg-slate-100 dark:bg-slate-900 hover:bg-slate-200 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition"
-            title={sidebarOpen ? "Tutup Sidebar" : "Buka Sidebar"}
-          >
-            <i className={`fa-solid ${sidebarOpen ? "fa-bars-staggered" : "fa-bars"} text-base`}></i>
-          </button>
-
-          <div className="w-10 h-10 rounded-2xl bg-linear-to-tr from-emerald-600 via-green-600 to-teal-500 flex items-center justify-center text-white shadow-lg shadow-emerald-600/30">
-            <i className="fa-solid fa-money-bill-trend-up text-base"></i>
-          </div>
-
-          <div>
-            <h2 className="text-base md:text-xl font-extrabold text-slate-900 dark:text-white tracking-tight">
-              Laporan Fee
-            </h2>
-            <p className="text-xs text-slate-500 dark:text-slate-400 hidden sm:block">
-              Data rahasia — cuma owner yang bisa akses
-            </p>
-          </div>
-        </div>
+      <AdminHeader
+        icon="fa-money-bill-trend-up"
+        iconClassName="from-emerald-600 via-green-600 to-teal-500 shadow-emerald-600/30"
+        title="Laporan Fee"
+        subtitle="Data rahasia — cuma owner yang bisa akses"
+      >
 
         <div className="flex items-center gap-2">
           <span className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-100 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 text-emerald-700 dark:text-emerald-400 text-xs font-bold">
@@ -364,7 +350,7 @@ export default function FeeReportPage() {
             Owner Only
           </span>
         </div>
-      </header>
+      </AdminHeader>
 
       {/* CONTENT */}
       <div className="flex-1 overflow-y-auto scrollbar-hide p-4 md:p-8 space-y-6">
@@ -656,7 +642,7 @@ export default function FeeReportPage() {
 
           {/* DESKTOP — Tabel */}
           <div className="hidden md:block overflow-x-auto">
-            <table className="w-full">
+            <table className="w-full table-cards">
               <thead className="bg-slate-50 dark:bg-slate-950/50">
                 <tr className="text-xs font-bold text-slate-500 uppercase">
                   <th className="text-left p-3">Joki</th>
@@ -672,19 +658,19 @@ export default function FeeReportPage() {
                     key={row.joki_name}
                     className="border-t border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-900/30 transition"
                   >
-                    <td className="p-3 font-bold capitalize text-slate-900 dark:text-white">
+                    <td data-label="Joki" className="p-3 font-bold capitalize text-slate-900 dark:text-white">
                       {row.joki_name}
                     </td>
-                    <td className="p-3 text-right font-mono text-slate-600 dark:text-slate-400">
+                    <td data-label="Gross" className="p-3 text-right font-mono text-slate-600 dark:text-slate-400">
                       Rp {row.total_gross.toLocaleString("id-ID")}
                     </td>
-                    <td className="p-3 text-right font-mono font-black text-emerald-600 dark:text-emerald-400">
+                    <td data-label="Fee" className="p-3 text-right font-mono font-black text-emerald-600 dark:text-emerald-400">
                       Rp {row.total_fee.toLocaleString("id-ID")}
                     </td>
-                    <td className="p-3 text-right font-mono text-slate-900 dark:text-white">
+                    <td data-label="Net" className="p-3 text-right font-mono text-slate-900 dark:text-white">
                       Rp {row.total_net.toLocaleString("id-ID")}
                     </td>
-                    <td className="p-3 text-right text-slate-500 dark:text-slate-400">
+                    <td data-label="Order" className="p-3 text-right text-slate-500 dark:text-slate-400">
                       {row.total_orders}
                     </td>
                   </tr>
@@ -910,7 +896,7 @@ export default function FeeReportPage() {
           </div>
 
           <div className="hidden md:block overflow-x-auto overflow-y-auto max-h-96 scrollbar-hide">
-            <table className="w-full">
+            <table className="w-full table-cards">
               <thead className="bg-slate-50 dark:bg-slate-950/50 sticky top-0">
                 <tr className="text-xs font-bold text-slate-500 uppercase">
                   <th className="text-left p-3">Tanggal</th>
@@ -927,7 +913,7 @@ export default function FeeReportPage() {
                     key={row.id}
                     className="border-t border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-900/30 transition"
                   >
-                    <td className="p-3 text-xs text-slate-500 whitespace-nowrap">
+                    <td data-label="Tanggal" className="p-3 text-xs text-slate-500 whitespace-nowrap">
                       {new Date(row.created_at).toLocaleString("id-ID", {
                         day: "2-digit",
                         month: "short",
@@ -936,19 +922,19 @@ export default function FeeReportPage() {
                         minute: "2-digit",
                       })}
                     </td>
-                    <td className="p-3 font-mono text-xs text-slate-700 dark:text-slate-300 whitespace-nowrap">
+                    <td data-label="Order ID" className="p-3 font-mono text-xs text-slate-700 dark:text-slate-300 whitespace-nowrap">
                       {row.order_id}
                     </td>
-                    <td className="p-3 text-xs font-bold capitalize text-slate-900 dark:text-white">
+                    <td data-label="Joki" className="p-3 text-xs font-bold capitalize text-slate-900 dark:text-white">
                       {row.joki_name}
                     </td>
-                    <td className="p-3 text-right font-mono text-xs text-slate-600 dark:text-slate-400">
+                    <td data-label="Gross" className="p-3 text-right font-mono text-xs text-slate-600 dark:text-slate-400">
                       Rp {row.gross_amount.toLocaleString("id-ID")}
                     </td>
-                    <td className="p-3 text-right font-mono text-xs font-black text-emerald-600 dark:text-emerald-400">
+                    <td data-label="Fee" className="p-3 text-right font-mono text-xs font-black text-emerald-600 dark:text-emerald-400">
                       Rp {row.fee_amount.toLocaleString("id-ID")}
                     </td>
-                    <td className="p-3 text-right font-mono text-xs text-slate-900 dark:text-white">
+                    <td data-label="Net" className="p-3 text-right font-mono text-xs text-slate-900 dark:text-white">
                       Rp {row.net_amount.toLocaleString("id-ID")}
                     </td>
                   </tr>
@@ -1062,6 +1048,7 @@ export default function FeeReportPage() {
         </div>
 
       </div>
+      {confirmDialog}
     </>
   );
 }

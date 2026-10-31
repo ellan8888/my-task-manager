@@ -3,9 +3,9 @@
 import { useEffect, useState } from "react";
 import KategoriDropdown from "./KategoriDropdown";
 import { useToast } from "@/app/components/ToastProvider";
-import { useSidebar } from "../SidebarContext";
 import { SkeletonList } from "@/app/components/Skeleton";
 
+import AdminHeader from "@/app/components/AdminHeader";
 type StockAccount = {
   id: number;
   username: string;
@@ -35,7 +35,7 @@ export default function StockPage() {
   const [loading, setLoading] = useState(true);
   const [kategoriList, setKategoriList] = useState<KategoriLink[]>([]);
   const [loadingKategori, setLoadingKategori] = useState(true);
-  const { sidebarOpen, toggleSidebar } = useSidebar();
+
   const [searchQuery, setSearchQuery] = useState("");
     // State untuk Modal Pindah Kategori
   const [moveModalOpen, setMoveModalOpen] = useState(false);
@@ -335,34 +335,12 @@ export default function StockPage() {
       `}</style>
 
       {/* Header */}
-      <header className="h-16 border-b border-slate-200 dark:border-slate-800/80 bg-white/80 dark:bg-slate-950/60 backdrop-blur-md px-4 md:px-8 flex items-center justify-between z-20 shrink-0">
-        <div className="flex items-center space-x-3">
-          <button
-            onClick={toggleSidebar}
-            className="w-10 h-10 flex items-center justify-center rounded-xl bg-slate-100 dark:bg-slate-900 hover:bg-slate-200 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition"
-            title={sidebarOpen ? "Tutup Sidebar" : "Buka Sidebar"}
-          >
-            <i
-              className={`fa-solid ${
-                sidebarOpen ? "fa-bars-staggered" : "fa-bars"
-              } text-base`}
-            ></i>
-          </button>
-
-          <div className="w-10 h-10 rounded-2xl bg-linear-to-tr from-violet-600 via-indigo-600 to-purple-500 flex items-center justify-center text-white shadow-lg shadow-violet-600/30">
-            <i className="fa-solid fa-boxes-stacked text-base"></i>
-          </div>
-
-          <div>
-            <h2 className="text-base md:text-xl font-extrabold text-slate-900 dark:text-white tracking-tight">
-              Stock Akun Roblox
-            </h2>
-            <p className="text-xs text-slate-500 dark:text-slate-400 hidden sm:block">
-              Kelola stok akun yang dijual
-            </p>
-          </div>
-        </div>
-      </header>
+      <AdminHeader
+        icon="fa-boxes-stacked"
+        iconClassName="from-violet-600 via-indigo-600 to-purple-500 shadow-violet-600/30"
+        title="Stock Akun Roblox"
+        subtitle="Kelola stok akun yang dijual"
+      />
 
       {/* Content */}
       <div className="flex-1 overflow-y-auto custom-scrollbar p-4 md:p-8">
@@ -653,7 +631,7 @@ export default function StockPage() {
 
                     {/* Table */}
                     <div className="hidden md:block overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800">
-                      <table className="w-full text-sm table-fixed">
+                      <table className="w-full text-sm table-fixed table-cards">
                         <thead className="bg-slate-50 dark:bg-slate-950/50">
                           <tr className="text-left text-[10px] uppercase text-slate-500 dark:text-slate-400 font-bold">
                             <th className="px-3 py-2.5 w-[5%] text-center">#</th>
@@ -671,25 +649,25 @@ export default function StockPage() {
                               key={acc.id}
                               className="border-t border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-900/40 transition"
                             >
-                              <td className="px-3 py-2.5 w-[5%] text-xs text-slate-400 font-mono text-center">
+                              <td data-label="#" className="px-3 py-2.5 w-[5%] text-xs text-slate-400 font-mono text-center">
                                 {idx + 1}
                               </td>
-                              <td className="px-3 py-2.5 w-[20%]">
+                              <td data-label="Username" className="px-3 py-2.5 w-[20%]">
                                 <span className="font-mono font-bold text-xs text-slate-900 dark:text-white truncate block">
                                   {acc.username}
                                 </span>
                               </td>
-                              <td className="px-3 py-2.5 w-[13%] hidden md:table-cell">
+                              <td data-label="Password" className="px-3 py-2.5 w-[13%] hidden md:table-cell">
                                 <span className="font-mono text-[11px] text-slate-500 dark:text-slate-400">
                                   {acc.password ? "••••••••" : "—"}
                                 </span>
                               </td>
-                              <td className="px-3 py-2.5 w-[13%]">
+                              <td data-label="Added By" className="px-3 py-2.5 w-[13%]">
                                 <span className="text-xs text-slate-600 dark:text-slate-300 truncate block">
                                   {acc.added_by || "—"}
                                 </span>
                               </td>
-                              <td className="px-3 py-2.5 w-[17%]">
+                              <td data-label="Status" className="px-3 py-2.5 w-[17%]">
                                 <div className="flex items-center gap-1.5">
                                   {acc.used ? (
                                     <span className="px-2 py-0.5 bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 text-[10px] font-bold rounded-md inline-flex items-center gap-1 whitespace-nowrap">
@@ -704,7 +682,7 @@ export default function StockPage() {
                                   )}
                                 </div>
                               </td>
-                              <td className="px-3 py-2.5 w-[17%] hidden lg:table-cell">
+                              <td data-label="Created" className="px-3 py-2.5 w-[17%] hidden lg:table-cell">
                                 <span className="text-[10px] text-slate-400 whitespace-nowrap">
                                   {new Date(acc.created_at).toLocaleDateString("id-ID", {
                                     day: "2-digit",
@@ -713,7 +691,7 @@ export default function StockPage() {
                                   })}
                                 </span>
                               </td>
-                              <td className="px-3 py-2.5 w-[10%] text-right">
+                              <td data-label="Aksi" className="px-3 py-2.5 w-[10%] text-right">
                                 <div className="flex items-center justify-end gap-1">
                                   {/* Tombol Pindah Kategori */}
                                   <button

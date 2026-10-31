@@ -4,10 +4,71 @@ import { useEffect, useState } from "react";
 import WithdrawFormModal from "@/app/components/WithdrawFormModal";
 import ApproveModal from "@/app/components/ApproveModal";
 import AddBankModal from "@/app/components/AddBankModal";
-import { useSidebar } from "../SidebarContext";
+
+import AdminHeader from "@/app/components/AdminHeader";
+import { useToast } from "@/app/components/ToastProvider";
+import { useConfirmAsync } from "@/app/components/ConfirmDialog";
+type HistoryFilter = "all" | "pending" | "approved" | "rejected";
+
+const HISTORY_TABS: { key: HistoryFilter; label: string; dot: string }[] = [
+  { key: "all", label: "Semua", dot: "" },
+  { key: "pending", label: "Menunggu", dot: "bg-amber-500" },
+  { key: "approved", label: "Disetujui", dot: "bg-emerald-500" },
+  { key: "rejected", label: "Ditolak", dot: "bg-rose-500" },
+];
+
+function HistoryTabs({
+  value,
+  onChange,
+  counts,
+}: {
+  value: HistoryFilter;
+  onChange: (v: HistoryFilter) => void;
+  counts: Record<HistoryFilter, number>;
+}) {
+  return (
+    <div className="px-4 py-2 border-b border-slate-200 dark:border-slate-800 flex gap-1.5 overflow-x-auto scrollbar-hide">
+      {HISTORY_TABS.map((t) => (
+        <button
+          key={t.key}
+          onClick={() => onChange(t.key)}
+          className={`shrink-0 px-3 py-1.5 rounded-lg text-[11px] font-bold transition flex items-center gap-1.5 ${
+            value === t.key
+              ? "bg-violet-600 text-white shadow-sm"
+              : "bg-slate-100 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700"
+          }`}
+        >
+          {t.dot && <span className={`w-1.5 h-1.5 rounded-full ${t.dot}`}></span>}
+          {t.label}
+          <span className={`text-[10px] ${value === t.key ? "text-violet-200" : "text-slate-400"}`}>{counts[t.key]}</span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/** Thumbnail bukti transfer — klik untuk buka modal bukti yang sudah ada */
+function ProofThumb({ url, onOpen }: { url: string; onOpen: (url: string) => void }) {
+  return (
+    <button
+      onClick={() => onOpen(url)}
+      className="mt-1.5 inline-flex items-center gap-2 p-1 pr-2.5 rounded-lg border border-emerald-200 dark:border-emerald-500/30 bg-emerald-50 dark:bg-emerald-500/10 hover:border-emerald-400 transition group"
+      title="Lihat bukti pembayaran"
+    >
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={url} alt="Bukti pembayaran" className="w-9 h-9 rounded-md object-cover bg-white" loading="lazy" />
+      <span className="text-[10px] font-bold text-emerald-700 dark:text-emerald-400 flex items-center gap-1">
+        <i className="fa-solid fa-receipt"></i>
+        Bukti transfer
+        <i className="fa-solid fa-up-right-and-down-left-from-center text-[8px] opacity-60 group-hover:opacity-100"></i>
+      </span>
+    </button>
+  );
+}
 
 export default function WithdrawalsPage() {
-  const { sidebarOpen, toggleSidebar } = useSidebar();
+  const toast = useToast();
+  const { confirm, confirmDialog } = useConfirmAsync();
 
   const [currentUser, setCurrentUser] = useState<{
     username: string;
@@ -31,6 +92,7 @@ export default function WithdrawalsPage() {
   const [bankAccounts, setBankAccounts] = useState<any[]>([]);
   const [showBankModal, setShowBankModal] = useState(false);
   const [proofModal, setProofModal] = useState<string | null>(null);
+  const [historyFilter, setHistoryFilter] = useState<HistoryFilter>("all");
 
   useEffect(() => {
     fetch("/api/auth/me")
@@ -160,6 +222,16 @@ export default function WithdrawalsPage() {
   }, [currentUser]);
 
   const formatRupiah = (num: number) => "Rp " + num.toLocaleString("id-ID");
+
+  // ⭐ Tab status — hanya menyaring tampilan dari data yang sudah dimuat
+  const historyCounts: Record<HistoryFilter, number> = {
+    all: withdrawals.length,
+    pending: withdrawals.filter((w) => w.status === "pending").length,
+    approved: withdrawals.filter((w) => w.status === "approved").length,
+    rejected: withdrawals.filter((w) => w.status === "rejected").length,
+  };
+  const filteredHistory =
+    historyFilter === "all" ? withdrawals : withdrawals.filter((w) => w.status === historyFilter);
     // ⭐ Helper: filter belanja code dari list withdrawals
   const isPurchaseCode = (w: any) =>
     (w.note || "").startsWith("[BELI CODE]");
@@ -170,31 +242,12 @@ export default function WithdrawalsPage() {
   return (
     <>
       {/* Header */}
-      <header className="h-16 border-b border-slate-200 dark:border-slate-800/80 bg-white/80 dark:bg-slate-950/60 backdrop-blur-md px-4 md:px-8 flex items-center justify-between z-20 shrink-0">
-        <div className="flex items-center space-x-3">
-          <button
-            onClick={toggleSidebar}
-            className="w-10 h-10 flex items-center justify-center rounded-xl bg-slate-100 dark:bg-slate-900 hover:bg-slate-200 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition"
-          >
-            <i className={`fa-solid ${sidebarOpen ? "fa-bars-staggered" : "fa-bars"} text-base`}></i>
-          </button>
-
-          <div className="w-10 h-10 rounded-2xl bg-linear-to-tr from-emerald-600 via-green-600 to-teal-500 flex items-center justify-center text-white shadow-lg shadow-emerald-600/30">
-            <i className="fa-solid fa-wallet text-base"></i>
-          </div>
-
-          <div>
-            <h2 className="text-base md:text-xl font-extrabold text-slate-900 dark:text-white tracking-tight">
-              Penarikan Pendapatan
-            </h2>
-            <p className="text-xs text-slate-500 dark:text-slate-400 hidden sm:block">
-              {currentUser?.role === "superadmin"
-                ? "Review & approve request penarikan"
-                : "Ajukan penarikan pendapatan kamu"}
-            </p>
-          </div>
-        </div>
-      </header>
+      <AdminHeader
+        icon="fa-wallet"
+        iconClassName="from-emerald-600 via-green-600 to-teal-500 shadow-emerald-600/30"
+        title="Penarikan Pendapatan"
+        subtitle={<>{currentUser?.role === "superadmin" ? "Review & approve request penarikan" : "Ajukan penarikan pendapatan kamu"}</>}
+      />
 
       <div className="flex-1 overflow-y-auto scrollbar-hide p-4 md:p-8">
         {loading ? (
@@ -295,18 +348,20 @@ export default function WithdrawalsPage() {
                       </span>
                     </div>
 
-                    {withdrawals.length === 0 ? (
+                    <HistoryTabs value={historyFilter} onChange={setHistoryFilter} counts={historyCounts} />
+
+                    {filteredHistory.length === 0 ? (
                       <div className="text-center py-16">
                         <div className="w-12 h-12 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-400 flex items-center justify-center mx-auto mb-3">
                           <i className="fa-solid fa-inbox text-lg"></i>
                         </div>
                         <p className="text-sm font-semibold text-slate-500">
-                          Belum ada penarikan
+                          {historyFilter === "all" ? "Belum ada penarikan" : "Tidak ada penarikan dengan status ini"}
                         </p>
                       </div>
                     ) : (
                       <div className="divide-y divide-slate-100 dark:divide-slate-800">
-                        {withdrawals.map((w) => (
+                        {filteredHistory.map((w) => (
                           <div
                             key={w.id}
                             className="px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-900/50 transition flex items-center justify-between gap-3"
@@ -353,13 +408,7 @@ export default function WithdrawalsPage() {
 
                                 {/* ⭐ BUKTI PEMBAYARAN — cuma muncul kalau approved & ada URL */}
                                 {w.status === "approved" && w.payment_proof_url && (
-                                  <button
-                                    onClick={() => setProofModal(w.payment_proof_url)}
-                                    className="mt-1.5 inline-flex items-center gap-1 text-[10px] font-bold text-emerald-600 dark:text-emerald-400 hover:underline"
-                                  >
-                                    <i className="fa-solid fa-receipt"></i>
-                                    Lihat Bukti Pembayaran
-                                  </button>
+                                  <ProofThumb url={w.payment_proof_url} onOpen={setProofModal} />
                                 )}
                               </div>
                             </div>
@@ -516,7 +565,7 @@ export default function WithdrawalsPage() {
                               <button
                                 onClick={() => {
                                   navigator.clipboard.writeText(bank.account_number);
-                                  alert("Nomor dicopy!");
+                                  toast.success("Nomor rekening dicopy");
                                 }}
                                 className="flex-1 py-1 rounded text-[10px] font-bold bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800 transition flex items-center justify-center gap-1"
                               >
@@ -541,7 +590,15 @@ export default function WithdrawalsPage() {
                               )}
                               <button
                                 onClick={async () => {
-                                  if (!confirm(`Hapus rekening ${bank.bank_name}?`)) return;
+                                  if (
+                                    !(await confirm({
+                                      title: "Hapus rekening?",
+                                      message: `Rekening ${bank.bank_name} akan dihapus.`,
+                                      variant: "danger",
+                                      confirmText: "Ya, hapus",
+                                    }))
+                                  )
+                                    return;
                                   await fetch(`/api/bank-accounts?id=${bank.id}`, { method: "DELETE" });
                                   reloadBanks();
                                 }}
@@ -690,18 +747,20 @@ export default function WithdrawalsPage() {
                     </span>
                   </div>
 
-                  {withdrawals.length === 0 ? (
+                  <HistoryTabs value={historyFilter} onChange={setHistoryFilter} counts={historyCounts} />
+
+                  {filteredHistory.length === 0 ? (
                     <div className="text-center py-14">
                       <div className="w-12 h-12 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-400 flex items-center justify-center mx-auto mb-3">
                         <i className="fa-solid fa-inbox text-lg"></i>
                       </div>
                       <p className="text-sm font-semibold text-slate-500">
-                        Belum ada penarikan
+                        {historyFilter === "all" ? "Belum ada penarikan" : "Tidak ada penarikan dengan status ini"}
                       </p>
                     </div>
                   ) : (
                     <div className="divide-y divide-slate-100 dark:divide-slate-800">
-                      {withdrawals.map((w) => (
+                      {filteredHistory.map((w) => (
                         <div
                           key={w.id}
                           className="px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-900/50 transition flex items-center justify-between gap-3"
@@ -736,13 +795,7 @@ export default function WithdrawalsPage() {
 
                               {/* ⭐ BUKTI PEMBAYARAN — buat superadmin juga */}
                               {w.status === "approved" && w.payment_proof_url && (
-                                <button
-                                  onClick={() => setProofModal(w.payment_proof_url)}
-                                  className="mt-1 inline-flex items-center gap-1 text-[10px] font-bold text-emerald-600 dark:text-emerald-400 hover:underline"
-                                >
-                                  <i className="fa-solid fa-receipt"></i>
-                                  Lihat Bukti
-                                </button>
+                                <ProofThumb url={w.payment_proof_url} onOpen={setProofModal} />
                               )}
                             </div>
                           </div>
@@ -882,6 +935,7 @@ export default function WithdrawalsPage() {
     </div>
   </div>
 )}
+      {confirmDialog}
     </>
   );
 }

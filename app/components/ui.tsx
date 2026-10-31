@@ -58,13 +58,16 @@ export function StatCard({
   color,
   footerIcon,
   footerText,
+  compact = false,
 }: {
   label: string;
-  value: number;
+  value: ReactNode;
   icon: string;
   color: UiColor;
   footerIcon: string;
   footerText: string;
+  /** Angka lebih kecil — untuk nilai panjang seperti rupiah */
+  compact?: boolean;
 }) {
   const c = STAT_COLORS[color];
   return (
@@ -73,13 +76,15 @@ export function StatCard({
     >
       <div className={`absolute -right-4 -bottom-4 w-20 h-20 rounded-full blur-xl transition ${c.blob}`}></div>
       <div className="flex justify-between items-start">
-        <div>
+        <div className="min-w-0">
           <p className={`text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 ${c.label}`}>
             <span>{label}</span>
           </p>
-          <h3 className={`text-2xl md:text-3xl font-black mt-1 ${c.value}`}>{value}</h3>
+          <h3 className={`${compact ? "text-lg md:text-2xl" : "text-2xl md:text-3xl"} font-black mt-1 truncate ${c.value}`}>
+            {value}
+          </h3>
         </div>
-        <div className={`w-10 h-10 rounded-xl flex items-center justify-center border ${c.iconBox}`}>
+        <div className={`w-10 h-10 shrink-0 rounded-xl flex items-center justify-center border ${c.iconBox}`}>
           <i className={`fa-solid ${icon} text-base`}></i>
         </div>
       </div>

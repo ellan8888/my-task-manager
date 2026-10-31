@@ -147,3 +147,67 @@ body::-webkit-scrollbar {
 .animate-in {
   animation: fade-in 0.15s ease-out, slide-in-from-top-1 0.15s ease-out;
 }
+/* ══════════════════════════════════════════════════════ */
+/* TABEL → CARD DI HP                                     */
+/* Pakai: <table className="... table-cards"> dan         */
+/*        <td data-label="Nama kolom"> di setiap sel.     */
+/* Di layar ≥ 768px tetap tabel biasa.                    */
+/* ══════════════════════════════════════════════════════ */
+@media (max-width: 767px) {
+  .table-cards {
+    display: block;
+    width: 100%;
+    min-width: 0 !important;
+    table-layout: auto !important;
+  }
+  .table-cards thead {
+    display: none;
+  }
+  .table-cards tbody {
+    display: block;
+    padding: 0.5rem;
+  }
+  .table-cards tbody tr {
+    display: block;
+    margin-bottom: 0.625rem;
+    padding: 0.375rem 0.875rem;
+    border: 1px solid rgb(226 232 240);
+    border-radius: 0.875rem;
+  }
+  .dark .table-cards tbody tr {
+    border-color: rgb(30 41 59);
+  }
+  .table-cards tbody tr:last-child {
+    margin-bottom: 0;
+  }
+  .table-cards td:not(.hidden) {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    width: auto !important;
+    padding: 0.4rem 0 !important;
+    text-align: right;
+    border: 0;
+  }
+  .table-cards td:not(.hidden) + td:not(.hidden) {
+    border-top: 1px dashed rgb(226 232 240);
+  }
+  .dark .table-cards td:not(.hidden) + td:not(.hidden) {
+    border-top-color: rgb(30 41 59);
+  }
+  .table-cards td[data-label]::before {
+    content: attr(data-label);
+    flex-shrink: 0;
+    text-align: left;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: rgb(100 116 139);
+  }
+  .table-cards td[colspan] {
+    display: block;
+    text-align: center;
+  }
+}

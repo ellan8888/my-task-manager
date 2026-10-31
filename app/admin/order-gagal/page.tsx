@@ -1,8 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useSidebar } from "../SidebarContext";
 
+import AdminHeader from "@/app/components/AdminHeader";
+import { useToast } from "@/app/components/ToastProvider";
+import { useConfirmAsync } from "@/app/components/ConfirmDialog";
 type FailedOrder = {
   order_id: string;
   product_title?: string;
@@ -33,10 +35,11 @@ type IncomeLog = {
 };
 
 export default function OrderGagalPage() {
+  const toast = useToast();
+  const { confirm, confirmDialog } = useConfirmAsync();
   const [orders, setOrders] = useState<FailedOrder[]>([]);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
-  const { sidebarOpen, toggleSidebar } = useSidebar();
 
   // ══════════════════════════════════════════════════════
   // ⭐ SEARCH STATE
@@ -74,7 +77,7 @@ export default function OrderGagalPage() {
       body: JSON.stringify({ order_id }),
     });
     const data = await res.json();
-    if (!data.success) alert(data.error);
+    if (!data.success) toast.error(data.error || "Gagal retry order");
     await fetchOrders();
     setActionLoading(null);
   };
@@ -92,7 +95,15 @@ export default function OrderGagalPage() {
         )}?`
       : `Hapus order ${order.order_id} TANPA insert income?`;
 
-    if (!confirm(confirmMsg)) return;
+    if (
+      !(await confirm({
+        title: insertIncome ? "Hapus order + catat pendapatan?" : "Hapus order?",
+        message: confirmMsg,
+        variant: "danger",
+        confirmText: "Ya, hapus",
+      }))
+    )
+      return;
 
     setActionLoading(order.order_id);
     await fetch("/api/queue/failed/delete", {
@@ -126,13 +137,13 @@ export default function OrderGagalPage() {
         setIncomeResults(data.data || []);
         setShowIncomePanel(true);
       } else {
-        alert(data.error || "Gagal search income log");
+        toast.error(data.error || "Gagal search income log");
         setIncomeResults([]);
         setShowIncomePanel(true);
       }
     } catch (err) {
       console.error(err);
-      alert("Error search income log");
+      toast.error("Error search income log");
       setIncomeResults([]);
       setShowIncomePanel(true);
     } finally {
@@ -190,33 +201,14 @@ export default function OrderGagalPage() {
       {/* ══════════════════════════════════════════════════
           HEADER
       ══════════════════════════════════════════════════ */}
-      <header className="h-16 border-b border-slate-200 dark:border-slate-800/80 bg-white/80 dark:bg-slate-950/60 backdrop-blur-md px-4 md:px-8 flex items-center justify-between gap-3 z-20 shrink-0">
-        <div className="flex items-center space-x-3 shrink-0">
-          <button
-            onClick={toggleSidebar}
-            className="w-10 h-10 flex items-center justify-center rounded-xl bg-slate-100 dark:bg-slate-900 hover:bg-slate-200 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition"
-            title={sidebarOpen ? "Tutup Sidebar" : "Buka Sidebar"}
-          >
-            <i
-              className={`fa-solid ${
-                sidebarOpen ? "fa-bars-staggered" : "fa-bars"
-              } text-base`}
-            ></i>
-          </button>
-
-          <div className="w-10 h-10 rounded-2xl bg-linear-to-tr from-rose-600 via-red-600 to-orange-500 flex items-center justify-center text-white shadow-lg shadow-rose-600/30">
-            <i className="fa-solid fa-triangle-exclamation text-base"></i>
-          </div>
-
-          <div className="hidden md:block">
-            <h2 className="text-base md:text-xl font-extrabold text-slate-900 dark:text-white tracking-tight">
-              Order Gagal
-            </h2>
-            <p className="text-xs text-slate-500 dark:text-slate-400 hidden sm:block">
-              Order yang bot gagal proses setelah 3x retry
-            </p>
-          </div>
-        </div>
+      <AdminHeader
+        icon="fa-triangle-exclamation"
+        iconClassName="from-rose-600 via-red-600 to-orange-500 shadow-rose-600/30"
+        title="Order Gagal"
+        subtitle="Order yang bot gagal proses setelah 3x retry"
+        hideTitleOnMobile
+        className="gap-3"
+      >
 
         {/* ⭐ SEARCH BAR — filter list order gagal */}
         <div className="flex-1 max-w-md hidden md:block">
@@ -250,7 +242,7 @@ export default function OrderGagalPage() {
             </span>
           </div>
         )}
-      </header>
+      </AdminHeader>
 
       {/* ══════════════════════════════════════════════════
           CONTENT
@@ -750,6 +742,7 @@ export default function OrderGagalPage() {
           )}
         </div>
       </div>
+      {confirmDialog}
     </>
   );
 }

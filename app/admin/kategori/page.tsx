@@ -3,9 +3,10 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useToast } from "@/app/components/ToastProvider";
-import { useSidebar } from "../SidebarContext";
 import { SkeletonList } from "@/app/components/Skeleton";
 
+import AdminHeader from "@/app/components/AdminHeader";
+import { useConfirmAsync } from "@/app/components/ConfirmDialog";
 type KategoriLink = {
   id: number;
   kategori: string;
@@ -23,10 +24,11 @@ type EditMode = "add" | "edit_link" | "edit_product";
 
 export default function KategoriPage() {
   const toast = useToast();
+  const { confirm, confirmDialog } = useConfirmAsync();
   const [list, setList] = useState<KategoriLink[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const { sidebarOpen, toggleSidebar } = useSidebar();
+
   const [defaultIncome, setDefaultIncome] = useState("");
 const [defaultSpeed, setDefaultSpeed] = useState("");
 const [defaultPickaxe, setDefaultPickaxe] = useState("");
@@ -212,7 +214,15 @@ const [defaultEgg, setDefaultEgg] = useState("");// ⭐ NEW
   // HAPUS
   // ══════════════════════════════════════════════════════
   const handleDelete = async (nama: string) => {
-    if (!confirm(`Hapus kategori "${nama}"?`)) return;
+    if (
+      !(await confirm({
+        title: "Hapus kategori?",
+        message: `Kategori "${nama}" akan dihapus.`,
+        variant: "danger",
+        confirmText: "Ya, hapus",
+      }))
+    )
+      return;
     try {
       const res = await fetch(
         `/api/kategori/links?kategori=${encodeURIComponent(nama)}`,
@@ -313,27 +323,12 @@ const [defaultEgg, setDefaultEgg] = useState("");// ⭐ NEW
       `}</style>
 
       {/* Header */}
-      <header className="h-16 border-b border-slate-200 dark:border-slate-800/80 bg-white/80 dark:bg-slate-950/60 backdrop-blur-md px-4 md:px-8 flex items-center justify-between z-20 shrink-0">
-        <div className="flex items-center space-x-3">
-          <button
-            onClick={toggleSidebar}
-            className="w-10 h-10 flex items-center justify-center rounded-xl bg-slate-100 dark:bg-slate-900 hover:bg-slate-200 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 transition"
-          >
-            <i className={`fa-solid ${sidebarOpen ? "fa-bars-staggered" : "fa-bars"} text-base`}></i>
-          </button>
-          <div className="w-10 h-10 rounded-2xl bg-linear-to-tr from-emerald-600 to-teal-500 flex items-center justify-center text-white shadow-lg shadow-emerald-600/30">
-            <i className="fa-solid fa-folder-tree text-base"></i>
-          </div>
-          <div>
-            <h2 className="text-base md:text-xl font-extrabold text-slate-900 dark:text-white tracking-tight">
-              Kategori Link
-            </h2>
-            <p className="text-xs text-slate-500 dark:text-slate-400 hidden sm:block">
-              Kelola kategori & link itemku
-            </p>
-          </div>
-        </div>
-      </header>
+      <AdminHeader
+        icon="fa-folder-tree"
+        iconClassName="from-emerald-600 to-teal-500 shadow-emerald-600/30"
+        title="Kategori Link"
+        subtitle="Kelola kategori & link itemku"
+      />
 
       {/* Content */}
       <div className="flex-1 overflow-y-auto custom-scrollbar p-4 md:p-8">
@@ -679,6 +674,7 @@ const [defaultEgg, setDefaultEgg] = useState("");// ⭐ NEW
           </div>
         </div>
       </div>
+      {confirmDialog}
     </>
   );
 }

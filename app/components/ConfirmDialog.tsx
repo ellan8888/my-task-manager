@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 
 export type ConfirmVariant = "danger" | "warning" | "info" | "success";
 
@@ -109,4 +109,47 @@ export function ConfirmDialog({
       </div>
     </div>
   );
+}
+
+// ══════════════════════════════════════════════════════════════
+// VERSI ASYNC — pengganti confirm() bawaan browser
+//   const { confirm, confirmDialog } = useConfirmAsync();
+//   if (!(await confirm({ title: "Hapus?", message: "..." }))) return;
+//   ...render {confirmDialog} di JSX
+// ══════════════════════════════════════════════════════════════
+
+export type ConfirmOptions = {
+  title: string;
+  message?: string;
+  variant?: ConfirmVariant;
+  confirmText?: string;
+};
+
+export function useConfirmAsync() {
+  const { dialog, showConfirm, closeConfirm } = useConfirm();
+  const resolverRef = useRef<((ok: boolean) => void) | null>(null);
+
+  const confirm = useCallback(
+    ({ title, message = "", variant = "warning", confirmText = "Ya, lanjutkan" }: ConfirmOptions) =>
+      new Promise<boolean>((resolve) => {
+        resolverRef.current?.(false); // dialog sebelumnya dianggap batal
+        resolverRef.current = resolve;
+        showConfirm(title, message, variant, confirmText, () => {
+          resolverRef.current = null;
+          closeConfirm();
+          resolve(true);
+        });
+      }),
+    [showConfirm, closeConfirm]
+  );
+
+  const handleClose = useCallback(() => {
+    resolverRef.current?.(false);
+    resolverRef.current = null;
+    closeConfirm();
+  }, [closeConfirm]);
+
+  const confirmDialog = <ConfirmDialog dialog={dialog} onClose={handleClose} />;
+
+  return { confirm, confirmDialog };
 }

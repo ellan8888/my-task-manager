@@ -4,9 +4,9 @@
 import { useEffect, useState } from "react";
 import KategoriDropdown from "../stock/KategoriDropdown";
 import { useToast } from "@/app/components/ToastProvider";
-import { useSidebar } from "../SidebarContext";
 import { SkeletonList } from "@/app/components/Skeleton";
 
+import AdminHeader from "@/app/components/AdminHeader";
 type StockAccount = {
   id: number;
   username: string;
@@ -30,7 +30,7 @@ export default function StokPribadiPage() {
   const [loading, setLoading] = useState(true);
   const [kategoriList, setKategoriList] = useState<any[]>([]);
   const [selling, setSelling] = useState<Set<number>>(new Set());
-  const { sidebarOpen, toggleSidebar } = useSidebar();
+
   const [searchQuery, setSearchQuery] = useState("");
   // ⭐ Filter idle
 const [filterIdle, setFilterIdle] = useState<"all" | "idle" | "active">("all");
@@ -408,34 +408,12 @@ const idleCount = accounts.filter((a) => a.idle && !a.logged_out).length;
       `}</style>
 
       {/* Header */}
-      <header className="h-16 border-b border-slate-200 dark:border-slate-800/80 bg-white/80 dark:bg-slate-950/60 backdrop-blur-md px-4 md:px-8 flex items-center justify-between z-20 shrink-0">
-        <div className="flex items-center space-x-3">
-          <button
-            onClick={toggleSidebar}
-            className="w-10 h-10 flex items-center justify-center rounded-xl bg-slate-100 dark:bg-slate-900 hover:bg-slate-200 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition"
-            title={sidebarOpen ? "Tutup Sidebar" : "Buka Sidebar"}
-          >
-            <i
-              className={`fa-solid ${
-                sidebarOpen ? "fa-bars-staggered" : "fa-bars"
-              } text-base`}
-            ></i>
-          </button>
-
-          <div className="w-10 h-10 rounded-2xl bg-linear-to-tr from-blue-600 to-cyan-500 flex items-center justify-center text-white shadow-lg shadow-blue-600/30">
-            <i className="fa-solid fa-vault text-base"></i>
-          </div>
-
-          <div>
-            <h2 className="text-base md:text-xl font-extrabold text-slate-900 dark:text-white tracking-tight">
-              Stok Pribadi
-            </h2>
-            <p className="text-xs text-slate-500 dark:text-slate-400 hidden sm:block">
-              Simpan akun dulu, jual nanti
-            </p>
-          </div>
-        </div>
-      </header>
+      <AdminHeader
+        icon="fa-vault"
+        iconClassName="from-blue-600 to-cyan-500 shadow-blue-600/30"
+        title="Stok Pribadi"
+        subtitle="Simpan akun dulu, jual nanti"
+      />
 
       {/* Content */}
       <div className="flex-1 overflow-y-auto custom-scrollbar p-4 md:p-8">
@@ -640,7 +618,7 @@ const idleCount = accounts.filter((a) => a.idle && !a.logged_out).length;
 {/* ⭐ DESKTOP VIEW — Tabel (hidden di mobile) */}
 {/* ══════════════════════════════════════════════════════════ */}
 <div className="hidden md:block overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800">
-  <table className="w-full text-sm table-fixed">
+  <table className="w-full text-sm table-fixed table-cards">
     <thead className="bg-slate-50 dark:bg-slate-950/50">
       <tr className="text-left text-[10px] uppercase text-slate-500 dark:text-slate-400 font-bold">
         <th className="px-3 py-2.5 w-[5%] text-center">#</th>
@@ -665,10 +643,10 @@ const idleCount = accounts.filter((a) => a.idle && !a.logged_out).length;
               isSelling ? "opacity-50 pointer-events-none" : ""
             } ${isIdle ? "bg-amber-50/40 dark:bg-amber-500/5" : ""}`}
           >
-            <td className="px-3 py-2.5 text-xs text-slate-400 font-mono text-center">
+            <td data-label="#" className="px-3 py-2.5 text-xs text-slate-400 font-mono text-center">
               {idx + 1}
             </td>
-            <td className="px-3 py-2.5">
+            <td data-label="Username" className="px-3 py-2.5">
               <div className="flex items-center gap-2">
                 {isIdle && (
                   <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" title="Idle" />
@@ -682,17 +660,17 @@ const idleCount = accounts.filter((a) => a.idle && !a.logged_out).length;
                 </span>
               </div>
             </td>
-            <td className="px-3 py-2.5">
+            <td data-label="Password" className="px-3 py-2.5">
               <span className="font-mono text-[11px] text-slate-500 dark:text-slate-400">
                 {acc.password ? "••••••••" : "—"}
               </span>
             </td>
-            <td className="px-3 py-2.5">
+            <td data-label="Added By" className="px-3 py-2.5">
               <span className="text-xs text-slate-600 dark:text-slate-300 truncate block">
                 {acc.added_by || "—"}
               </span>
             </td>
-            <td className="px-3 py-2.5 text-center">
+            <td data-label="Status" className="px-3 py-2.5 text-center">
               {isIdle ? (
                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-300 text-[10px] font-bold">
                   <i className="fa-solid fa-moon text-[9px]"></i>
@@ -705,7 +683,7 @@ const idleCount = accounts.filter((a) => a.idle && !a.logged_out).length;
                 </span>
               )}
             </td>
-            <td className="px-3 py-2.5">
+            <td data-label="Created" className="px-3 py-2.5">
               <span className="text-[10px] text-slate-400 whitespace-nowrap">
                 {new Date(acc.created_at).toLocaleDateString("id-ID", {
                   day: "2-digit",
@@ -714,7 +692,7 @@ const idleCount = accounts.filter((a) => a.idle && !a.logged_out).length;
                 })}
               </span>
             </td>
-            <td className="px-3 py-2.5">
+            <td data-label="Aksi" className="px-3 py-2.5">
               <div className="flex items-center justify-end gap-1.5">
                 <button
                   onClick={() => handleToggleIdle(acc)}
