@@ -677,7 +677,8 @@ export default function JokiOrderCard({
       )}
 
       {/* ═══ CATATAN SAYA (bisa diedit, bukan dari Itemku) ═══ */}
-      {!isCompletedByBot && <MyNote order={order} />}
+      {/* Tetap tampil walaupun card sudah pudar (selesai bot) */}
+      <MyNote order={order} />
 
       {/* ═══ BOT SEDANG PROSES ═══ */}
       {isChecked && (
