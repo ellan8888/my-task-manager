@@ -247,6 +247,13 @@ const isEllan = currentUser?.username?.toLowerCase() === "ellan";
           label: "Ganti Akun",
           active: pathname === "/admin/ganti-akun",
         },
+        {
+          href: "/admin/kirim-akun",
+          icon: "fa-paper-plane",
+          label: "Kirim Akun Manual",
+          active: pathname === "/admin/kirim-akun",
+          ellanOnly: true,
+        },
       ],
     },
     {
