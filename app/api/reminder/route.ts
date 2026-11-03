@@ -259,7 +259,7 @@ export async function GET() {
 
       const payload =
         JSON.stringify({
-          title: `🔔 ${task.title}`,
+          title: task.title,
           body: `Reminder harian • Deadline ${task.deadline}`,
           icon: "/icon-192.png",
         });
@@ -390,7 +390,7 @@ export async function GET() {
       );
 
       const payload = JSON.stringify({
-        title: "🎮 Waktunya Jokian!",
+        title: "Waktunya Jokian!",
         body:
           `${order.product || "Jokian"} • ` +
           `Joki: ${order.joki_name || "-"} • ` +

@@ -1,6 +1,7 @@
 // app/api/redeem/buy-with-balance/route.ts
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { getBalance } from "@/lib/ledger";
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -33,28 +34,8 @@ export async function POST(request: Request) {
     // 1. Cek saldo user (SKIP kalo owner)
     // ═══════════════════════════════════════════════════════
     if (!isFreeAdmin) {
-      const { data: incomeData } = await supabaseAdmin
-        .from("income_log")
-        .select("amount")
-        .eq("joki_name", username);
-
-      const totalIncome = (incomeData || []).reduce(
-        (sum, row) => sum + (row.amount || 0),
-        0
-      );
-
-      const { data: withdrawData } = await supabaseAdmin
-        .from("withdrawals")
-        .select("amount, status")
-        .eq("joki_name", username)
-        .in("status", ["approved", "pending"]);
-
-      const totalWithdrawn = (withdrawData || []).reduce(
-        (sum, row) => sum + (row.amount || 0),
-        0
-      );
-
-      const sisa = totalIncome - totalWithdrawn;
+      // Saldo dari buku kas (SQL 009); kalau belum ada, pakai hitungan lama
+      const sisa = await getBalance(username);
 
       if (sisa < PRICE_PER_CODE) {
         return NextResponse.json(
@@ -150,7 +131,7 @@ export async function POST(request: Request) {
         code: code.code,
         is_free_admin: isFreeAdmin,
         message: isFreeAdmin
-          ? "👑 Owner ambil code GRATIS: " + code.code
+          ? "Owner ambil code GRATIS: " + code.code
           : "Pembelian berhasil! Code kamu: " + code.code,
       },
     });

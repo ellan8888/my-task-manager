@@ -83,7 +83,7 @@ export async function GET(req: Request) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         username: NOTIF_TARGET,
-        title: "🔴 Bot Offline!",
+        title: "Bot Offline!",
         body: `Bot itemku berhenti ${diffMinutes} menit lalu.`,
         url: "/",
       }),

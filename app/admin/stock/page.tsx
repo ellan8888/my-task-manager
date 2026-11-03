@@ -48,7 +48,7 @@ export default function StockPage() {
   const [password, setPassword] = useState("");
   const [cookie, setCookie] = useState("");
   const [kategori, setKategori] = useState("");
-  const [addedBy, setAddedBy] = useState("lan4337");
+  const [addedBy, setAddedBy] = useState(""); // diisi otomatis dari user yang login
   const [saving, setSaving] = useState(false);
   const [filter, setFilter] = useState<"all" | "ready" | "progress" | "logged_out">("all");
 
@@ -530,7 +530,7 @@ export default function StockPage() {
 
             <button
               type="submit"
-              disabled={saving || loadingKategori}
+              disabled={saving || loadingKategori || !addedBy}
               className="w-full bg-linear-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 disabled:opacity-50 text-white font-bold py-3 rounded-xl transition flex items-center justify-center gap-2"
             >
               <i

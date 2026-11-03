@@ -99,7 +99,7 @@ export async function POST(request: Request) {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               username: adminUser,
-              title: "💸 Pending Transfer Baru!",
+              title: "Pending Transfer Baru!",
               body: `${user} — Rp 20.000${notes ? ` • "${notes}"` : ""}`,
               url: "/redeem",
             }),

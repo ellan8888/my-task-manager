@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import WithdrawFormModal from "@/app/components/WithdrawFormModal";
 import ApproveModal from "@/app/components/ApproveModal";
 import AddBankModal from "@/app/components/AddBankModal";
@@ -83,7 +84,6 @@ export default function WithdrawalsPage() {
   } | null>(null);
 
   const [withdrawals, setWithdrawals] = useState<any[]>([]); // withdraw beneran
-  const [purchases, setPurchases] = useState<any[]>([]);         // belanja code
   const [pendingRequests, setPendingRequests] = useState<any[]>([]);
   const [showWithdrawModal, setShowWithdrawModal] = useState(false);
   const [approveModal, setApproveModal] = useState<any>(null);
@@ -136,13 +136,18 @@ export default function WithdrawalsPage() {
 
     const fetchBalance = async () => {
       try {
-        const [incomeRes, withdrawRes] = await Promise.all([
+        const [incomeRes, withdrawRes, ledgerRes] = await Promise.all([
           fetch("/api/stats/income/me"),
           fetch("/api/withdrawals"),
+          fetch("/api/saldo/riwayat?limit=1").catch(() => null),
         ]);
 
         const incomeData = await incomeRes.json();
         const withdrawData = await withdrawRes.json();
+        // Saldo dari buku kas (Riwayat Saldo) — kalau belum aktif pakai hitungan lama
+        const ledgerData = ledgerRes ? await ledgerRes.json().catch(() => null) : null;
+        const ledgerBalance: number | null =
+          ledgerData?.success && ledgerData.ready && typeof ledgerData.balance === "number" ? ledgerData.balance : null;
 
                 const totalIncome = incomeData.total || 0;
 
@@ -166,12 +171,11 @@ export default function WithdrawalsPage() {
 
         setMyBalance({
           totalIncome,
-          totalWithdrawn,
-          sisa: totalIncome - totalWithdrawn - totalPurchases, // ⭐ sisa = income - ditarik - belanja
+          totalWithdrawn: totalWithdrawn + totalPurchases, // keluar = ditarik + beli code
+          sisa: ledgerBalance ?? totalIncome - totalWithdrawn - totalPurchases,
         });
 
         setWithdrawals(withdrawRows);
-        setPurchases(purchaseRows);
       } catch (err) {
         console.error(err);
       } finally {
@@ -289,7 +293,7 @@ export default function WithdrawalsPage() {
                             <i className="fa-solid fa-arrow-up-from-bracket text-xs"></i>
                           </div>
                           <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                            Ditarik
+                            Keluar
                           </span>
                         </div>
                         <p className="text-base md:text-lg font-black text-rose-600 dark:text-rose-400 truncate">
@@ -312,6 +316,25 @@ export default function WithdrawalsPage() {
                         </p>
                       </div>
                     </div>
+                  )}
+
+                  {/* ⭐ LINK RIWAYAT SALDO */}
+                  {myBalance && (
+                    <Link
+                      href="/admin/riwayat-saldo"
+                      className="group flex items-center gap-3 px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/50 hover:border-emerald-400 dark:hover:border-emerald-500/50 transition"
+                    >
+                      <div className="w-8 h-8 rounded-lg bg-emerald-100 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+                        <i className="fa-solid fa-clock-rotate-left text-xs"></i>
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-bold text-slate-900 dark:text-white">Lihat riwayat saldo</p>
+                        <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate">
+                          Semua uang masuk &amp; keluar, termasuk beli code, beserta asalnya
+                        </p>
+                      </div>
+                      <i className="fa-solid fa-chevron-right text-xs text-slate-400 group-hover:text-emerald-500 group-hover:translate-x-0.5 transition"></i>
+                    </Link>
                   )}
 
                   {/* ⭐ TARIK BUTTON — Full width */}
@@ -422,72 +445,6 @@ export default function WithdrawalsPage() {
                                         )}
                   </div>
 
-                  {/* ⭐ PENGELUARAN — SECTION BARU */}
-                  <div className="bg-white dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 rounded-xl shadow-sm overflow-hidden">
-                    <div className="px-4 py-3 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <div className="w-7 h-7 rounded-lg bg-violet-100 dark:bg-violet-500/10 text-violet-600 dark:text-violet-400 flex items-center justify-center">
-                          <i className="fa-solid fa-ticket text-xs"></i>
-                        </div>
-                        <h3 className="font-bold text-slate-900 dark:text-white text-sm">
-                          Pengeluaran (Beli Code)
-                        </h3>
-                      </div>
-                      <span className="text-[10px] bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 px-2 py-0.5 rounded-full font-bold">
-                        {purchases.length}
-                      </span>
-                    </div>
-
-                    {purchases.length === 0 ? (
-                      <div className="text-center py-12">
-                        <div className="w-12 h-12 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-400 flex items-center justify-center mx-auto mb-3">
-                          <i className="fa-solid fa-ticket text-lg"></i>
-                        </div>
-                        <p className="text-sm font-semibold text-slate-500">
-                          Belum ada beli code
-                        </p>
-                      </div>
-                    ) : (
-                      <div className="divide-y divide-slate-100 dark:divide-slate-800">
-                        {purchases.map((w) => (
-                          <div
-                            key={w.id}
-                            className="px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-900/50 transition flex items-center justify-between gap-3"
-                          >
-                            <div className="flex items-center gap-3 min-w-0 flex-1">
-                              <div className="w-8 h-8 rounded-lg bg-violet-100 dark:bg-violet-500/10 text-violet-600 dark:text-violet-400 flex items-center justify-center shrink-0 border border-violet-200 dark:border-violet-500/20">
-                                <i className="fa-solid fa-ticket text-[10px]"></i>
-                              </div>
-
-                              <div className="min-w-0 flex-1">
-                                <div className="flex items-center gap-1.5">
-                                  <span className="text-xs font-bold text-slate-900 dark:text-white">
-                                    Beli Code
-                                  </span>
-                                  <span className="text-[10px] font-mono text-violet-600 dark:text-violet-400 truncate">
-                                    • {(w.note || "").replace("[BELI CODE] ", "")}
-                                  </span>
-                                </div>
-                                <p className="text-[10px] text-slate-500 dark:text-slate-400 truncate">
-                                  {new Date(w.approved_at || w.requested_at).toLocaleString("id-ID", {
-                                    day: "numeric",
-                                    month: "short",
-                                    year: "numeric",
-                                    hour: "2-digit",
-                                    minute: "2-digit",
-                                  })}
-                                </p>
-                              </div>
-                            </div>
-
-                            <p className="text-sm font-black text-violet-600 dark:text-violet-400 font-mono shrink-0">
-                              -{formatRupiah(w.amount)}
-                            </p>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
                 </div>
 
                 {/* RIGHT COLUMN (1/3) */}

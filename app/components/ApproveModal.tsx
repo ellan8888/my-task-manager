@@ -256,7 +256,7 @@ export default function ApproveModal({ withdrawal, onClose, onSuccess }: Props) 
                   <i className="fa-solid fa-xmark"></i>
                 </button>
                 <div className="absolute bottom-2 left-2 bg-emerald-600 text-white text-[10px] font-bold px-2 py-1 rounded truncate max-w-[80%]">
-                  ✅ {file?.name}
+                  <i className="fa-solid fa-circle-check mr-1"></i>{file?.name}
                 </div>
               </div>
             ) : (

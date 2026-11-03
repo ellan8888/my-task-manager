@@ -4,6 +4,8 @@
 import { useEffect, useMemo, useState } from "react";
 
 import AdminHeader from "@/app/components/AdminHeader";
+import RoleBadge from "@/app/components/RoleBadge";
+import { DatePicker } from "@/app/components/Pickers";
 import { useToast } from "@/app/components/ToastProvider";
 import { useConfirmAsync } from "@/app/components/ConfirmDialog";
 type FeeDetail = {
@@ -205,7 +207,7 @@ export default function FeeReportPage() {
         setNewFeeAmount(4);
         setShowAddForm(false);
       } else {
-        toast.error(data.message || "Gagal tambah joki");
+        toast.error(data.message || "Gagal tambah staff");
       }
     } catch (err) {
       console.error(err);
@@ -410,7 +412,7 @@ export default function FeeReportPage() {
                   Rp {filteredTotals.net.toLocaleString("id-ID")}
                 </p>
                 <p className="text-[10px] text-slate-500 mt-1">
-                  Yang diterima joki
+                  Yang diterima owner & staff
                 </p>
               </div>
               <div className="w-10 h-10 rounded-xl bg-violet-100 dark:bg-violet-500/10 text-violet-600 dark:text-violet-400 flex items-center justify-center border border-violet-200 dark:border-violet-500/20 shrink-0">
@@ -434,7 +436,7 @@ export default function FeeReportPage() {
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition shadow-sm shadow-emerald-600/20"
             >
               <i className="fa-solid fa-plus text-[10px]"></i>
-              Tambah Joki
+              Tambah Staff
             </button>
           </div>
 
@@ -444,7 +446,7 @@ export default function FeeReportPage() {
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <input
                   type="text"
-                  placeholder="Nama joki (misal: budi)"
+                  placeholder="Username staff (misal: budi)"
                   value={newJokiName}
                   onChange={(e) => setNewJokiName(e.target.value)}
                   className="px-3 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-sm focus:outline-none focus:border-emerald-500"
@@ -627,16 +629,16 @@ export default function FeeReportPage() {
         </div>
 
         {/* ═══════════════════════════════════════════════════ */}
-        {/* BREAKDOWN PER JOKI */}
+        {/* BREAKDOWN PER ANGGOTA TIM */}
         {/* ═══════════════════════════════════════════════════ */}
         <div className="bg-white dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden">
           <div className="px-5 py-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
             <h3 className="font-black text-slate-900 dark:text-white flex items-center gap-2">
               <i className="fa-solid fa-chart-pie text-violet-600"></i>
-              Breakdown per Joki
+              Breakdown per Anggota Tim
             </h3>
             <span className="text-[10px] bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 px-2 py-1 rounded-full font-bold">
-              {summary.length} joki
+              {summary.length} anggota
             </span>
           </div>
 
@@ -645,7 +647,7 @@ export default function FeeReportPage() {
             <table className="w-full table-cards">
               <thead className="bg-slate-50 dark:bg-slate-950/50">
                 <tr className="text-xs font-bold text-slate-500 uppercase">
-                  <th className="text-left p-3">Joki</th>
+                  <th className="text-left p-3">Anggota</th>
                   <th className="text-right p-3">Gross</th>
                   <th className="text-right p-3">Fee</th>
                   <th className="text-right p-3">Net</th>
@@ -658,8 +660,11 @@ export default function FeeReportPage() {
                     key={row.joki_name}
                     className="border-t border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-900/30 transition"
                   >
-                    <td data-label="Joki" className="p-3 font-bold capitalize text-slate-900 dark:text-white">
-                      {row.joki_name}
+                    <td data-label="Anggota" className="p-3 font-bold capitalize text-slate-900 dark:text-white">
+                      <span className="inline-flex items-center gap-1.5">
+                        {row.joki_name}
+                        <RoleBadge username={row.joki_name} />
+                      </span>
                     </td>
                     <td data-label="Gross" className="p-3 text-right font-mono text-slate-600 dark:text-slate-400">
                       Rp {row.total_gross.toLocaleString("id-ID")}
@@ -691,8 +696,9 @@ export default function FeeReportPage() {
             {summary.map((row) => (
               <div key={row.joki_name} className="p-4 space-y-3">
                 <div className="flex items-center justify-between">
-                  <span className="font-bold capitalize text-sm text-slate-900 dark:text-white">
+                  <span className="font-bold capitalize text-sm text-slate-900 dark:text-white inline-flex items-center gap-1.5">
                     {row.joki_name}
+                    <RoleBadge username={row.joki_name} />
                   </span>
                   <span className="text-[10px] bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 px-2 py-0.5 rounded font-bold">
                     {row.total_orders} order
@@ -772,7 +778,7 @@ export default function FeeReportPage() {
                 <span className="flex items-center gap-2 truncate">
                   <i className="fa-solid fa-user-tie text-xs text-slate-400"></i>
                   <span className="capitalize truncate">
-                    {filterJoki === "all" ? "Semua Joki" : filterJoki}
+                    {filterJoki === "all" ? "Semua Anggota" : filterJoki}
                   </span>
                 </span>
                 <i
@@ -808,7 +814,7 @@ export default function FeeReportPage() {
                       )}
                     </span>
                     <i className="fa-solid fa-users text-xs text-slate-400"></i>
-                    <span>Semua Joki</span>
+                    <span>Semua Anggota</span>
                   </button>
 
                   <div className="h-px bg-slate-100 dark:bg-slate-800"></div>
@@ -847,18 +853,29 @@ export default function FeeReportPage() {
               )}
             </div>
 
-            <input
-              type="date"
+            <DatePicker
               value={filterDateFrom}
-              onChange={(e) => setFilterDateFrom(e.target.value)}
-              className="px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-sm focus:outline-none focus:border-emerald-500"
+              onChange={setFilterDateFrom}
+              max={filterDateTo || undefined}
+              placeholder="Dari tanggal"
+              clearable
+              accent="emerald"
+              size="sm"
+              className="w-full sm:w-44"
+              ariaLabel="Dari tanggal"
             />
 
-            <input
-              type="date"
+            <DatePicker
               value={filterDateTo}
-              onChange={(e) => setFilterDateTo(e.target.value)}
-              className="px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-sm focus:outline-none focus:border-emerald-500"
+              onChange={setFilterDateTo}
+              min={filterDateFrom || undefined}
+              placeholder="Sampai tanggal"
+              clearable
+              accent="emerald"
+              size="sm"
+              align="right"
+              className="w-full sm:w-44"
+              ariaLabel="Sampai tanggal"
             />
           </div>
 
@@ -901,7 +918,7 @@ export default function FeeReportPage() {
                 <tr className="text-xs font-bold text-slate-500 uppercase">
                   <th className="text-left p-3">Tanggal</th>
                   <th className="text-left p-3">Order ID</th>
-                  <th className="text-left p-3">Joki</th>
+                  <th className="text-left p-3">Anggota</th>
                   <th className="text-right p-3">Gross</th>
                   <th className="text-right p-3">Fee</th>
                   <th className="text-right p-3">Net</th>
@@ -925,7 +942,7 @@ export default function FeeReportPage() {
                     <td data-label="Order ID" className="p-3 font-mono text-xs text-slate-700 dark:text-slate-300 whitespace-nowrap">
                       {row.order_id}
                     </td>
-                    <td data-label="Joki" className="p-3 text-xs font-bold capitalize text-slate-900 dark:text-white">
+                    <td data-label="Anggota" className="p-3 text-xs font-bold capitalize text-slate-900 dark:text-white">
                       {row.joki_name}
                     </td>
                     <td data-label="Gross" className="p-3 text-right font-mono text-xs text-slate-600 dark:text-slate-400">
@@ -978,7 +995,7 @@ export default function FeeReportPage() {
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <p className="text-[10px] uppercase text-slate-400 font-bold tracking-wider">
-                      Joki
+                      Anggota
                     </p>
                     <p className="text-xs font-bold capitalize text-slate-900 dark:text-white mt-0.5">
                       {row.joki_name}

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { createClient } from "@supabase/supabase-js";
 import crypto from "crypto";
+import { getBalance } from "@/lib/ledger";
 
 export const runtime = "nodejs";
 
@@ -182,26 +183,8 @@ export async function POST(req: NextRequest) {
     }
 
     // 6️⃣ Validasi saldo cukup
-    const { data: incomeData } = await supabaseAdmin
-      .from("income_log")
-      .select("amount")
-      .eq("joki_name", targetJoki);
-
-    const totalIncome = (incomeData || []).reduce(
-      (sum, r) => sum + (r.amount || 0),
-      0
-    );
-
-    const { data: withdrawalData } = await supabaseAdmin
-      .from("withdrawals")
-      .select("amount, status")
-      .eq("joki_name", targetJoki);
-
-    const totalWithdrawn = (withdrawalData || [])
-      .filter((w) => w.status === "approved" || w.status === "pending")
-      .reduce((sum, r) => sum + (r.amount || 0), 0);
-
-    const sisaSaldo = totalIncome - totalWithdrawn;
+    // Saldo dari buku kas (SQL 009); kalau belum ada, pakai hitungan lama
+    const sisaSaldo = await getBalance(targetJoki);
 
     if (amount > sisaSaldo) {
       return NextResponse.json(
@@ -242,7 +225,7 @@ export async function POST(req: NextRequest) {
     // 8️⃣ Push notif ke superadmin (ellan)
     await sendPush(
       "ellan",
-      `💰 ${targetJoki} Request Tarik`,
+      `${targetJoki} Request Tarik`,
       `Rp ${amount.toLocaleString("id-ID")} → ${bank.bank_name} ${bank.account_number}`,
       "/admin/withdrawals"
     );
@@ -327,7 +310,7 @@ const { id, action, reject_reason, transfer_note, payment_proof_url } = body;
       if (action === "approve") {
         await sendPush(
           data.joki_name,
-          "✅ Tarik Disetujui!",
+          "Tarik Disetujui!",
           `Rp ${data.amount.toLocaleString("id-ID")} udah ditransfer${
             transfer_note ? ` • ${transfer_note}` : ""
           }`,
@@ -336,7 +319,7 @@ const { id, action, reject_reason, transfer_note, payment_proof_url } = body;
       } else {
         await sendPush(
           data.joki_name,
-          "❌ Tarik Ditolak",
+          "Tarik Ditolak",
           `Rp ${data.amount.toLocaleString("id-ID")} • Alasan: ${
             reject_reason || "-"
           }`,

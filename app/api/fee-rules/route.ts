@@ -1,16 +1,16 @@
 // app/api/fee-rules/route.ts
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { canSeeFee, getSession } from "@/lib/auth";
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-const OWNER_USERNAMES = ["ellan"];
-
-function isOwner(username: string | null): boolean {
-  return !!username && OWNER_USERNAMES.includes(username.toLowerCase());
+// Fee rahasia — akses dicek dari session login, bukan dari username yang dikirim
+function isOwner(request: Request): boolean {
+  return canSeeFee(getSession(request));
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -18,10 +18,7 @@ function isOwner(username: string | null): boolean {
 // ══════════════════════════════════════════════════════════════
 export async function GET(request: Request) {
   try {
-    const { searchParams } = new URL(request.url);
-    const username = searchParams.get("username");
-
-    if (!isOwner(username)) {
+    if (!isOwner(request)) {
       return NextResponse.json(
         { success: false, message: "Unauthorized" },
         { status: 403 }
@@ -55,9 +52,9 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { username, joki_name, fee_percent, description } = body;
+    const { joki_name, fee_percent, description } = body;
 
-    if (!isOwner(username)) {
+    if (!isOwner(request)) {
       return NextResponse.json(
         { success: false, message: "Unauthorized" },
         { status: 403 }
@@ -112,9 +109,9 @@ export async function POST(request: Request) {
 export async function PATCH(request: Request) {
   try {
     const body = await request.json();
-    const { username, joki_name, fee_percent, is_active, description } = body;
+    const { joki_name, fee_percent, is_active, description } = body;
 
-    if (!isOwner(username)) {
+    if (!isOwner(request)) {
       return NextResponse.json(
         { success: false, message: "Unauthorized" },
         { status: 403 }
@@ -174,10 +171,9 @@ export async function PATCH(request: Request) {
 export async function DELETE(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
-    const username = searchParams.get("username");
     const joki_name = searchParams.get("joki_name");
 
-    if (!isOwner(username)) {
+    if (!isOwner(request)) {
       return NextResponse.json(
         { success: false, message: "Unauthorized" },
         { status: 403 }

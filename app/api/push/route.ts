@@ -49,8 +49,8 @@ export async function POST(req: NextRequest) {
     }
 
     const targetUsername = body.username;   // ⭐ filter per user (opsional)
-    const title = body.title || "🔔 My Task Manager";
-    const notifBody = body.body || "Push notification berhasil! 🎉";
+    const title = body.title || "My Task Manager";
+    const notifBody = body.body || "Push notification berhasil!";
     const url = body.url || "/";
 
     console.log(

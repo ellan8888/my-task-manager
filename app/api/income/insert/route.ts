@@ -10,6 +10,13 @@ const supabaseAdmin = createClient(
 
 export async function POST(request: Request) {
   try {
+    const isBot = !!process.env.BOT_API_KEY && request.headers.get("x-bot-api-key") === process.env.BOT_API_KEY;
+    // Hanya bot (pakai kunci x-bot-api-key) yang boleh mencatat pendapatan.
+    // Tanpa kunci → ditolak, supaya orang luar tidak bisa menambah pendapatan palsu.
+    if (!isBot) {
+      return NextResponse.json({ success: false, message: "Unauthorized" }, { status: 401 });
+    }
+
     const body = await request.json();
     const {
       order_id,

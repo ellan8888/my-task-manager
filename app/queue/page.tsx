@@ -5,6 +5,7 @@ import { supabase } from "@/lib/supabase";
 import Link from "next/link";
 import { useToast } from "@/app/components/ToastProvider";
 import {
+  estimateQueueStarts,
   formatShortNumber,
   formatWIB,
   getDisplayTarget,
@@ -182,46 +183,8 @@ export default function QueuePage() {
   const totalActive = processingAll.length + waiting.length;
   const freeSlots = Math.max(0, maxParallel - totalActive);
 
-  // ══════════════════════════════════════════════════════════
-  // ⭐ Perkiraan waktu mulai untuk antrian
-  //    Slot kosong = sekarang. Slot countdown = saat countdown habis.
-  //    Order progress & menunggu konfirmasi tidak punya jam selesai,
-  //    jadi slotnya tidak dihitung.
-  // ══════════════════════════════════════════════════════════
-  const queueEstimates = (() => {
-    const result = new Map<string, number | null>();
-
-    const durations = processingCountdown
-      .map((o) => {
-        const s = toMs(o.processing_started_at);
-        const e = toMs(o.estimated_end_at);
-        return s != null && e != null && e > s ? e - s : null;
-      })
-      .filter((d): d is number => d != null);
-    const avgDuration = durations.length ? durations.reduce((a, b) => a + b, 0) / durations.length : null;
-
-    const slots: number[] = [];
-    for (let i = 0; i < freeSlots; i++) slots.push(now);
-    for (const o of processingCountdown) {
-      const e = toMs(o.estimated_end_at);
-      if (e != null) slots.push(Math.max(e, now));
-    }
-    slots.sort((a, b) => a - b);
-
-    for (const o of queued) {
-      const start = slots.shift();
-      if (start == null) {
-        result.set(o.order_id, null);
-        continue;
-      }
-      result.set(o.order_id, start);
-      if (avgDuration != null) {
-        slots.push(start + avgDuration);
-        slots.sort((a, b) => a - b);
-      }
-    }
-    return result;
-  })();
+  // ⭐ Perkiraan waktu mulai untuk antrian (rumus bersama di lib/queueUtils)
+  const queueEstimates = estimateQueueStarts(orders, maxParallel, now);
 
   // ══════════════════════════════════════════════════════════
   // ⭐ Cari order kamu
@@ -496,7 +459,7 @@ export default function QueuePage() {
 
               {/* WAITING CONFIRM */}
               <section>
-                <SectionHeader icon="fa-clock" title="Menunggu Konfirmasi Penjoki" count={waiting.length} color="violet" />
+                <SectionHeader icon="fa-clock" title="Menunggu Konfirmasi Tim" count={waiting.length} color="violet" />
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   {waiting.length === 0 ? (
                     <EmptyState icon="fa-inbox" text="Tidak ada order menunggu konfirmasi" />
@@ -515,7 +478,7 @@ export default function QueuePage() {
                             MENUNGGU
                           </>
                         }
-                        info="Menunggu penjoki konfirmasi"
+                        info="Menunggu konfirmasi tim kami"
                       />
                     ))
                   )}
@@ -883,7 +846,14 @@ function ProgressCard({
         </div>
         <div className="flex items-center justify-between mt-2 text-[11px]">
           <span className="text-slate-400 font-semibold">
-            {percent >= 100 ? "🎉 Selesai!" : `${Math.floor(percent)}% selesai`}
+            {percent >= 100 ? (
+              <span className="text-emerald-400 inline-flex items-center gap-1">
+                <i className="fa-solid fa-circle-check text-[10px]"></i>
+                Selesai!
+              </span>
+            ) : (
+              `${Math.floor(percent)}% selesai`
+            )}
           </span>
           {lastUpdate && (
             <span className="text-slate-500 flex items-center gap-1" title="Terakhir kali progres berubah">

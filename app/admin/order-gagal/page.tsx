@@ -5,6 +5,8 @@ import { useEffect, useState } from "react";
 import AdminHeader from "@/app/components/AdminHeader";
 import { useToast } from "@/app/components/ToastProvider";
 import { useConfirmAsync } from "@/app/components/ConfirmDialog";
+import { useCurrentUser } from "@/app/hooks/useCurrentUser";
+import Link from "next/link";
 type FailedOrder = {
   order_id: string;
   product_title?: string;
@@ -23,20 +25,12 @@ type FailedOrder = {
   };
 };
 
-type IncomeLog = {
-  id?: number | string;
-  order_id: string;
-  joki_name?: string;
-  product_title?: string;
-  amount?: number;
-  completed_at?: string;
-  roblox_username?: string;
-  buyer_name?: string;
-};
 
 export default function OrderGagalPage() {
   const toast = useToast();
   const { confirm, confirmDialog } = useConfirmAsync();
+  const { user: currentUser } = useCurrentUser();
+  const isEllan = currentUser?.username?.toLowerCase() === "ellan";
   const [orders, setOrders] = useState<FailedOrder[]>([]);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
@@ -45,11 +39,6 @@ export default function OrderGagalPage() {
   // ⭐ SEARCH STATE
   // ══════════════════════════════════════════════════════
   const [searchQuery, setSearchQuery] = useState("");
-  const [incomeSearch, setIncomeSearch] = useState("");
-  const [incomeResults, setIncomeResults] = useState<IncomeLog[]>([]);
-  const [incomeSearching, setIncomeSearching] = useState(false);
-  const [showIncomePanel, setShowIncomePanel] = useState(false);
-  const [incomeSearched, setIncomeSearched] = useState(false);
 
   const fetchOrders = async () => {
     try {
@@ -125,38 +114,6 @@ export default function OrderGagalPage() {
   // ══════════════════════════════════════════════════════
   // ⭐ SEARCH INCOME LOG
   // ══════════════════════════════════════════════════════
-  const searchIncomeLog = async () => {
-    const q = incomeSearch.trim();
-    if (!q) return;
-    setIncomeSearching(true);
-    setIncomeSearched(true);
-    try {
-      const res = await fetch(`/api/income/search?q=${encodeURIComponent(q)}`);
-      const data = await res.json();
-      if (data.success) {
-        setIncomeResults(data.data || []);
-        setShowIncomePanel(true);
-      } else {
-        toast.error(data.error || "Gagal search income log");
-        setIncomeResults([]);
-        setShowIncomePanel(true);
-      }
-    } catch (err) {
-      console.error(err);
-      toast.error("Error search income log");
-      setIncomeResults([]);
-      setShowIncomePanel(true);
-    } finally {
-      setIncomeSearching(false);
-    }
-  };
-
-  const resetIncomeSearch = () => {
-    setShowIncomePanel(false);
-    setIncomeResults([]);
-    setIncomeSearch("");
-    setIncomeSearched(false);
-  };
 
   // ══════════════════════════════════════════════════════
   // SUMMARY STATS
@@ -479,7 +436,7 @@ export default function OrderGagalPage() {
                           <i className="fa-solid fa-user-tie text-slate-400 dark:text-slate-500 text-xs mt-1 w-4"></i>
                           <div className="min-w-0 flex-1">
                             <p className="text-[11px] text-slate-500 dark:text-slate-400 uppercase tracking-wider font-semibold">
-                              Joki
+                              Ditangani
                             </p>
                             <p className="font-semibold text-slate-800 dark:text-slate-200 capitalize truncate">
                               {order.joki_name || "ellan"}
@@ -604,143 +561,22 @@ export default function OrderGagalPage() {
           </div>
         )}
 
-        {/* ══════════════════════════════════════════════════
-            ⭐ SEARCH INCOME LOG PANEL — PINDAH KE BAWAH
-        ══════════════════════════════════════════════════ */}
-        <div className="bg-white dark:bg-slate-900/50 backdrop-blur-xl border border-slate-200 dark:border-slate-800 rounded-2xl p-4 md:p-5 relative overflow-hidden">
-          <div className="absolute -right-6 -top-6 w-24 h-24 bg-blue-500/5 dark:bg-blue-600/10 rounded-full blur-2xl pointer-events-none"></div>
-
-          <div className="flex flex-col md:flex-row md:items-center gap-3 relative">
-            <div className="flex items-center gap-3 shrink-0">
-              <div className="w-10 h-10 rounded-xl bg-linear-to-tr from-blue-600 to-cyan-500 flex items-center justify-center text-white shadow-lg shadow-blue-600/30">
-                <i className="fa-solid fa-database text-sm"></i>
-              </div>
-              <div>
-                <h3 className="text-sm font-extrabold text-slate-900 dark:text-white">
-                  Cek Income Log
-                </h3>
-                <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                  Search langsung ke Supabase
-                </p>
-              </div>
+        {/* ⭐ Cek income dipindah ke halaman Pendapatan Tim → Cek Order (khusus Ellan) */}
+        {isEllan && (
+          <Link
+            href="/admin/pendapatan"
+            className="flex items-center gap-3 bg-white dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 md:p-5 hover:border-emerald-400 transition group"
+          >
+            <div className="w-10 h-10 rounded-xl bg-linear-to-tr from-emerald-600 to-teal-500 flex items-center justify-center text-white shadow-lg shadow-emerald-600/30 shrink-0">
+              <i className="fa-solid fa-magnifying-glass-dollar text-sm"></i>
             </div>
-
-            <div className="flex-1 flex gap-2">
-              <div className="relative flex-1">
-                <i className="fa-solid fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm pointer-events-none"></i>
-                <input
-                  type="text"
-                  placeholder="Order ID / username / joki..."
-                  value={incomeSearch}
-                  onChange={(e) => setIncomeSearch(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") searchIncomeLog();
-                  }}
-                  className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-blue-500/50 transition"
-                />
-              </div>
-              <button
-                onClick={searchIncomeLog}
-                disabled={incomeSearching || !incomeSearch.trim()}
-                className="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold disabled:opacity-40 disabled:cursor-not-allowed transition-all shadow-sm shadow-blue-600/20 flex items-center gap-2"
-              >
-                <i
-                  className={`fa-solid ${
-                    incomeSearching ? "fa-spinner fa-spin" : "fa-search"
-                  } text-xs`}
-                ></i>
-                <span className="hidden sm:inline">Cari</span>
-              </button>
-              {showIncomePanel && (
-                <button
-                  onClick={resetIncomeSearch}
-                  className="px-3 py-2.5 rounded-xl bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition"
-                  title="Tutup hasil"
-                >
-                  <i className="fa-solid fa-xmark text-xs"></i>
-                </button>
-              )}
+            <div className="min-w-0 flex-1">
+              <h3 className="text-sm font-extrabold text-slate-900 dark:text-white">Cek apakah order sudah masuk income</h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400">Sekarang ada di Pendapatan Tim → tab Cek Order, lengkap dengan tombol proses ulang</p>
             </div>
-          </div>
-
-          {/* Hasil search */}
-          {showIncomePanel && (
-            <div className="mt-4 pt-4 border-t border-slate-100 dark:border-slate-800">
-              <div className="flex items-center justify-between mb-3">
-                <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                  Hasil: {incomeResults.length} entry
-                </p>
-                {incomeResults.length > 0 && (
-                  <p className="text-[11px] font-semibold text-green-600 dark:text-green-400">
-                    Total: Rp{" "}
-                    {incomeResults
-                      .reduce((s, r) => s + (r.amount || 0), 0)
-                      .toLocaleString("id-ID")}
-                  </p>
-                )}
-              </div>
-
-              {incomeResults.length === 0 && incomeSearched ? (
-                <div className="text-center py-6 text-slate-500 dark:text-slate-400 text-sm">
-                  <i className="fa-solid fa-inbox text-2xl mb-2 opacity-40"></i>
-                  <p>Nggak ada data yang match</p>
-                </div>
-              ) : (
-                <div className="space-y-2 max-h-96 overflow-y-auto scrollbar-hide">
-                  {incomeResults.map((item, idx) => (
-                    <div
-                      key={item.id ?? idx}
-                      className="p-3 rounded-xl bg-slate-50 dark:bg-slate-950/50 border border-slate-200 dark:border-slate-800 hover:border-blue-500/30 transition"
-                    >
-                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 flex-wrap mb-1">
-                            <span className="font-mono font-bold text-sm text-slate-900 dark:text-white">
-                              #{item.order_id}
-                            </span>
-                            {item.joki_name && (
-                              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-blue-100 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 capitalize">
-                                {item.joki_name}
-                              </span>
-                            )}
-                            {item.roblox_username && (
-                              <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
-                                {item.roblox_username}
-                              </span>
-                            )}
-                          </div>
-                          <p className="text-xs text-slate-600 dark:text-slate-400 truncate">
-                            {item.product_title || "-"}
-                          </p>
-                          <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-1">
-                            <i className="fa-solid fa-clock mr-1"></i>
-                            {item.completed_at
-                              ? new Date(item.completed_at).toLocaleString(
-                                  "id-ID",
-                                  {
-                                    day: "2-digit",
-                                    month: "short",
-                                    year: "numeric",
-                                    hour: "2-digit",
-                                    minute: "2-digit",
-                                  }
-                                )
-                              : "-"}
-                          </p>
-                        </div>
-                        <div className="text-right shrink-0">
-                          <p className="font-black text-green-600 dark:text-green-400 text-sm">
-                            Rp {(item.amount || 0).toLocaleString("id-ID")}
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-        </div>
+            <i className="fa-solid fa-arrow-right text-slate-400 group-hover:text-emerald-500 group-hover:translate-x-1 transition"></i>
+          </Link>
+        )}
       </div>
       {confirmDialog}
     </>

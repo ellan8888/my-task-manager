@@ -83,8 +83,9 @@ export default function ProgressKeywordsPage() {
   
   return (
     <div className="p-8 max-w-4xl mx-auto">
-      <h1 className="text-2xl font-bold mb-6">
-        🎯 Progress Keywords
+      <h1 className="text-2xl font-bold mb-6 flex items-center gap-2.5">
+        <i className="fa-solid fa-bullseye text-violet-500"></i>
+        Progress Keywords
       </h1>
       
       <p className="text-sm text-slate-500 mb-6">
@@ -94,7 +95,10 @@ export default function ProgressKeywordsPage() {
       
       {/* Form Tambah */}
       <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 border mb-6">
-        <h2 className="font-bold mb-4">➕ Tambah Keyword Baru</h2>
+        <h2 className="font-bold mb-4 flex items-center gap-2">
+          <i className="fa-solid fa-plus text-violet-500"></i>
+          Tambah Keyword Baru
+        </h2>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
           <input
             type="text"

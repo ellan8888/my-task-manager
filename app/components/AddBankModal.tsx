@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { SelectMenu, type MenuOption } from "@/app/components/Pickers";
 
 type Props = {
   onClose: () => void;
@@ -12,6 +13,28 @@ const BANKS = [
   "Dana", "OVO", "GoPay", "ShopeePay", "LinkAja",
   "Lainnya",
 ];
+
+// Warna avatar per bank / e-wallet (hanya huruf awal + nama)
+const BANK_COLORS: Record<string, string> = {
+  BCA: "bg-blue-600 text-white",
+  BRI: "bg-sky-600 text-white",
+  BNI: "bg-orange-500 text-white",
+  Mandiri: "bg-yellow-400 text-blue-900",
+  BSI: "bg-teal-600 text-white",
+  "CIMB Niaga": "bg-red-600 text-white",
+  Permata: "bg-emerald-600 text-white",
+  Dana: "bg-sky-500 text-white",
+  OVO: "bg-purple-600 text-white",
+  GoPay: "bg-cyan-500 text-white",
+  ShopeePay: "bg-orange-600 text-white",
+  LinkAja: "bg-rose-600 text-white",
+};
+
+const BANK_OPTIONS: MenuOption<string>[] = BANKS.map((b) =>
+  b === "Lainnya"
+    ? { value: b, label: b, icon: "fa-ellipsis", avatarClass: "bg-slate-200 text-slate-600 dark:bg-slate-700 dark:text-slate-200" }
+    : { value: b, label: b, avatarClass: BANK_COLORS[b] }
+);
 
 export default function AddBankModal({ onClose, onSuccess }: Props) {
   const [bankName, setBankName] = useState("BCA");
@@ -97,17 +120,15 @@ export default function AddBankModal({ onClose, onSuccess }: Props) {
             <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1.5">
               Nama Bank / E-Wallet
             </label>
-            <select
+            <SelectMenu
+              options={BANK_OPTIONS}
               value={bankName}
-              onChange={(e) => setBankName(e.target.value)}
-              className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm text-slate-900 dark:text-slate-200 focus:outline-none focus:border-violet-500 transition"
-            >
-              {BANKS.map((b) => (
-                <option key={b} value={b}>
-                  {b}
-                </option>
-              ))}
-            </select>
+              onChange={setBankName}
+              searchable
+              searchPlaceholder="Cari bank / e-wallet..."
+              accent="blue"
+              ariaLabel="Nama bank atau e-wallet"
+            />
 
             {bankName === "Lainnya" && (
               <input

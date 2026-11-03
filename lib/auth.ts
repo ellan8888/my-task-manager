@@ -46,6 +46,10 @@ export function getSession(req: Request & { cookies?: { get(name: string): { val
 
 export const isSuperadmin = (s: Session | null) => s?.role === "superadmin";
 
+/** Potongan fee bersifat RAHASIA — hanya superadmin (owner) yang boleh melihat / mengubah */
+export const canSeeFee = (s: Session | null) =>
+  s?.role === "superadmin" || s?.username?.toLowerCase() === "ellan";
+
 /** Awal hari ini dalam WIB (UTC+7), dikembalikan sebagai Date UTC. */
 export function startOfTodayWIB(now = new Date()): Date {
   const wib = new Date(now.getTime() + 7 * 3600_000);

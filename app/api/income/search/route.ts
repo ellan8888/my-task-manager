@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { getSession, isSuperadmin } from "@/lib/auth";
 
 // ⭐ Pake service role biar bypass RLS (search bebas)
 const supabase = createClient(
@@ -10,6 +11,13 @@ const supabase = createClient(
 
 export async function GET(req: NextRequest) {
   try {
+    // ⭐ /api/income dilewati middleware → wajib cek login di sini.
+    //    Data pendapatan semua user → hanya superadmin.
+    const session = getSession(req);
+    if (!isSuperadmin(session)) {
+      return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+    }
+
     const { searchParams } = new URL(req.url);
     const query = searchParams.get("q")?.trim();
 

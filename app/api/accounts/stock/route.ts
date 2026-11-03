@@ -174,6 +174,17 @@ export async function POST(req: NextRequest) {
     const { username, password, roblox_cookie, kategori, added_by, status } = body;
     const note = cleanNote(body.note);
 
+    // ⭐ Pemilik akun: dari form, atau dari user yang login. TIDAK ada nama default lagi.
+    const signed = req.cookies.get("auth_session")?.value;
+    const sessionUser = signed ? verifySession(signed, process.env.AUTH_SECRET!)?.username : null;
+    const owner = String(added_by || sessionUser || "").trim();
+    if (!owner) {
+      return NextResponse.json(
+        { success: false, message: "Pemilik akun tidak diketahui — silakan login ulang" },
+        { status: 400 }
+      );
+    }
+
     if (!username) {
       return NextResponse.json(
         { success: false, message: "Username wajib diisi" },
@@ -214,7 +225,7 @@ export async function POST(req: NextRequest) {
           password: password || null,
           roblox_cookie: roblox_cookie || null,
           kategori: kategori || "akun",
-          added_by: added_by || "lan4337",
+          added_by: owner,
           used: false,
           logged_out: false,
           idle: false,
@@ -279,7 +290,7 @@ export async function POST(req: NextRequest) {
       password: password || null,
       roblox_cookie: roblox_cookie || null,
       kategori: kategori || "akun",
-      added_by: added_by || "lan4337",
+      added_by: owner,
       used: false,
       logged_out: false,
       idle: false,

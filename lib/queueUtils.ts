@@ -98,3 +98,81 @@ export function formatWIB(ms: number, now: number): string {
   const day = new Date(ms).toLocaleDateString("id-ID", { day: "numeric", month: "short", timeZone: "Asia/Jakarta" });
   return `${day}, ${time}`;
 }
+
+// ══════════════════════════════════════════════════════════
+// Perkiraan waktu mulai untuk antrian
+//   Slot kosong = sekarang. Slot countdown = saat countdown habis.
+//   Order progress & menunggu konfirmasi tidak punya jam selesai,
+//   jadi slotnya tidak dihitung.
+//   Dipakai halaman /queue DAN halaman detail supaya angkanya sama.
+// ══════════════════════════════════════════════════════════
+export type QueueEstimateOrder = {
+  order_id: string;
+  queue_status: string;
+  queue_position: number | null;
+  processing_started_at: string | null;
+  estimated_end_at: string | null;
+  order_type?: string | null;
+  progress_keyword: string | null;
+  target_count: number | null;
+};
+
+const msOf = (iso: string | null | undefined) => {
+  if (!iso) return null;
+  const t = new Date(iso).getTime();
+  return Number.isNaN(t) ? null : t;
+};
+
+export const isProgressLike = (o: Pick<QueueEstimateOrder, "order_type" | "progress_keyword" | "target_count">) =>
+  o.order_type === "progress" || (o.progress_keyword != null && (o.target_count ?? 0) > 0);
+
+/** order_id → perkiraan jam mulai (ms), atau null kalau belum bisa diperkirakan */
+export function estimateQueueStarts(
+  orders: QueueEstimateOrder[],
+  maxParallel: number,
+  now: number
+): Map<string, number | null> {
+  const result = new Map<string, number | null>();
+
+  const processingAll = orders.filter((o) => o.queue_status === "processing");
+  const waitingCount = orders.filter((o) => o.queue_status === "waiting_confirm").length;
+  const processingCountdown = processingAll
+    .filter((o) => !isProgressLike(o))
+    .sort((a, b) => (msOf(a.estimated_end_at) ?? Infinity) - (msOf(b.estimated_end_at) ?? Infinity));
+  const queued = orders
+    .filter((o) => o.queue_status === "queued")
+    .sort((a, b) => (a.queue_position ?? Infinity) - (b.queue_position ?? Infinity));
+
+  const freeSlots = Math.max(0, maxParallel - (processingAll.length + waitingCount));
+
+  const durations = processingCountdown
+    .map((o) => {
+      const s = msOf(o.processing_started_at);
+      const e = msOf(o.estimated_end_at);
+      return s != null && e != null && e > s ? e - s : null;
+    })
+    .filter((d): d is number => d != null);
+  const avgDuration = durations.length ? durations.reduce((a, b) => a + b, 0) / durations.length : null;
+
+  const slots: number[] = [];
+  for (let i = 0; i < freeSlots; i++) slots.push(now);
+  for (const o of processingCountdown) {
+    const e = msOf(o.estimated_end_at);
+    if (e != null) slots.push(Math.max(e, now));
+  }
+  slots.sort((a, b) => a - b);
+
+  for (const o of queued) {
+    const start = slots.shift();
+    if (start == null) {
+      result.set(o.order_id, null);
+      continue;
+    }
+    result.set(o.order_id, start);
+    if (avgDuration != null) {
+      slots.push(start + avgDuration);
+      slots.sort((a, b) => a - b);
+    }
+  }
+  return result;
+}

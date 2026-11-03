@@ -5,6 +5,7 @@ import { supabase } from "@/lib/supabase";
 import { useCurrentUser } from "@/app/hooks/useCurrentUser";
 import type { Task } from "@/lib/types";
 import AppShell from "@/app/components/AppShell";
+import { DatePicker, SegmentedChoice, TimePicker } from "@/app/components/Pickers";
 import { ConfirmDialog, useConfirm } from "@/app/components/ConfirmDialog";
 import {
   StatCard,
@@ -500,42 +501,36 @@ export default function TasksPage() {
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1.5">Deadline</label>
-                    <div className="relative">
-                      <input
-                        type="date"
-                        value={deadline}
-                        onChange={(e) => setDeadline(e.target.value)}
-                        className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 pr-11 text-sm text-slate-900 dark:text-slate-200 focus:outline-none focus:border-violet-500 transition"
-                      />
-                      <i className="fa-regular fa-calendar absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 text-sm pointer-events-none"></i>
-                    </div>
+                    <DatePicker value={deadline} onChange={setDeadline} placeholder="Pilih deadline" ariaLabel="Deadline" />
                   </div>
                   <div>
                     <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1.5">Daily Reminder</label>
-                    <div className="relative">
-                      <input
-                        type="time"
-                        value={reminder}
-                        onChange={(e) => setReminder(e.target.value)}
-                        className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 pr-11 text-sm text-slate-900 dark:text-slate-200 focus:outline-none focus:border-violet-500 transition"
-                      />
-                      <i className="fa-regular fa-clock absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 text-sm pointer-events-none"></i>
-                    </div>
+                    <TimePicker
+                      value={reminder}
+                      onChange={setReminder}
+                      placeholder="Tanpa reminder"
+                      clearable
+                      align="right"
+                      ariaLabel="Daily reminder"
+                    />
                   </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1.5">Priority</label>
-                    <select
+                    <SegmentedChoice
+                      ariaLabel="Priority"
+                      fullWidth
+                      size="sm"
                       value={priority}
-                      onChange={(e) => setPriority(e.target.value as "Low" | "Medium" | "High")}
-                      className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm text-slate-900 dark:text-slate-200 focus:outline-none focus:border-violet-500 transition"
-                    >
-                      <option value="Low">Low</option>
-                      <option value="Medium">Medium</option>
-                      <option value="High">High</option>
-                    </select>
+                      onChange={setPriority}
+                      options={[
+                        { value: "Low", label: "Low", icon: "fa-arrow-down", activeClass: "bg-emerald-500 text-white border-emerald-500 shadow-emerald-500/30" },
+                        { value: "Medium", label: "Medium", icon: "fa-equals", activeClass: "bg-amber-500 text-white border-amber-500 shadow-amber-500/30" },
+                        { value: "High", label: "High", icon: "fa-fire", activeClass: "bg-rose-500 text-white border-rose-500 shadow-rose-500/30" },
+                      ]}
+                    />
                   </div>
                   <div>
                     <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1.5">Mata Kuliah</label>

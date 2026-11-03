@@ -5,6 +5,7 @@ import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { registerPushSubscription } from "@/lib/push";
 import type { CurrentUser } from "@/lib/types";
+import { useToast } from "@/app/components/ToastProvider";
 
 type ActivePage = "tasks" | "joki";
 
@@ -88,6 +89,7 @@ export default function AppShell({
   refreshKey,
   children,
 }: AppShellProps) {
+  const toast = useToast();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarHydrated, setSidebarHydrated] = useState(false);
   const [isDark, setIsDark] = useState(true);
@@ -226,14 +228,14 @@ export default function AppShell({
       const res = await fetch("/api/bot/restart", { method: "POST" });
       const data = await res.json();
       if (data.success) {
-        alert("✅ Bot sedang di-restart...\n\nTunggu 30-60 detik.");
+        toast.success("Bot sedang di-restart, tunggu 30–60 detik", 6000);
         setTimeout(fetchBotStatus, 5000);
         setTimeout(fetchBotStatus, 15000);
       } else {
-        alert(`❌ Gagal: ${data.message}`);
+        toast.error(`Gagal: ${data.message}`);
       }
     } catch {
-      alert("❌ Gagal menghubungi restart server");
+      toast.error("Gagal menghubungi restart server");
     } finally {
       setRestarting(false);
     }

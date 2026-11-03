@@ -15,7 +15,8 @@ type MenuItemBelow = {
   label: string;
   active: boolean;
   badge?: string;
-  badgeColor?: "red" | "emerald";
+  badgeColor?: "red" | "emerald" | "amber";
+  badgeTitle?: string;
   superadminOnly?: boolean;
   ellanOnly?: boolean;        // ⭐ NEW — cuma ellan
   migrasiOnly?: boolean;
@@ -38,6 +39,9 @@ export default function AdminSidebar({ sidebarOpen, setSidebarOpen }: Props) {
 
   // ★ State buat count order gagal
   const [failedCount, setFailedCount] = useState(0);
+
+  // ★ Jumlah pengajuan tarik saldo yang menunggu (khusus superadmin)
+  const [pendingWithdrawCount, setPendingWithdrawCount] = useState(0);
 
   // ⭐ State user yang login
   const [currentUser, setCurrentUser] = useState<{
@@ -110,6 +114,37 @@ const isEllan = currentUser?.username?.toLowerCase() === "ellan";
     const interval = setInterval(fetchFailedCount, 30000);
     return () => clearInterval(interval);
   }, [isSuperadmin]);
+
+  // ⭐ Fetch jumlah pengajuan tarik saldo yang menunggu — cuma kalau superadmin
+  //    Dicek tiap 20 detik, saat pindah halaman, dan saat tab dibuka lagi
+  useEffect(() => {
+    if (!isSuperadmin) return;
+
+    const fetchPendingWithdraw = async () => {
+      try {
+        const res = await fetch("/api/withdrawals?status=pending");
+        const data = await res.json();
+        if (data.success && Array.isArray(data.data)) {
+          setPendingWithdrawCount(
+            data.data.filter((w: { note?: string | null }) => !(w.note || "").startsWith("[BELI CODE]")).length
+          );
+        }
+      } catch {
+        // silent fail
+      }
+    };
+
+    fetchPendingWithdraw();
+    const interval = setInterval(fetchPendingWithdraw, 20000);
+    const onVisible = () => {
+      if (document.visibilityState === "visible") fetchPendingWithdraw();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [isSuperadmin, pathname]);
 
   const toggleTheme = () => {
     const newMode = !isDark;
@@ -206,13 +241,41 @@ const isEllan = currentUser?.username?.toLowerCase() === "ellan";
       items: [
         { href: "/admin/kategori", icon: "fa-folder-tree", label: "Kategori Link", active: pathname === "/admin/kategori" },
         { href: "/admin/redeem", icon: "fa-ticket", label: "Code Redfinger", active: pathname === "/admin/redeem" },
+        {
+          href: "/admin/ganti-akun",
+          icon: "fa-right-left",
+          label: "Ganti Akun",
+          active: pathname === "/admin/ganti-akun",
+          ellanOnly: true,
+        },
       ],
     },
     {
       key: "keuangan",
       label: "Keuangan",
       items: [
-        { href: "/admin/withdrawals", icon: "fa-wallet", label: "Penarikan", active: pathname === "/admin/withdrawals" },
+        {
+          href: "/admin/withdrawals",
+          icon: "fa-wallet",
+          label: "Penarikan",
+          active: pathname === "/admin/withdrawals",
+          badge: isSuperadmin && pendingWithdrawCount > 0 ? String(pendingWithdrawCount) : undefined,
+          badgeColor: "amber",
+          badgeTitle: `${pendingWithdrawCount} pengajuan tarik saldo menunggu persetujuan`,
+        },
+        {
+          href: "/admin/riwayat-saldo",
+          icon: "fa-clock-rotate-left",
+          label: "Riwayat Saldo",
+          active: pathname === "/admin/riwayat-saldo",
+        },
+        {
+          href: "/admin/pendapatan",
+          icon: "fa-people-group",
+          label: "Pendapatan Tim",
+          active: pathname === "/admin/pendapatan",
+          ellanOnly: true,
+        },
         {
           href: "/admin/fee-report",
           icon: "fa-money-bill-trend-up",
@@ -262,12 +325,21 @@ const isEllan = currentUser?.username?.toLowerCase() === "ellan";
 
       {item.badge && (
         <span
+          title={item.badgeTitle}
           className={`ml-auto text-[10px] px-2 py-0.5 rounded font-mono ${
             item.badgeColor === "red"
               ? "bg-red-100 dark:bg-red-500/20 text-red-700 dark:text-red-300"
-              : "bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300"
+              : item.badgeColor === "amber"
+                ? "inline-flex items-center gap-1.5 font-bold bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-300"
+                : "bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300"
           }`}
         >
+          {item.badgeColor === "amber" && (
+            <span className="relative flex w-1.5 h-1.5">
+              <span className="absolute inset-0 rounded-full bg-amber-500 animate-ping opacity-75"></span>
+              <span className="relative w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+            </span>
+          )}
           {item.badge}
         </span>
       )}

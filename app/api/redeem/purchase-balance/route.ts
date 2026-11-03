@@ -1,6 +1,7 @@
 // app/api/redeem/purchase-balance/route.ts
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { getBalance } from "@/lib/ledger";
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -31,24 +32,8 @@ export async function POST(request: Request) {
 
     // 1. Cek saldo (skip kalau owner)
     if (!isFree) {
-      const { data: income } = await supabaseAdmin
-        .from("income_log")
-        .select("amount")
-        .eq("joki_name", user);
-
-      const totalIncome = (income || []).reduce(
-        (s, r) => s + (r.amount || 0),
-        0
-      );
-
-      const { data: wd } = await supabaseAdmin
-        .from("withdrawals")
-        .select("amount, status")
-        .eq("joki_name", user)
-        .in("status", ["approved", "pending"]);
-
-      const totalWd = (wd || []).reduce((s, r) => s + (r.amount || 0), 0);
-      const sisa = totalIncome - totalWd;
+      // Saldo dari buku kas (SQL 009); kalau belum ada, pakai hitungan lama
+      const sisa = await getBalance(user);
 
       if (sisa < PRICE_PER_CODE) {
         return NextResponse.json(

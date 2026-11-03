@@ -1,12 +1,15 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useToast } from "@/app/components/ToastProvider";
-import { getRealTarget } from "@/lib/queueUtils";
+import { ProgressHero, EggSection } from "./ProgressView";
+import CountdownHero from "./CountdownView";
+import { QueueHero, StatusSteps, WaitingHero, type StepStatus } from "./WaitingView";
+import { estimateQueueStarts, type QueueEstimateOrder } from "@/lib/queueUtils";
 
 type EternalEggLog = {
   egg_name: string;
@@ -90,6 +93,10 @@ export default function QueueDetailPage() {
   const [addValue, setAddValue] = useState("");
   const [addUnit, setAddUnit] = useState<"minutes" | "hours">("minutes");
   const [saving, setSaving] = useState(false);
+
+  // === ANTRIAN: daftar order aktif + jumlah slot (untuk perkiraan mulai) ===
+  const [queueList, setQueueList] = useState<QueueEstimateOrder[] | null>(null);
+  const [maxParallel, setMaxParallel] = useState<number | null>(null);
 
   
 
@@ -189,7 +196,63 @@ useEffect(() => {
     }
 
     setOrder(data);
+    if (data.queue_status === "queued") loadQueueList();
   };
+
+  // ⭐ Daftar order aktif — hanya diambil saat order ini masih di antrian
+  const loadQueueList = async () => {
+    const { data, error } = await supabase
+      .from("joki_orders")
+      .select(
+        "order_id, queue_status, queue_position, processing_started_at, estimated_end_at, order_type, progress_keyword, target_count"
+      )
+      .eq("completed", false);
+    if (error) {
+      console.error("[QueueDetail] queue list error:", error);
+      return;
+    }
+    setQueueList((data as QueueEstimateOrder[]) || []);
+  };
+
+  useEffect(() => {
+    fetch("/api/queue/settings")
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.success) setMaxParallel(d.max_parallel);
+      })
+      .catch(() => {});
+  }, []);
+
+  // ⭐ Kasih tahu pembeli saat order mulai dikerjakan (toast + judul tab + getar)
+  const prevStatus = useRef<string | null>(null);
+  useEffect(() => {
+    const status = order?.queue_status ?? null;
+    const before = prevStatus.current;
+    prevStatus.current = status;
+    if (!status || !before || before === status) return;
+    if (status !== "processing" || (before !== "queued" && before !== "waiting_confirm")) return;
+
+    toast.success("Jokian kamu mulai dikerjakan!");
+    try {
+      navigator.vibrate?.([120, 60, 120]);
+    } catch {}
+
+    const original = document.title;
+    if (document.visibilityState === "hidden") {
+      let flip = false;
+      const timer = setInterval(() => {
+        flip = !flip;
+        document.title = flip ? "(Mulai) Jokian dikerjakan!" : original;
+      }, 1200);
+      const restore = () => {
+        if (document.visibilityState !== "visible") return;
+        clearInterval(timer);
+        document.title = original;
+        document.removeEventListener("visibilitychange", restore);
+      };
+      document.addEventListener("visibilitychange", restore);
+    }
+  }, [order?.queue_status, toast]);
 
   useEffect(() => {
     if (!orderId) return;
@@ -347,9 +410,27 @@ useEffect(() => {
     ? new Date(effectiveEstimatedEnd).getTime()
     : 0;
   const remaining = Math.max(0, endTime - now);
-  const hours = Math.floor(remaining / 3600000);
-  const minutes = Math.floor((remaining % 3600000) / 60000);
-  const seconds = Math.floor((remaining % 60000) / 1000);
+
+  // ⭐ Tahapan untuk garis langkah
+  const stepStatus: StepStatus = isCompleted
+    ? "completed"
+    : isProcessing
+      ? "processing"
+      : isWaiting
+        ? "waiting_confirm"
+        : "queued";
+  const stepHint = isWaiting
+    ? "menunggu tim"
+    : isQueued
+      ? `antrian #${order.queue_position ?? "-"}`
+      : null;
+
+  // ⭐ Perkiraan mulai (rumus sama dengan halaman /queue)
+  const queuedTotal = queueList ? queueList.filter((o) => o.queue_status === "queued").length : 0;
+  const queueEta: number | null | undefined =
+    isQueued && queueList && maxParallel != null
+      ? (estimateQueueStarts(queueList, maxParallel, now).get(order.order_id) ?? null)
+      : undefined;
 
   // ✅ Overdue cuma berlaku buat countdown order
   const isOverdue = !isProgressOrder && isProcessing && remaining === 0;
@@ -407,7 +488,7 @@ useEffect(() => {
         iconColor: "text-violet-400",
         icon: "fa-solid fa-hourglass-half",
         title: "MENUNGGU KONFIRMASI",
-        subtitle: "Menunggu penjoki mulai",
+        subtitle: "Menunggu tim kami mulai",
       }
     : {
         bg: "bg-indigo-500/10",
@@ -457,6 +538,35 @@ useEffect(() => {
         <div
           className={`rounded-3xl p-6 md:p-8 mb-6 border-2 ${statusConfig.bg} ${statusConfig.border}`}
         >
+          <StatusSteps status={stepStatus} hint={stepHint} />
+
+          {isProgressOrder && eternalData && eternalData.order.target_count > 0 ? (
+            // ⭐ Order progress: cincin progress + kecepatan & perkiraan selesai
+            <ProgressHero
+              data={eternalData}
+              fallbackTargetCount={order.target_count}
+              fallbackTargetUnit={order.target_unit}
+              now={now}
+              isCompleted={isCompleted}
+            />
+          ) : !isProgressOrder && isProcessing && !isCompleted ? (
+            // ⭐ Order countdown: cincin sisa waktu + garis waktu + tombol cepat admin
+            <CountdownHero
+              startIso={order.processing_started_at}
+              endIso={order.estimated_end_at}
+              now={now}
+              isAdmin={isAdmin}
+              saving={saving}
+              onQuickAdd={handleAddTime}
+              onOpenAddTime={() => setShowAddTime(true)}
+            />
+          ) : isWaiting && !isCompleted ? (
+            // ⭐ Menunggu konfirmasi
+            <WaitingHero />
+          ) : isQueued && !isCompleted ? (
+            // ⭐ Antrian: nomor besar + deretan posisi + perkiraan mulai
+            <QueueHero position={order.queue_position} totalQueued={queuedTotal} eta={queueEta} now={now} />
+          ) : (
           <div className="text-center">
             <div
               className={`w-20 h-20 rounded-3xl ${statusConfig.iconBg} ${statusConfig.iconColor} flex items-center justify-center mx-auto mb-5 shadow-sm border ${statusConfig.border}`}
@@ -470,69 +580,6 @@ useEffect(() => {
             </h2>
             <p className="text-sm text-slate-400">{statusConfig.subtitle}</p>
           </div>
-
-          {isProcessing && !isOverdue && !isCompleted && !isProgressOrder && (
-  <div className="mt-6 pt-6 border-t border-amber-500/20">
-              <p className="text-[11px] text-slate-400 mb-2 text-center uppercase tracking-wider font-bold flex items-center justify-center gap-1.5">
-                <i className="fa-regular fa-clock"></i>
-                Estimasi Selesai
-              </p>
-              <p className="text-3xl md:text-4xl font-black text-center font-mono tracking-tight text-amber-400">
-                {`${hours > 0 ? hours + ":" : ""}${minutes
-                  .toString()
-                  .padStart(2, "0")}:${seconds
-                  .toString()
-                  .padStart(2, "0")}`}
-              </p>
-              {order.estimated_end_at && (
-                <p className="text-xs text-slate-400 text-center mt-3 flex items-center justify-center gap-1.5">
-                  <i className="fa-regular fa-calendar text-[10px]"></i>
-                  {new Date(order.estimated_end_at).toLocaleString("id-ID", {
-                    timeZone: "Asia/Jakarta",
-                    day: "numeric",
-                    month: "short",
-                    hour: "2-digit",
-                    minute: "2-digit",
-                  })}{" "}
-                  WIB
-                </p>
-              )}
-
-              {isAdmin && (
-                <button
-                  onClick={() => setShowAddTime(true)}
-                  className="mt-5 w-full flex items-center justify-center gap-2 bg-slate-950/40 hover:bg-slate-950/60 border border-amber-500/40 hover:border-amber-500/60 text-amber-300 font-bold py-2.5 rounded-xl transition text-sm"
-                >
-                  <i className="fa-solid fa-plus"></i>
-                  Tambah Waktu
-                </button>
-              )}
-            </div>
-          )}
-
-          {/* ✅ Countdown lewat tapi status masih processing → pesan kalem */}
-          {isProcessing && isOverdue && !isCompleted && !isProgressOrder && (
-  <div className="mt-6 pt-6 border-t border-emerald-500/20">
-              <div className="text-center">
-                <i className="fa-solid fa-circle-check text-emerald-400 text-3xl mb-3"></i>
-                <p className="text-sm text-slate-300 font-medium">
-                  Jokian kamu sudah dalam proses penyelesaian.
-                </p>
-                <p className="text-xs text-slate-400 mt-1">
-                  Mohon tunggu sebentar ya kak, penjoki sedang menyelesaikan
-                </p>
-              </div>
-
-              {isAdmin && (
-                <button
-                  onClick={() => setShowAddTime(true)}
-                  className="mt-5 w-full flex items-center justify-center gap-2 bg-slate-950/40 hover:bg-slate-950/60 border border-emerald-500/40 hover:border-emerald-500/60 text-emerald-300 font-bold py-2.5 rounded-xl transition text-sm"
-                >
-                  <i className="fa-solid fa-plus"></i>
-                  Tambah Waktu
-                </button>
-              )}
-            </div>
           )}
 
           {/* ✅ Kalau completed → pesan selesai + tombol konfirmasi */}
@@ -600,127 +647,23 @@ useEffect(() => {
         {/* ═══════════════════════════════════════════════ */}
         {/* ETERNAL PROGRESS SECTION — cuma kalau order progress */}
         {/* ═══════════════════════════════════════════════ */}
-        {eternalData && eternalData.order.target_count > 0 && (
-          <div className="bg-slate-900/70 backdrop-blur-xl rounded-2xl p-5 md:p-6 border border-violet-500/30 mb-6">
-            <div className="flex items-center gap-2 mb-5">
-              <div className="w-9 h-9 rounded-xl bg-violet-500/20 border border-violet-500/30 flex items-center justify-center">
-                <i className="fa-solid fa-egg text-violet-400 text-sm"></i>
+        {eternalData &&
+          eternalData.order.target_count > 0 &&
+          !eternalData.order.progress_keyword.toLowerCase().includes("income") && (
+            <div className="bg-slate-900/70 backdrop-blur-xl rounded-2xl p-5 md:p-6 border border-violet-500/30 mb-6">
+              <div className="flex items-center gap-2 mb-5">
+                <div className="w-9 h-9 rounded-xl bg-violet-500/20 border border-violet-500/30 flex items-center justify-center">
+                  <i className="fa-solid fa-egg text-violet-400 text-sm"></i>
+                </div>
+                <h3 className="font-extrabold text-white">Egg yang didapat</h3>
+                <span className="ml-auto text-[11px] text-slate-500 flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                  Live
+                </span>
               </div>
-              <h3 className="font-extrabold text-white">
-                Progress {eternalData.order.progress_keyword.toUpperCase()}
-              </h3>
+              <EggSection data={eternalData} now={now} />
             </div>
-
-            {/* ⭐ LOGIKA DINAMIS: Cek apakah ini Joki Income atau Egg */}
-            {(() => {
-              const isIncome = eternalData.order.progress_keyword.toLowerCase().includes("income");
-              const unitLabel = isIncome ? "Income" : "Egg";
-              const unitLabelLower = isIncome ? "income" : "egg";
-
-              return (
-                <>
-                  {/* PROGRESS BAR */}
-                  <div className="mb-6">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">
-                        Target Counted {unitLabel}
-                      </span>
-                      <span className="text-sm font-black text-violet-300 font-mono">
-                        {formatShortNumber(eternalData.order.progress_count)} / {displayTarget}
-                      </span>
-                    </div>
-                    <div className="w-full h-3 bg-slate-950 rounded-full overflow-hidden border border-slate-800">
-                      <div
-                        className="h-full bg-linear-to-r from-violet-500 to-indigo-500 transition-all duration-500"
-                        style={{
-                          width: `${(() => {
-                            // ⭐ Target asli dari target_unit ("1T", "200Qa", ...) atau target_count
-                            const realTarget = getRealTarget({
-                              progress_count: eternalData.order.progress_count,
-                              target_count: eternalData.order.target_count || order.target_count,
-                              target_unit: order.target_unit,
-                            });
-
-                            const percent = Math.min(100, ((eternalData.order.progress_count ?? 0) / realTarget) * 100);
-                            return percent;
-                          })()}%`,
-                        }}
-                      />
-                    </div>
-                    <p className="text-[11px] text-slate-500 mt-2">
-                      {eternalData.eggs.total} {unitLabelLower} terkumpul · {eternalData.eggs.counted} masuk hitungan target
-                    </p>
-                  </div>
-
-                  {/* BREAKDOWN SECTION */}
-                  <div className="space-y-4">
-                    <p className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2">
-                      <i className="fa-solid fa-list text-[10px]"></i>
-                      {unitLabel} yang Didapat
-                    </p>
-
-                    {Object.keys(eternalData.eggs.by_rarity).length === 0 ? (
-                      <p className="text-xs text-slate-500 italic text-center py-4">
-                        Belum ada {unitLabelLower} yang didapat
-                      </p>
-                    ) : (
-                      Object.entries(eternalData.eggs.by_rarity)
-                        .sort(([a], [b]) => {
-                          // Tampilkan rarity target duluan
-                          if (a === eternalData.order.progress_keyword) return -1;
-                          if (b === eternalData.order.progress_keyword) return 1;
-                          return 0;
-                        })
-                        .map(([rarity, eggs]) => {
-                          const isTargetRarity = rarity === eternalData.order.progress_keyword;
-                          const rarityColor = isTargetRarity
-                            ? "text-violet-300 border-violet-500/40 bg-violet-500/10"
-                            : "text-slate-300 border-slate-700 bg-slate-800/40";
-
-                          const rarityIconClass = isTargetRarity ? "fa-solid fa-star" : "fa-solid fa-gem";
-
-                          return (
-                            <div
-                              key={rarity}
-                              className={`rounded-xl border ${rarityColor} p-4`}
-                            >
-                              <div className="flex items-center justify-between mb-3">
-                                <span className="text-sm font-extrabold capitalize flex items-center gap-2">
-                                  <i className={`${rarityIconClass} text-xs ${isTargetRarity ? "text-violet-400" : "text-sky-400"}`}></i>
-                                  {rarity}
-                                </span>
-                                <span className="text-xs font-mono text-slate-400">
-                                  {eggs.length} {unitLabelLower}
-                                </span>
-                              </div>
-                              <ul className="space-y-1.5">
-                                {eggs.map((egg, idx) => (
-                                  <li
-                                    key={idx}
-                                    className="text-xs text-slate-300 flex items-start gap-2"
-                                  >
-                                    <span className="text-slate-500 font-mono shrink-0">
-                                      {idx + 1}.
-                                    </span>
-                                    <span className="flex-1">
-                                      <span className="font-semibold">{egg.egg_name}</span>
-                                      {egg.area && (
-                                        <span className="text-slate-500"> · {egg.area}</span>
-                                      )}
-                                    </span>
-                                  </li>
-                                ))}
-                              </ul>
-                            </div>
-                          );
-                        })
-                    )}
-                  </div>
-                </>
-              );
-            })()}
-          </div>
-        )}
+          )}
 
         {/* DETAIL ORDER */}
         <div className="bg-slate-900/70 backdrop-blur-xl rounded-2xl p-5 md:p-6 border border-slate-800/80">
@@ -741,7 +684,7 @@ useEffect(() => {
             />
             <DetailRow
               icon="fa-solid fa-user-tie"
-              label="Joki"
+              label="Ditangani oleh"
               value={order.joki_name || "Ellan"}
             />
             {isProgressOrder ? (
@@ -859,16 +802,29 @@ useEffect(() => {
                 placeholder="1"
                 className="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/30 transition"
               />
-              <select
-                value={addUnit}
-                onChange={(e) =>
-                  setAddUnit(e.target.value as "minutes" | "hours")
-                }
-                className="bg-slate-950 border border-slate-800 rounded-xl px-3 py-3 text-sm text-white focus:outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/30 transition cursor-pointer"
-              >
-                <option value="minutes">Menit</option>
-                <option value="hours">Jam</option>
-              </select>
+              <div role="radiogroup" aria-label="Satuan waktu" className="flex bg-slate-950 border border-slate-800 rounded-xl p-1 gap-1 shrink-0">
+                {(
+                  [
+                    ["minutes", "Menit"],
+                    ["hours", "Jam"],
+                  ] as const
+                ).map(([unit, label]) => (
+                  <button
+                    key={unit}
+                    type="button"
+                    role="radio"
+                    aria-checked={addUnit === unit}
+                    onClick={() => setAddUnit(unit)}
+                    className={`px-3 rounded-lg text-xs font-bold transition active:scale-95 ${
+                      addUnit === unit
+                        ? "bg-amber-500 text-slate-950 shadow-md shadow-amber-500/30"
+                        : "text-slate-400 hover:text-white hover:bg-slate-800"
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
               <button
                 onClick={handleCustomAdd}
                 disabled={saving || !addValue}

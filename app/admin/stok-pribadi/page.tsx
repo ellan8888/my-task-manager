@@ -54,7 +54,7 @@ const [idleLoading, setIdleLoading] = useState<Set<number>>(new Set());
 const [username, setUsername] = useState("");
 const [password, setPassword] = useState("");
 const [kategori, setKategori] = useState("");
-const [addedBy, setAddedBy] = useState("lan4337");
+const [addedBy, setAddedBy] = useState(""); // diisi otomatis dari user yang login
 const [note, setNote] = useState("");
 const [saving, setSaving] = useState(false);
 
@@ -178,6 +178,10 @@ useEffect(() => {
 
   if (!username) {
     toast.warning("Username wajib diisi");
+    return;
+  }
+  if (!addedBy) {
+    toast.warning("Data login belum termuat — tunggu sebentar lalu coba lagi");
     return;
   }
 
@@ -346,7 +350,7 @@ const handleToggleIdle = async (acc: StockAccount) => {
     setEditPassword(acc.password || "");
     setEditNote(getNote(acc));
     setEditKategori(acc.kategori || "");
-    setEditAddedBy(acc.added_by || "lan4337");
+    setEditAddedBy(acc.added_by || "");
   };
 
   // ★ Tutup modal edit
@@ -598,7 +602,7 @@ const idleCount = accounts.filter((a) => a.idle && !a.logged_out).length;
 
             <button
               type="submit"
-              disabled={saving}
+              disabled={saving || !addedBy}
               className="w-full bg-linear-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 disabled:opacity-50 text-white font-bold py-3 rounded-xl transition flex items-center justify-center gap-2"
             >
               <i

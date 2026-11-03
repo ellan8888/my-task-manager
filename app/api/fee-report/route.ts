@@ -1,20 +1,17 @@
 // app/api/fee-report/route.ts
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { canSeeFee, getSession } from "@/lib/auth";
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-const OWNER_USERNAMES = ["ellan"];
-
 export async function GET(request: Request) {
   try {
-    const { searchParams } = new URL(request.url);
-    const username = searchParams.get("username");
-
-    if (!username || !OWNER_USERNAMES.includes(username.toLowerCase())) {
+    // Cek dari session login (bukan dari ?username=) — fee rahasia, khusus superadmin
+    if (!canSeeFee(getSession(request))) {
       return NextResponse.json(
         { success: false, message: "Unauthorized" },
         { status: 403 }

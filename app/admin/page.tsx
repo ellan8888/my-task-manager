@@ -7,6 +7,7 @@ import { SkeletonStatsCard } from "@/app/components/Skeleton";
 import { PushNotificationButton } from "../components/PushNotificationButton";
 
 import AdminHeader from "@/app/components/AdminHeader";
+import RoleBadge from "@/app/components/RoleBadge";
 import { StatCard } from "@/app/components/ui";
 type IncomeStats = {
   hariIni: number;
@@ -155,12 +156,12 @@ export default function AdminPage() {
 
         <TopCustomers />
 
-        {/* Breakdown Per Joki */}
+        {/* Pendapatan per anggota tim */}
         {stats && Object.keys(stats.perJoki).length > 0 && (
           <div className="bg-white dark:bg-slate-900/50 backdrop-blur-xl border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-sm">
             <h3 className="font-extrabold text-slate-900 dark:text-white flex items-center gap-2 mb-4">
               <i className="fa-solid fa-users text-violet-600 dark:text-violet-400"></i>
-              <span>Breakdown Per Joki (Bulan Ini)</span>
+              <span>Pendapatan per Anggota Tim (Bulan Ini)</span>
             </h3>
 
             <div className="space-y-3">
@@ -175,8 +176,9 @@ export default function AdminPage() {
                   return (
                     <div key={joki}>
                       <div className="flex justify-between items-center mb-1.5">
-                        <span className="text-sm font-bold text-slate-700 dark:text-slate-200 capitalize">
+                        <span className="text-sm font-bold text-slate-700 dark:text-slate-200 capitalize flex items-center gap-1.5">
                           {joki}
+                          <RoleBadge username={joki} />
                         </span>
                         <span className="text-sm font-bold text-violet-600 dark:text-violet-400">
                           {showIncome ? formatRupiah(amount) : "Rp ••••••"}
