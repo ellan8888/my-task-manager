@@ -246,7 +246,6 @@ const isEllan = currentUser?.username?.toLowerCase() === "ellan";
           icon: "fa-right-left",
           label: "Ganti Akun",
           active: pathname === "/admin/ganti-akun",
-          ellanOnly: true,
         },
       ],
     },

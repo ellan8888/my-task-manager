@@ -8,6 +8,9 @@ export const ACTIVE_STATUSES = ["pending", "processing", "failed", "finalize_fai
 
 export const isEllan = (s: Session | null) => s?.username?.toLowerCase() === "ellan";
 
+/** Ganti Akun boleh dipakai owner & staff (siapa pun yang login) */
+export const canUseGantiAkun = (s: Session | null) => !!s?.username;
+
 /** "OD000000167663006 (ID)" → "OD000000167663006" */
 export const cleanOrderId = (v: string) => v.replace(/\s*\([A-Z]{2}\)\s*$/i, "").trim().toUpperCase();
 

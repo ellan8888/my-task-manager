@@ -9,7 +9,7 @@ import {
   ACTIVE_STATUSES,
   cleanOrderId,
   finalizeReplacement,
-  isEllan,
+  canUseGantiAkun,
   orderDetailUrl,
   type ReplacementRow,
 } from "@/lib/replacements";
@@ -19,10 +19,10 @@ export const dynamic = "force-dynamic";
 const errorMessage = (err: unknown) =>
   err instanceof Error ? err.message : (err as { message?: string })?.message || "Terjadi kesalahan";
 
-const forbidden = () => NextResponse.json({ success: false, message: "Khusus Ellan" }, { status: 403 });
+const forbidden = () => NextResponse.json({ success: false, message: "Harus login" }, { status: 401 });
 
 export async function GET(request: Request) {
-  if (!isEllan(getSession(request))) return forbidden();
+  if (!canUseGantiAkun(getSession(request))) return forbidden();
   try {
     const { data, error } = await supabaseAdmin
       .from("account_replacements")
@@ -38,13 +38,17 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   const session = getSession(request);
-  if (!isEllan(session)) return forbidden();
+  if (!canUseGantiAkun(session)) return forbidden();
 
   try {
     const body = await request.json().catch(() => ({}));
     const oldUsername = typeof body.old_username === "string" ? body.old_username.trim() : "";
     const newUsername = typeof body.new_username === "string" ? body.new_username.trim() : "";
     const orderId = typeof body.order_id === "string" ? cleanOrderId(body.order_id) : "";
+    // Dari tombol "Ganti Akun" di ticket Discord → akun pengganti juga dikirim ke ticket itu
+    const ticketChannelId =
+      typeof body.ticket_channel_id === "string" && /^\d{15,25}$/.test(body.ticket_channel_id) ? body.ticket_channel_id : null;
+    const ticketName = ticketChannelId && typeof body.ticket_name === "string" ? body.ticket_name.slice(0, 100) : null;
 
     if (!oldUsername || !newUsername || !orderId) {
       return NextResponse.json({ success: false, message: "Akun lama, akun pengganti, dan nomor order wajib" }, { status: 400 });
@@ -96,31 +100,42 @@ export async function POST(request: Request) {
       );
     }
 
-    const { data, error } = await supabaseAdmin
+    const row: Record<string, unknown> = {
+      order_id: orderId,
+      detail_url: detailUrl,
+      kategori: oldAcc.kategori,
+      old_username: oldAcc.username,
+      old_added_by: oldAcc.added_by,
+      new_username: newAcc.username,
+      new_added_by: newAcc.added_by,
+      status: "pending",
+      requested_by: session?.username || "ellan",
+    };
+    let { data, error } = await supabaseAdmin
       .from("account_replacements")
-      .insert({
-        order_id: orderId,
-        detail_url: detailUrl,
-        kategori: oldAcc.kategori,
-        old_username: oldAcc.username,
-        old_added_by: oldAcc.added_by,
-        new_username: newAcc.username,
-        new_added_by: newAcc.added_by,
-        status: "pending",
-        requested_by: session?.username || "ellan",
-      })
+      .insert(ticketChannelId ? { ...row, ticket_channel_id: ticketChannelId, ticket_name: ticketName } : row)
       .select("*")
       .single();
+    let ticketNote = "";
+    // SQL 010 belum dijalankan → tetap buat permintaan, tanpa kirim ke ticket
+    if (error && ticketChannelId && /ticket_/i.test(error.message || "")) {
+      ({ data, error } = await supabaseAdmin.from("account_replacements").insert(row).select("*").single());
+      ticketNote = " (akun baru TIDAK dikirim ke ticket — jalankan SQL 010 dulu)";
+    }
     if (error) throw error;
 
-    return NextResponse.json({ success: true, data, message: "Permintaan dikirim — bot akan memprosesnya" });
+    return NextResponse.json({
+      success: true,
+      data,
+      message: `Permintaan dikirim — bot akan memprosesnya${ticketNote}`,
+    });
   } catch (err) {
     return NextResponse.json({ success: false, message: errorMessage(err) }, { status: 500 });
   }
 }
 
 export async function PATCH(request: Request) {
-  if (!isEllan(getSession(request))) return forbidden();
+  if (!canUseGantiAkun(getSession(request))) return forbidden();
 
   try {
     const body = await request.json().catch(() => ({}));

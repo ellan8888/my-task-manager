@@ -44,6 +44,8 @@ type Replacement = {
   attempts: number;
   created_at: string;
   done_at: string | null;
+  ticket_name?: string | null;
+  ticket_notified_status?: string | null;
 };
 
 // ══════════════════════════════════════════════════════════════
@@ -110,7 +112,8 @@ export default function GantiAkunPage() {
   const toast = useToast();
   const { confirm, confirmDialog } = useConfirmAsync();
   const { user, loading: userLoading } = useCurrentUser();
-  const isEllan = user?.username?.toLowerCase() === "ellan";
+  // Owner & staff boleh memakai Ganti Akun
+  const isEllan = !!user;
 
   // Langkah 1 — akun bermasalah
   const [query, setQuery] = useState("");
@@ -122,6 +125,7 @@ export default function GantiAkunPage() {
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [loadingCandidates, setLoadingCandidates] = useState(false);
   const [replacement, setReplacement] = useState<Candidate | null>(null);
+  const [autoPicked, setAutoPicked] = useState(false);
 
   // Langkah 3 — kirim
   const [submitting, setSubmitting] = useState(false);
@@ -132,6 +136,10 @@ export default function GantiAkunPage() {
   const [busyId, setBusyId] = useState<number | null>(null);
 
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Dari tombol "Ganti Akun" di ticket Discord: /admin/ganti-akun?u=username&ticket=<id>&tname=<nama>
+  const [ticket, setTicket] = useState<{ id: string; name: string } | null>(null);
+  const autoPick = useRef<string | null>(null);
 
   // ── Riwayat ────────────────────────────────────────────────
   const loadHistory = useCallback(async () => {
@@ -186,14 +194,21 @@ export default function GantiAkunPage() {
     searchTimer.current = setTimeout(() => runSearch(v), 350);
   };
 
-  // Prefill dari link: /admin/ganti-akun?u=username
+  // Prefill dari link: /admin/ganti-akun?u=username (&ticket=<id>&tname=<nama> dari Discord)
   useEffect(() => {
     if (!isEllan) return;
-    const u = new URLSearchParams(window.location.search).get("u");
-    if (!u) return;
+    const params = new URLSearchParams(window.location.search);
+    const u = params.get("u");
+    const ticketId = params.get("ticket");
     const t = setTimeout(() => {
-      setQuery(u);
-      runSearch(u);
+      if (ticketId && /^\d{15,25}$/.test(ticketId)) {
+        setTicket({ id: ticketId, name: params.get("tname") || "ticket" });
+      }
+      if (u) {
+        autoPick.current = u.toLowerCase();
+        setQuery(u);
+        runSearch(u);
+      }
     }, 0);
     return () => clearTimeout(t);
   }, [isEllan, runSearch]);
@@ -217,14 +232,34 @@ export default function GantiAkunPage() {
     try {
       const res = await fetch(`/api/admin/ganti-akun/candidates?kategori=${encodeURIComponent(acc.kategori)}`);
       const data = await res.json();
-      if (data.success) setCandidates(data.data || []);
-      else toast.error(data.message || "Gagal memuat calon pengganti");
+      if (data.success) {
+        const list: Candidate[] = data.data || [];
+        setCandidates(list);
+        // Pilih otomatis akun yang paling lama terpajang (dan punya password) — tetap bisa diganti
+        const first = list.find((c) => c.has_password);
+        if (first) {
+          setReplacement(first);
+          setAutoPicked(true);
+        }
+      } else toast.error(data.message || "Gagal memuat calon pengganti");
     } catch {
       toast.error("Gagal memuat calon pengganti");
     } finally {
       setLoadingCandidates(false);
     }
   };
+
+  // Kalau hasil pencarian dari link berisi username yang sama persis → langsung dipilih
+  useEffect(() => {
+    const want = autoPick.current;
+    if (!want || !results.length) return;
+    const exact = results.find((r) => r.username.toLowerCase() === want);
+    autoPick.current = null;
+    if (!exact) return;
+    const t = setTimeout(() => pickBroken(exact), 0);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [results]);
 
   const resetFlow = () => {
     setSelected(null);
@@ -256,6 +291,8 @@ export default function GantiAkunPage() {
           old_username: selected.username,
           new_username: replacement.username,
           order_id: selected.order_id,
+          ticket_channel_id: ticket?.id,
+          ticket_name: ticket?.name,
         }),
       });
       const data = await res.json();
@@ -263,7 +300,13 @@ export default function GantiAkunPage() {
         toast.error(data.message || "Gagal membuat permintaan");
         return;
       }
-      toast.success("Permintaan dikirim — bot akan memprosesnya dalam beberapa saat");
+      toast.success(
+        ticket
+          ? "Permintaan dikirim — setelah selesai, akun pengganti juga dikirim ke ticket Discord"
+          : data.message || "Permintaan dikirim — bot akan memprosesnya dalam beberapa saat"
+      );
+      if (ticket && /SQL 010/.test(data.message || "")) toast.warning(data.message);
+      setTicket(null);
       resetFlow();
       setQuery("");
       setResults([]);
@@ -313,7 +356,7 @@ export default function GantiAkunPage() {
       icon="fa-right-left"
       iconClassName="from-fuchsia-600 via-violet-600 to-indigo-500 shadow-violet-600/30"
       title="Ganti Akun"
-      subtitle="Ganti akun bermasalah dengan stok Itemku — dikerjakan otomatis oleh bot"
+      subtitle="Ganti akun bermasalah dengan stok Itemku — dikerjakan otomatis oleh bot (owner & staff)"
     />
   );
 
@@ -338,7 +381,7 @@ export default function GantiAkunPage() {
               <i className="fa-solid fa-lock text-2xl"></i>
             </div>
             <h3 className="font-bold text-slate-900 dark:text-white mb-1">Akses ditolak</h3>
-            <p className="text-sm text-slate-500 dark:text-slate-400">Halaman ini khusus Ellan.</p>
+            <p className="text-sm text-slate-500 dark:text-slate-400">Silakan login dulu.</p>
           </div>
         </div>
       </>
@@ -354,6 +397,31 @@ export default function GantiAkunPage() {
 
       <div className="flex-1 overflow-y-auto custom-scrollbar p-4 md:p-8">
         <div className="max-w-5xl mx-auto space-y-6">
+          {/* ═══ DARI TICKET DISCORD ═══ */}
+          {ticket && (
+            <div className="flex items-start gap-3 rounded-2xl border border-indigo-200 dark:border-indigo-500/30 bg-indigo-50 dark:bg-indigo-500/10 px-4 py-3">
+              <div className="w-9 h-9 rounded-xl bg-indigo-500 text-white flex items-center justify-center shrink-0">
+                <i className="fa-brands fa-discord"></i>
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-bold text-indigo-900 dark:text-indigo-200">
+                  Dari ticket Discord <span className="font-mono">#{ticket.name}</span>
+                </p>
+                <p className="text-xs text-indigo-700/80 dark:text-indigo-300/80">
+                  Setelah bot selesai, akun pengganti dikirim ke chat Itemku <b>dan</b> otomatis ke ticket ini.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setTicket(null)}
+                className="text-xs font-bold text-indigo-600 dark:text-indigo-300 hover:underline shrink-0"
+                title="Ganti akun tanpa mengirim ke ticket"
+              >
+                Lepas
+              </button>
+            </div>
+          )}
+
           {/* ═══ INDIKATOR LANGKAH ═══ */}
           <div className="grid grid-cols-3 gap-2">
             {[
@@ -490,7 +558,11 @@ export default function GantiAkunPage() {
                     <button
                       key={c.username}
                       type="button"
-                      onClick={() => (c.has_password ? setReplacement(c) : toast.warning("Akun ini belum punya password"))}
+                      onClick={() => {
+                        if (!c.has_password) return toast.warning("Akun ini belum punya password");
+                        setReplacement(c);
+                        setAutoPicked(false);
+                      }}
                       className={`text-left rounded-xl border px-4 py-3 transition flex items-center gap-3 ${
                         active
                           ? "border-violet-500 bg-violet-50 dark:bg-violet-500/10 ring-2 ring-violet-500/30"
@@ -514,11 +586,16 @@ export default function GantiAkunPage() {
                           {c.added_by || "-"} · di Itemku sejak {fmtDate(c.listed_at)}
                         </span>
                       </span>
-                      {i === 0 && (
+                      {active && autoPicked ? (
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-violet-100 dark:bg-violet-500/15 text-violet-700 dark:text-violet-300 shrink-0 inline-flex items-center gap-1">
+                          <i className="fa-solid fa-wand-magic-sparkles text-[9px]"></i>
+                          Dipilih otomatis
+                        </span>
+                      ) : i === 0 ? (
                         <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-amber-100 dark:bg-amber-500/15 text-amber-700 dark:text-amber-300 shrink-0">
                           Terlama
                         </span>
-                      )}
+                      ) : null}
                     </button>
                   );
                 })}
@@ -615,6 +692,15 @@ export default function GantiAkunPage() {
                           Fee: {h.old_added_by || "-"} → <span className="font-semibold text-slate-700 dark:text-slate-200">{h.new_added_by || "-"}</span>
                         </span>
                         {h.note && <span className="text-emerald-600 dark:text-emerald-400">{h.note}</span>}
+                        {h.ticket_name && (
+                          <span className="inline-flex items-center gap-1 text-indigo-600 dark:text-indigo-400">
+                            <i className="fa-brands fa-discord text-[10px]"></i>
+                            {h.ticket_name}
+                            {h.ticket_notified_status === "done" && (
+                              <i className="fa-solid fa-circle-check text-[10px] text-emerald-500" title="Akun pengganti sudah dikirim ke ticket"></i>
+                            )}
+                          </span>
+                        )}
                       </div>
 
                       {h.error && (

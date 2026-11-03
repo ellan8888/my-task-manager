@@ -4,14 +4,14 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { getSession } from "@/lib/auth";
-import { ACTIVE_STATUSES, isEllan } from "@/lib/replacements";
+import { ACTIVE_STATUSES, canUseGantiAkun } from "@/lib/replacements";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
   const session = getSession(request);
-  if (!isEllan(session)) {
-    return NextResponse.json({ success: false, message: "Khusus Ellan" }, { status: 403 });
+  if (!canUseGantiAkun(session)) {
+    return NextResponse.json({ success: false, message: "Harus login" }, { status: 401 });
   }
 
   const kategori = (new URL(request.url).searchParams.get("kategori") || "").trim();
