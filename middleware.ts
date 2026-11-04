@@ -30,6 +30,7 @@ const BYPASS_PATHS = [
   "/api/manual-complete",
   "/admin/withdrawals",
   "/api/cron",
+  "/api/vziir0",
 ];
 
 // ⭐ Pakai Web Crypto API (bisa jalan di Edge Runtime)
