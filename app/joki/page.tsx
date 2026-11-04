@@ -140,7 +140,7 @@ export default function JokiPage() {
           const data = await res.json();
 
           if (!data.success) {
-            alert(data.message || "Gagal memulai order");
+            toast.error(data.message || "Gagal memulai order");
             setStartingOrders((prev) => withId(prev, order.id, false));
             return;
           }
@@ -149,7 +149,7 @@ export default function JokiPage() {
           setTimeout(() => setStartingOrders((prev) => withId(prev, order.id, false)), 1000);
         } catch (err) {
           console.error(err);
-          alert("Terjadi kesalahan");
+          toast.error("Terjadi kesalahan");
           setStartingOrders((prev) => withId(prev, order.id, false));
         }
       }
@@ -204,13 +204,13 @@ export default function JokiPage() {
           const data = await res.json().catch(() => null);
 
           if (!data?.success) {
-            alert(data?.message || "Gagal hapus paksa");
+            toast.error(data?.message || "Gagal hapus paksa");
             return;
           }
           setJokiOrders((cur) => cur.filter((o) => o.id !== order.id));
         } catch (err) {
           console.error(err);
-          alert("Terjadi kesalahan");
+          toast.error("Terjadi kesalahan");
         } finally {
           setProcessingOrders((prev) => withId(prev, order.id, false));
         }
@@ -220,7 +220,7 @@ export default function JokiPage() {
 
   const handleCompleteOrder = (order: JokiOrder) => {
     if (order.bot_process_failed) {
-      alert("Bot gagal proses order ini. Gunakan tombol 'Hapus Paksa' di card.");
+      toast.warning("Bot gagal memproses order ini. Gunakan tombol Hapus Paksa di card", 6000);
       return;
     }
 
@@ -255,7 +255,7 @@ export default function JokiPage() {
             const data = await res.json().catch(() => null);
 
             if (!data?.success) {
-              alert(data?.message || "Gagal hapus order");
+              toast.error(data?.message || "Gagal hapus order");
               await reload();
             }
             return;
@@ -269,14 +269,14 @@ export default function JokiPage() {
           const data = await res.json().catch(() => null);
 
           if (!data?.success) {
-            alert(data?.message || "Gagal trigger bot");
+            toast.error(data?.message || "Gagal trigger bot");
             await reload();
             setCheckedOrders((prev) => withId(prev, order.id, false));
           }
           // Kalau sukses: centang tetap ada, realtime yang bakal update card
         } catch (err) {
           console.error(err);
-          alert("Terjadi kesalahan");
+          toast.error("Terjadi kesalahan");
           await reload();
           setCheckedOrders((prev) => withId(prev, order.id, false));
         }
@@ -315,13 +315,13 @@ export default function JokiPage() {
 
   const updateOrderUsername = async (orderId: number, newUsername: string) => {
     if (!newUsername.trim()) {
-      alert("Username tidak boleh kosong!");
+      toast.warning("Username tidak boleh kosong");
       return;
     }
 
     const oldOrder = jokiOrders.find((o) => o.id === orderId);
     if (!oldOrder?.order_id) {
-      alert("Order ID nggak ketemu!");
+      toast.error("Order ID tidak ditemukan");
       return;
     }
 
@@ -338,7 +338,7 @@ export default function JokiPage() {
       const data = await res.json();
 
       if (!data.success) {
-        alert(data.message || "Gagal mengupdate username!");
+        toast.error(data.message || "Gagal mengupdate username");
         return;
       }
 
@@ -356,7 +356,7 @@ export default function JokiPage() {
       setEditingUsername(null);
     } catch (err) {
       console.error(err);
-      alert("Gagal mengupdate username!");
+      toast.error("Gagal mengupdate username");
     }
   };
 

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useToast } from "@/app/components/ToastProvider";
 
 type Props = {
   maxAmount: number;
@@ -9,6 +10,7 @@ type Props = {
 };
 
 export default function WithdrawFormModal({ maxAmount, onClose, onSuccess }: Props) {
+  const toast = useToast();
   const [amount, setAmount] = useState("");
   const [note, setNote] = useState("");
   const [loading, setLoading] = useState(false);
@@ -79,11 +81,8 @@ export default function WithdrawFormModal({ maxAmount, onClose, onSuccess }: Pro
         return;
       }
 
-      alert(
-        `Request penarikan ${formatRupiah(num)} dicatat!\n\n` +
-        `Uang akan ditransfer oleh admin setelah di-approve.`
-      );
-      onSuccess();
+      toast.success(`Pengajuan tarik ${formatRupiah(num)} terkirim, menunggu disetujui owner`, 5000);
+      setTimeout(onSuccess, 1200);
     } catch (err: any) {
       setError(err.message || "Terjadi kesalahan");
     } finally {

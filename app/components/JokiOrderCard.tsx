@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, type KeyboardEvent, type MouseEvent, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import type { JokiOrder, RamAccount } from "@/lib/types";
+import { useToast } from "@/app/components/ToastProvider";
 
 // ══════════════════════════════════════════════════════════════
 // HELPERS (di-export, dipakai juga di app/joki/page.tsx)
@@ -350,6 +351,7 @@ export default function JokiOrderCard({
   handleRefetchOrder,
   isRefetching = false,
 }: Props) {
+  const toast = useToast();
   const isCompletedByBot = isDoneByBot(order);
   const isProgress = isProgressOrder(order);
   const isFailed = order.bot_process_failed === true && !isCompletedByBot;
@@ -438,7 +440,7 @@ export default function JokiOrderCard({
     if (!editingUsername) return;
     const trimmed = editingUsername.value.trim();
     if (isUsernameUsedInOtherCards(trimmed, order.id)) {
-      alert(`Username "${trimmed}" sudah dipakai di card lain!`);
+      toast.warning(`Username "${trimmed}" sudah dipakai di card lain`);
       return;
     }
     updateOrderUsername(order.id, trimmed);

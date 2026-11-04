@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useToast } from "@/app/components/ToastProvider";
 import { SelectMenu, type MenuOption } from "@/app/components/Pickers";
 
 type Props = {
@@ -37,6 +38,7 @@ const BANK_OPTIONS: MenuOption<string>[] = BANKS.map((b) =>
 );
 
 export default function AddBankModal({ onClose, onSuccess }: Props) {
+  const toast = useToast();
   const [bankName, setBankName] = useState("BCA");
   const [customBankName, setCustomBankName] = useState("");
   const [accountNumber, setAccountNumber] = useState("");
@@ -79,7 +81,7 @@ export default function AddBankModal({ onClose, onSuccess }: Props) {
         return;
       }
 
-      alert("Rekening berhasil ditambahkan!");
+      toast.success("Rekening berhasil ditambahkan");
       onSuccess();
     } catch (err: any) {
       setError(err.message || "Terjadi kesalahan");

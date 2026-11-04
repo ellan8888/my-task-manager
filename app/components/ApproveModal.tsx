@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useToast } from "@/app/components/ToastProvider";
 
 type Props = {
   withdrawal: {
@@ -17,6 +18,7 @@ type Props = {
 };
 
 export default function ApproveModal({ withdrawal, onClose, onSuccess }: Props) {
+  const toast = useToast();
   const [action, setAction] = useState<"approve" | "reject">("approve");
   const [rejectReason, setRejectReason] = useState("");
   const [transferNote, setTransferNote] = useState("");
@@ -104,12 +106,9 @@ export default function ApproveModal({ withdrawal, onClose, onSuccess }: Props) 
         return;
       }
 
-      alert(
-        action === "approve"
-          ? `Request ${withdrawal.joki_name} disetujui!`
-          : `Request ${withdrawal.joki_name} ditolak.`
-      );
-      onSuccess();
+      if (action === "approve") toast.success(`Penarikan ${withdrawal.joki_name} disetujui`);
+      else toast.info(`Penarikan ${withdrawal.joki_name} ditolak`);
+      setTimeout(onSuccess, 1200);
     } catch (err: any) {
       setError(err.message || "Terjadi kesalahan");
     } finally {
@@ -167,7 +166,7 @@ export default function ApproveModal({ withdrawal, onClose, onSuccess }: Props) 
                   onClick={() => {
                     if (withdrawal.account_number) {
                       navigator.clipboard.writeText(withdrawal.account_number);
-                      alert("Nomor rekening dicopy!");
+                      toast.success("Nomor rekening disalin");
                     }
                   }}
                   className="w-7 h-7 rounded-lg bg-blue-100 dark:bg-blue-500/20 hover:bg-blue-200 dark:hover:bg-blue-500/30 text-blue-600 dark:text-blue-400 flex items-center justify-center transition"
@@ -193,7 +192,7 @@ export default function ApproveModal({ withdrawal, onClose, onSuccess }: Props) 
                 withdrawal.account_holder ? ` a/n ${withdrawal.account_holder}` : ""
               }`;
               navigator.clipboard.writeText(text);
-              alert("Detail rekening dicopy!");
+              toast.success("Detail rekening disalin");
             }}
             className="w-full mt-3 px-4 py-2 rounded-lg text-xs font-bold bg-blue-600 hover:bg-blue-500 text-white transition flex items-center justify-center gap-1.5"
           >

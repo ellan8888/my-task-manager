@@ -20,7 +20,7 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const { username, success, error: errMsg } = await req.json();
+  const { username, success, error: errMsg, skip_itemku } = await req.json();
 
   if (!username) {
     return NextResponse.json(
@@ -35,7 +35,7 @@ export async function POST(req: NextRequest) {
   if (success) {
     const { data: acc, error: fetchErr } = await supabase
       .from("accounts_stock")
-      .select("pending_move_to, pending_move_added_by")
+      .select("pending_move_to, pending_move_added_by, added_by, deleted")
       .eq("username", username)
       .maybeSingle();
 
@@ -46,10 +46,37 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // ⭐ MOVE → update row jadi kategori baru
+    // ⭐ Migrasi DIBATALKAN saat bot sedang menghapus → akun sudah hilang dari Itemku
+    //    tapi masih ada di data: pajang ulang di kategori lamanya, JANGAN dihapus.
+    if (acc && !acc.deleted) {
+      // Tidak ketemu di Itemku (skip_itemku) → memang tidak dihapus apa pun, biarkan apa adanya
+      if (skip_itemku) {
+        return NextResponse.json({ success: true, message: `Akun ${username} batal dipindah — tidak ada yang diubah` });
+      }
+      await supabase
+        .from("accounts_stock")
+        .update({
+          used: false,
+          status: "queued_for_sale",
+          delete_status: null,
+          delete_last_error: null,
+          delete_attempts: 0,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("username", username)
+        .eq("logged_out", false)
+        .neq("status", "personal");
+      return NextResponse.json({
+        success: true,
+        message: `Akun ${username} batal dihapus/dipindah — dipajang ulang di kategori lamanya`,
+        relisted: true,
+      });
+    }
+
+    // ⭐ MOVE → update row jadi kategori baru (pemilik tetap)
     if (acc?.pending_move_to) {
       const targetKategori = acc.pending_move_to;
-      const newAddedBy = acc.pending_move_added_by || "system";
+      const newAddedBy = acc.pending_move_added_by || acc.added_by || "ellan";
 
       const { error: moveErr } = await supabase
         .from("accounts_stock")

@@ -7,6 +7,7 @@ import type { Task } from "@/lib/types";
 import AppShell from "@/app/components/AppShell";
 import { DatePicker, SegmentedChoice, TimePicker } from "@/app/components/Pickers";
 import { ConfirmDialog, useConfirm } from "@/app/components/ConfirmDialog";
+import { useToast } from "@/app/components/ToastProvider";
 import {
   StatCard,
   FilterPill,
@@ -103,6 +104,7 @@ function getDeadlineStatus(deadline: string) {
 export default function TasksPage() {
   const { user: currentUser } = useCurrentUser();
   const { dialog, showConfirm, closeConfirm } = useConfirm();
+  const toast = useToast();
 
   const [tasks, setTasks] = useState<Task[]>([]);
 
@@ -142,11 +144,11 @@ export default function TasksPage() {
 
   const addTask = async () => {
     if (!title || !deadline) {
-      alert("Title dan deadline wajib diisi!");
+      toast.warning("Judul dan deadline wajib diisi");
       return;
     }
     if (!currentUser) {
-      alert("User belum siap. Coba refresh halaman.");
+      toast.warning("User belum siap, coba refresh halaman");
       return;
     }
 
@@ -167,7 +169,7 @@ export default function TasksPage() {
     const { error } = await supabase.from("tasks").insert([newTask]);
     if (error) {
       console.error(error);
-      alert("Gagal menyimpan task!");
+      toast.error("Gagal menyimpan task");
       return;
     }
 
@@ -177,7 +179,7 @@ export default function TasksPage() {
 
   const updateTask = async () => {
     if (!title || !deadline || editingId === null) {
-      alert("Title dan deadline wajib diisi!");
+      toast.warning("Judul dan deadline wajib diisi");
       return;
     }
 
@@ -195,7 +197,7 @@ export default function TasksPage() {
     const { error } = await supabase.from("tasks").update(changes).eq("id", editingId);
     if (error) {
       console.error(error);
-      alert("Gagal mengupdate task!");
+      toast.error("Gagal mengupdate task");
       return;
     }
 
@@ -225,7 +227,7 @@ export default function TasksPage() {
         const { error } = await supabase.from("tasks").delete().eq("id", id);
         if (error) {
           console.error(error);
-          alert("Gagal menghapus task!");
+          toast.error("Gagal menghapus task");
           return;
         }
         setTasks((prev) => prev.filter((t) => t.id !== id));
@@ -248,7 +250,7 @@ export default function TasksPage() {
         const { error } = await supabase.from("tasks").update({ completed: next }).eq("id", id);
         if (error) {
           console.error(error);
-          alert("Gagal mengubah status task!");
+          toast.error("Gagal mengubah status task");
           return;
         }
         setTasks((prev) => prev.map((t) => (t.id === id ? { ...t, completed: next } : t)));

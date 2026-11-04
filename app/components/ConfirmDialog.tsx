@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 export type ConfirmVariant = "danger" | "warning" | "info" | "success";
 
@@ -50,6 +50,20 @@ export function ConfirmDialog({
   dialog: ConfirmState;
   onClose: () => void;
 }) {
+  // Esc = batal, Enter = setuju (seperti dialog bawaan, tapi tampilan app)
+  useEffect(() => {
+    if (!dialog.open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+      else if (e.key === "Enter") {
+        e.preventDefault();
+        dialog.onConfirm();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [dialog, onClose]);
+
   if (!dialog.open) return null;
 
   const iconBox =
@@ -78,8 +92,18 @@ export function ConfirmDialog({
       : "bg-linear-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 shadow-violet-600/30";
 
   return (
-    <div className="fixed inset-0 bg-slate-950/40 dark:bg-slate-950/80 backdrop-blur-md z-60 flex items-center justify-center p-4">
-      <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 max-w-md w-full p-6 md:p-7 shadow-2xl relative animate-in">
+    <div
+      className="fixed inset-0 bg-slate-950/40 dark:bg-slate-950/80 backdrop-blur-md z-60 flex items-center justify-center p-4"
+      onClick={onClose}
+      role="presentation"
+    >
+      <div
+        role="alertdialog"
+        aria-modal="true"
+        aria-label={dialog.title}
+        onClick={(e) => e.stopPropagation()}
+        className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 max-w-md w-full p-6 md:p-7 shadow-2xl relative animate-in"
+      >
         <div className="flex items-start gap-4">
           <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 border ${iconBox}`}>
             <i className={`fa-solid text-xl ${icon}`}></i>

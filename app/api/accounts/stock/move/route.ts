@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { getSession } from "@/lib/auth";
 
 export const runtime = "nodejs";
 
@@ -10,7 +11,11 @@ const supabase = createClient(
 
 export async function PUT(req: NextRequest) {
   try {
-    const { username, targetKategori, addedBy } = await req.json();
+    if (!getSession(req)) {
+      return NextResponse.json({ success: false, message: "Harus login" }, { status: 401 });
+    }
+    // addedBy dari browser diabaikan — pemilik akun TIDAK berubah saat pindah kategori
+    const { username, targetKategori } = await req.json();
 
     if (!username || !targetKategori) {
       return NextResponse.json(
@@ -30,6 +35,20 @@ export async function PUT(req: NextRequest) {
       return NextResponse.json(
         { success: false, message: "Akun tidak ditemukan" },
         { status: 404 }
+      );
+    }
+
+    if (account.logged_out) {
+      return NextResponse.json(
+        { success: false, message: "Akun ini sudah laku — tidak bisa dipindah kategori" },
+        { status: 400 }
+      );
+    }
+
+    if (account.status === "personal") {
+      return NextResponse.json(
+        { success: false, message: "Akun Stok Pribadi belum dijual — ubah kategorinya dari halaman Stok Pribadi" },
+        { status: 400 }
       );
     }
 
@@ -63,7 +82,7 @@ export async function PUT(req: NextRequest) {
         delete_last_error: null,
         delete_requested_at: now,
         pending_move_to: targetKategori,
-        pending_move_added_by: addedBy,
+        pending_move_added_by: null, // pemilik tetap
       })
       .eq("id", account.id);
 

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import KategoriDropdown from "./KategoriDropdown";
 import { useToast } from "@/app/components/ToastProvider";
+import { useConfirmAsync } from "@/app/components/ConfirmDialog";
 import { SkeletonList } from "@/app/components/Skeleton";
 
 import AdminHeader from "@/app/components/AdminHeader";
@@ -31,6 +32,7 @@ type KategoriLink = {
 
 export default function StockPage() {
   const toast = useToast();
+  const { confirm, confirmDialog } = useConfirmAsync();
   const [accounts, setAccounts] = useState<StockAccount[]>([]);
   const [loading, setLoading] = useState(true);
   const [kategoriList, setKategoriList] = useState<KategoriLink[]>([]);
@@ -217,7 +219,13 @@ export default function StockPage() {
   };
 
   const handleDelete = async (uname: string) => {
-    if (!window.confirm(`Hapus ${uname}?`)) return;
+    const okDelete = await confirm({
+      title: `Hapus ${uname}?`,
+      message: "Akun akan dihapus dari link Itemku oleh bot, lalu dihapus dari data stok.",
+      variant: "danger",
+      confirmText: "Ya, hapus",
+    });
+    if (!okDelete) return;
     try {
       const res = await fetch(
         `/api/accounts/stock?username=${encodeURIComponent(uname)}`,
@@ -248,12 +256,16 @@ export default function StockPage() {
       return;
     }
 
-    const ok = window.confirm(
-      `Yakin pindahkan akun "${accountToMove.username}"?\n\n` +
+    const ok = await confirm({
+      title: `Pindahkan ${accountToMove.username}?`,
+      message:
         `Dari: ${accountToMove.kategori}\n` +
         `Ke: ${targetKategori}\n\n` +
-        `Proses pindah akan memakan waktu beberapa saat di belakang layar.`
-    );
+        "Bot akan menghapus akun dari link Itemku lama lalu memajangnya di kategori baru. " +
+        "Prosesnya beberapa saat di belakang layar, pemilik akun tetap sama.",
+      variant: "warning",
+      confirmText: "Ya, pindahkan",
+    });
     if (!ok) return;
 
     setIsMoving(true);
@@ -327,6 +339,7 @@ export default function StockPage() {
 
   return (
     <>
+      {confirmDialog}
       <style>{`
         .custom-scrollbar::-webkit-scrollbar { display: none; }
         .custom-scrollbar { scrollbar-width: none; }

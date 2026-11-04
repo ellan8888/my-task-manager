@@ -6,6 +6,7 @@ import { supabase } from "@/lib/supabase";
 import { registerPushSubscription } from "@/lib/push";
 import type { CurrentUser } from "@/lib/types";
 import { useToast } from "@/app/components/ToastProvider";
+import { useConfirmAsync } from "@/app/components/ConfirmDialog";
 
 type ActivePage = "tasks" | "joki";
 
@@ -90,6 +91,7 @@ export default function AppShell({
   children,
 }: AppShellProps) {
   const toast = useToast();
+  const { confirm, confirmDialog } = useConfirmAsync();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarHydrated, setSidebarHydrated] = useState(false);
   const [isDark, setIsDark] = useState(true);
@@ -172,25 +174,25 @@ export default function AppShell({
 
   const enableNotifications = async () => {
     if (!("Notification" in window)) {
-      alert("Browser kamu tidak mendukung notifikasi.");
+      toast.warning("Browser kamu tidak mendukung notifikasi");
       return;
     }
     try {
       const permission = await Notification.requestPermission();
       setNotificationPermission(permission);
       if (permission !== "granted") {
-        alert("Permission notifikasi ditolak.");
+        toast.warning("Izin notifikasi ditolak. Aktifkan dari pengaturan browser");
         return;
       }
       if (!currentUser?.username) {
-        alert("User belum siap. Coba refresh halaman.");
+        toast.warning("User belum siap, coba refresh halaman");
         return;
       }
       await registerPushSubscription(currentUser.username);
-      alert("Push notification berhasil diaktifkan!");
+      toast.success("Notifikasi berhasil diaktifkan");
     } catch (error) {
       console.error("Gagal mengaktifkan push notification:", error);
-      alert("Gagal mengaktifkan push notification. Cek Console.");
+      toast.error("Gagal mengaktifkan notifikasi");
     }
   };
 
@@ -199,13 +201,13 @@ export default function AppShell({
       const response = await fetch("/api/push", { method: "POST" });
       const result = await response.json();
       if (result.success) {
-        alert(`Push berhasil dikirim!\n\nTerkirim: ${result.sent}\nGagal: ${result.failed}`);
+        toast.success(`Push terkirim ke ${result.sent} perangkat${result.failed ? `, ${result.failed} gagal` : ""}`);
       } else {
-        alert(`Push gagal:\n${result.message || result.error}`);
+        toast.error(`Push gagal: ${result.message || result.error}`);
       }
     } catch (error) {
       console.error("Test push error:", error);
-      alert("Gagal menghubungi Push API.");
+      toast.error("Gagal menghubungi Push API");
     }
   };
 
@@ -222,7 +224,13 @@ export default function AppShell({
   }, []);
 
   const handleRestartBot = async () => {
-    if (!confirm("Jalankan ulang bot?\n\nIni bakal menjalankan login.py di komputer kamu.")) return;
+    const okRestart = await confirm({
+      title: "Jalankan ulang bot?",
+      message: "Ini akan menjalankan login.py di komputer kamu. Bot butuh 30–60 detik untuk aktif lagi.",
+      variant: "warning",
+      confirmText: "Ya, restart",
+    });
+    if (!okRestart) return;
     setRestarting(true);
     try {
       const res = await fetch("/api/bot/restart", { method: "POST" });
@@ -270,6 +278,7 @@ export default function AppShell({
 
   return (
     <>
+      {confirmDialog}
       <style>{`
         input[type="date"]::-webkit-calendar-picker-indicator,
         input[type="time"]::-webkit-calendar-picker-indicator {
