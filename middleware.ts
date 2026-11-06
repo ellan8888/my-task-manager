@@ -33,6 +33,20 @@ const BYPASS_PATHS = [
   "/api/vziir0",
 ];
 
+// ⭐ API yang dipakai bot / web — melewati redirect login, TAPI wajib salah satu:
+//    • header x-bot-api-key = BOT_API_KEY (bot Python), atau
+//    • cookie login yang sah (halaman My Task)
+//    Tanpa ini, data akun (password & cookie Roblox) bisa diambil siapa saja.
+const PROTECTED_API = [
+  "/api/accounts",
+  "/api/income",
+  "/api/kategori",
+  "/api/get-accounts",
+  "/api/remove-account",
+  "/api/progress-keywords",
+  "/api/bot",
+];
+
 // ⭐ Pakai Web Crypto API (bisa jalan di Edge Runtime)
 async function verifySession(
   signedValue: string,
@@ -79,7 +93,19 @@ async function verifySession(
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // 1. Bypass aset & API endpoints
+  // 1. API yang dilindungi: kunci bot ATAU login
+  if (PROTECTED_API.some((p) => pathname === p || pathname.startsWith(p + "/"))) {
+    const botKey = process.env.BOT_API_KEY;
+    if (botKey && request.headers.get("x-bot-api-key") === botKey) {
+      return NextResponse.next();
+    }
+    const cookie = request.cookies.get("auth_session")?.value;
+    const s = cookie ? await verifySession(cookie, process.env.AUTH_SECRET!) : null;
+    if (s) return NextResponse.next();
+    return NextResponse.json({ success: false, message: "Unauthorized" }, { status: 401 });
+  }
+
+  // 2. Bypass aset & API endpoints lain (masing-masing punya pengecekan sendiri / memang publik)
   if (BYPASS_PATHS.some((p) => pathname.startsWith(p))) {
     return NextResponse.next();
   }
