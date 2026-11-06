@@ -37,6 +37,13 @@ export default function NotifikasiPage() {
   const [setupNeeded, setSetupNeeded] = useState(false);
   const [saving, setSaving] = useState(false);
 
+  const [email, setEmail] = useState("");
+  const [savedEmail, setSavedEmail] = useState("");
+  const [emailPenarikan, setEmailPenarikan] = useState(true);
+  const [emailReady, setEmailReady] = useState(true);
+  const [emailSetupNeeded, setEmailSetupNeeded] = useState(false);
+  const [emailBusy, setEmailBusy] = useState(false);
+
   const [push, setPush] = useState<{ supported: boolean; permission: string; subscribed: boolean } | null>(null);
   const [thisEndpoint, setThisEndpoint] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -58,6 +65,11 @@ export default function NotifikasiPage() {
     const data = await res.json().catch(() => ({}));
     if (data.success) {
       setPrefs({ muted_kinds: data.prefs.muted_kinds || [], quiet_start: data.prefs.quiet_start, quiet_end: data.prefs.quiet_end });
+      setEmail(data.prefs.email || "");
+      setSavedEmail(data.prefs.email || "");
+      setEmailPenarikan(data.prefs.email_penarikan !== false);
+      setEmailReady(data.email_ready !== false);
+      setEmailSetupNeeded(!!data.email_setup_needed);
       setKinds(data.kinds || []);
       setDevices(data.devices || []);
       if (data.setup_needed) setSetupNeeded(true);
@@ -83,6 +95,36 @@ export default function NotifikasiPage() {
     }, 0);
     return () => clearTimeout(t);
   }, [loadList, loadPrefs, loadPush]);
+
+  const saveEmail = async (next: { email?: string; email_penarikan?: boolean }) => {
+    setEmailBusy(true);
+    const res = await fetch("/api/notifications/prefs", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...prefs, ...next }),
+    });
+    const data = await res.json().catch(() => ({}));
+    setEmailBusy(false);
+    if (!data.success) {
+      toast.error(data.message || "Gagal menyimpan email");
+      return false;
+    }
+    if ("email" in next) {
+      setSavedEmail(next.email || "");
+      toast.success(next.email ? "Email disimpan" : "Email dihapus");
+    }
+    if ("email_penarikan" in next) setEmailPenarikan(next.email_penarikan !== false);
+    return true;
+  };
+
+  const testEmail = async () => {
+    setEmailBusy(true);
+    const res = await fetch("/api/notifications/email-test", { method: "POST" });
+    const data = await res.json().catch(() => ({}));
+    setEmailBusy(false);
+    if (data.success) toast.success(data.message || "Email tes terkirim");
+    else toast.error(data.message || "Gagal mengirim email tes");
+  };
 
   const savePrefs = async (next: Prefs) => {
     setPrefs(next);
@@ -302,6 +344,74 @@ export default function NotifikasiPage() {
                   </>
                 )}
               </div>
+            </section>
+
+            {/* ── EMAIL ─────────────────────────────── */}
+            <section className={card}>
+              <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2 mb-1">
+                <i className="fa-solid fa-envelope text-violet-600 dark:text-violet-400"></i>Email
+              </h3>
+              <p className="text-xs text-slate-500 mb-3">
+                Notifikasi <b>penarikan saldo</b> juga dikirim ke email ini — request baru (owner) serta disetujui / ditolak (pemilik saldo).
+              </p>
+              {emailSetupNeeded && (
+                <p className="mb-3 text-xs rounded-lg bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-300 px-3 py-2">
+                  Jalankan <span className="font-mono">sql/013_email_notif.sql</span> di Supabase dulu.
+                </p>
+              )}
+              {!emailReady && (
+                <p className="mb-3 text-xs rounded-lg bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-300 px-3 py-2">
+                  Pengirim email belum diatur di server (SMTP_USER &amp; SMTP_PASS). Email belum akan terkirim.
+                </p>
+              )}
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  saveEmail({ email: email.trim() });
+                }}
+                className="flex gap-2"
+              >
+                <div className="relative flex-1 min-w-0">
+                  <i className="fa-regular fa-envelope absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-sm"></i>
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="namakamu@gmail.com"
+                    className="w-full rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 pl-10 pr-3 py-2.5 text-sm text-slate-900 dark:text-slate-200 outline-none focus:border-violet-500"
+                  />
+                </div>
+                <button
+                  type="submit"
+                  disabled={emailBusy || email.trim() === savedEmail}
+                  className="shrink-0 px-4 rounded-xl bg-violet-600 hover:bg-violet-500 text-white text-sm font-semibold disabled:opacity-50"
+                >
+                  Simpan
+                </button>
+              </form>
+              <button
+                onClick={() => saveEmail({ email_penarikan: !emailPenarikan })}
+                disabled={emailBusy || !savedEmail}
+                className="mt-3 w-full flex items-center gap-3 px-2 py-2 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800/50 disabled:opacity-50"
+              >
+                <span className={`w-8 h-8 rounded-lg flex items-center justify-center ${KIND_STYLE.penarikan.cls}`}>
+                  <i className={`fa-solid ${KIND_STYLE.penarikan.icon} text-xs`}></i>
+                </span>
+                <span className="flex-1 text-left text-sm font-medium text-slate-700 dark:text-slate-200">Email penarikan saldo</span>
+                <span className={`relative w-10 h-6 rounded-full transition ${emailPenarikan && savedEmail ? "bg-violet-600" : "bg-slate-300 dark:bg-slate-700"}`}>
+                  <span className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow transition-all ${emailPenarikan && savedEmail ? "left-5" : "left-1"}`}></span>
+                </span>
+              </button>
+              {savedEmail && (
+                <button
+                  onClick={testEmail}
+                  disabled={emailBusy || !emailReady}
+                  className="mt-2 w-full py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 text-sm font-semibold hover:bg-slate-200 disabled:opacity-50"
+                >
+                  {emailBusy ? <i className="fa-solid fa-spinner fa-spin mr-2"></i> : <i className="fa-solid fa-paper-plane mr-2"></i>}
+                  Kirim email tes
+                </button>
+              )}
             </section>
 
             {/* ── JENIS NOTIFIKASI ──────────────────── */}

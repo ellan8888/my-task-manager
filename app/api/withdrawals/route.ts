@@ -4,6 +4,7 @@ import { createClient } from "@supabase/supabase-js";
 import crypto from "crypto";
 import { getBalance } from "@/lib/ledger";
 import { notify } from "@/lib/notify";
+import { emailWithdrawRequest, emailWithdrawResult } from "@/lib/email";
 
 export const runtime = "nodejs";
 
@@ -218,6 +219,9 @@ export async function POST(req: NextRequest) {
       "/admin/withdrawals"
     );
 
+    // 9️⃣ Email ke owner (kalau email penarikan diaktifkan di halaman Notifikasi)
+    await emailWithdrawRequest(["ellan"], data).catch((e) => console.error("[Email] request tarik:", e));
+
     return NextResponse.json({ success: true, data });
   } catch (err: any) {
     return NextResponse.json(
@@ -314,6 +318,9 @@ const { id, action, reject_reason, transfer_note, payment_proof_url } = body;
           "/admin"
         );
       }
+
+      // Email ke staff pemilik saldo
+      await emailWithdrawResult(data, action).catch((e) => console.error("[Email] hasil tarik:", e));
     }
 
     return NextResponse.json({ success: true, data });
