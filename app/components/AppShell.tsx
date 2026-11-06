@@ -66,11 +66,14 @@ function NavGroupLabel({ children }: { children: ReactNode }) {
   );
 }
 
-async function getBotStatus(): Promise<{ isOnline: boolean; lastHeartbeatHuman: string } | null> {
+type BotStatusView = { isOnline: boolean; state: string; lastHeartbeatHuman: string };
+
+async function getBotStatus(): Promise<BotStatusView | null> {
   try {
     const res = await fetch("/api/bot/status");
     const data = await res.json();
-    if (data.success) return { isOnline: data.isOnline, lastHeartbeatHuman: data.lastHeartbeatHuman };
+    if (data.success)
+      return { isOnline: data.isOnline, state: data.state || (data.isOnline ? "online" : "offline"), lastHeartbeatHuman: data.lastHeartbeatHuman };
   } catch (err) {
     console.error("Fetch bot status error:", err);
   }
@@ -96,7 +99,7 @@ export default function AppShell({
   const [sidebarHydrated, setSidebarHydrated] = useState(false);
   const [isDark, setIsDark] = useState(true);
 
-  const [botStatus, setBotStatus] = useState<{ isOnline: boolean; lastHeartbeatHuman: string } | null>(null);
+  const [botStatus, setBotStatus] = useState<BotStatusView | null>(null);
   const [restarting, setRestarting] = useState(false);
 
 
@@ -295,10 +298,11 @@ export default function AppShell({
                     </>
                   ) : (
                     <>
-                      <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse"></span>
-                      <span className="text-rose-600 dark:text-rose-400">
-                        Bot Offline • {botStatus.lastHeartbeatHuman}
+                      <span className={`w-2 h-2 rounded-full animate-pulse ${botStatus.state === "stuck" ? "bg-amber-500" : "bg-rose-500"}`}></span>
+                      <span className={botStatus.state === "stuck" ? "text-amber-600 dark:text-amber-400" : "text-rose-600 dark:text-rose-400"}>
+                        {botStatus.state === "stuck" ? "Bot Macet" : "Bot Offline"} • {botStatus.lastHeartbeatHuman}
                       </span>
+                      {currentUser?.role === "superadmin" && (
                       <button
                         onClick={handleRestartBot}
                         disabled={restarting}
@@ -314,6 +318,7 @@ export default function AppShell({
                           </>
                         )}
                       </button>
+                      )}
                     </>
                   )}
                 </div>

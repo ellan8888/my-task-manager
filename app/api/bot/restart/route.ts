@@ -1,31 +1,29 @@
-import { NextResponse } from "next/server";
+// app/api/bot/restart/route.ts — restart bot dari My Task (KHUSUS superadmin)
+import { NextRequest, NextResponse } from "next/server";
+import { getSession, isSuperadmin } from "@/lib/auth";
 
-export async function POST() {
+export const runtime = "nodejs";
+
+export async function POST(req: NextRequest) {
+  if (!isSuperadmin(getSession(req))) {
+    return NextResponse.json({ success: false, message: "Hanya owner yang bisa me-restart bot" }, { status: 403 });
+  }
   try {
     const restartUrl = process.env.BOT_RESTART_URL;
     const secret = process.env.BOT_RESTART_SECRET;
-
     if (!restartUrl || !secret) {
-      return NextResponse.json(
-        { success: false, message: "Restart URL belum di-set" },
-        { status: 500 }
-      );
+      return NextResponse.json({ success: false, message: "Restart URL belum di-set" }, { status: 500 });
     }
-
     const res = await fetch(restartUrl, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-API-Secret": secret,
-      },
+      headers: { "Content-Type": "application/json", "X-API-Secret": secret },
       signal: AbortSignal.timeout(15000),
     });
-
     const data = await res.json();
     return NextResponse.json(data);
-  } catch (err: any) {
+  } catch (err) {
     return NextResponse.json(
-      { success: false, message: `Gagal restart: ${err.message}` },
+      { success: false, message: `Gagal restart: ${err instanceof Error ? err.message : "error"}` },
       { status: 500 }
     );
   }
