@@ -39,10 +39,10 @@ export default function NotifikasiPage() {
 
   const [email, setEmail] = useState("");
   const [savedEmail, setSavedEmail] = useState("");
-  const [emailPenarikan, setEmailPenarikan] = useState(true);
   const [emailReady, setEmailReady] = useState(true);
   const [emailSetupNeeded, setEmailSetupNeeded] = useState(false);
   const [emailBusy, setEmailBusy] = useState(false);
+  const [defaultReminder, setDefaultReminder] = useState("20:00");
 
   const [push, setPush] = useState<{ supported: boolean; permission: string; subscribed: boolean } | null>(null);
   const [thisEndpoint, setThisEndpoint] = useState<string | null>(null);
@@ -67,7 +67,6 @@ export default function NotifikasiPage() {
       setPrefs({ muted_kinds: data.prefs.muted_kinds || [], quiet_start: data.prefs.quiet_start, quiet_end: data.prefs.quiet_end });
       setEmail(data.prefs.email || "");
       setSavedEmail(data.prefs.email || "");
-      setEmailPenarikan(data.prefs.email_penarikan !== false);
       setEmailReady(data.email_ready !== false);
       setEmailSetupNeeded(!!data.email_setup_needed);
       setKinds(data.kinds || []);
@@ -89,6 +88,9 @@ export default function NotifikasiPage() {
 
   useEffect(() => {
     const t = setTimeout(() => {
+      try {
+        setDefaultReminder(localStorage.getItem("defaultReminder") || "20:00");
+      } catch {}
       loadList();
       loadPrefs();
       loadPush();
@@ -96,7 +98,7 @@ export default function NotifikasiPage() {
     return () => clearTimeout(t);
   }, [loadList, loadPrefs, loadPush]);
 
-  const saveEmail = async (next: { email?: string; email_penarikan?: boolean }) => {
+  const saveEmail = async (next: { email?: string }) => {
     setEmailBusy(true);
     const res = await fetch("/api/notifications/prefs", {
       method: "PUT",
@@ -113,7 +115,6 @@ export default function NotifikasiPage() {
       setSavedEmail(next.email || "");
       toast.success(next.email ? "Email disimpan" : "Email dihapus");
     }
-    if ("email_penarikan" in next) setEmailPenarikan(next.email_penarikan !== false);
     return true;
   };
 
@@ -353,6 +354,7 @@ export default function NotifikasiPage() {
               </h3>
               <p className="text-xs text-slate-500 mb-3">
                 Notifikasi <b>penarikan saldo</b> juga dikirim ke email ini — request baru (owner) serta disetujui / ditolak (pemilik saldo).
+                Matikan lewat toggle <b>Penarikan saldo</b> di Jenis notifikasi.
               </p>
               {emailSetupNeeded && (
                 <p className="mb-3 text-xs rounded-lg bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-300 px-3 py-2">
@@ -389,29 +391,37 @@ export default function NotifikasiPage() {
                   Simpan
                 </button>
               </form>
-              <button
-                onClick={() => saveEmail({ email_penarikan: !emailPenarikan })}
-                disabled={emailBusy || !savedEmail}
-                className="mt-3 w-full flex items-center gap-3 px-2 py-2 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800/50 disabled:opacity-50"
-              >
-                <span className={`w-8 h-8 rounded-lg flex items-center justify-center ${KIND_STYLE.penarikan.cls}`}>
-                  <i className={`fa-solid ${KIND_STYLE.penarikan.icon} text-xs`}></i>
-                </span>
-                <span className="flex-1 text-left text-sm font-medium text-slate-700 dark:text-slate-200">Email penarikan saldo</span>
-                <span className={`relative w-10 h-6 rounded-full transition ${emailPenarikan && savedEmail ? "bg-violet-600" : "bg-slate-300 dark:bg-slate-700"}`}>
-                  <span className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow transition-all ${emailPenarikan && savedEmail ? "left-5" : "left-1"}`}></span>
-                </span>
-              </button>
               {savedEmail && (
                 <button
                   onClick={testEmail}
                   disabled={emailBusy || !emailReady}
-                  className="mt-2 w-full py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 text-sm font-semibold hover:bg-slate-200 disabled:opacity-50"
+                  className="mt-3 w-full py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 text-sm font-semibold hover:bg-slate-200 disabled:opacity-50"
                 >
                   {emailBusy ? <i className="fa-solid fa-spinner fa-spin mr-2"></i> : <i className="fa-solid fa-paper-plane mr-2"></i>}
                   Kirim email tes
                 </button>
               )}
+            </section>
+
+            {/* ── PENGINGAT TUGAS KULIAH ────────────── */}
+            <section className={card}>
+              <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2 mb-1">
+                <i className="fa-solid fa-book-open text-violet-600 dark:text-violet-400"></i>Pengingat tugas kuliah
+              </h3>
+              <p className="text-xs text-slate-500 mb-3">Jam pengingat harian bawaan saat membuat tugas baru (format 24 jam).</p>
+              <div className="relative">
+                <input
+                  type="time"
+                  value={defaultReminder}
+                  onChange={(e) => {
+                    setDefaultReminder(e.target.value);
+                    try {
+                      if (e.target.value) localStorage.setItem("defaultReminder", e.target.value);
+                    } catch {}
+                  }}
+                  className="w-full rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 px-4 py-2.5 text-sm font-mono text-slate-900 dark:text-slate-200 outline-none focus:border-violet-500"
+                />
+              </div>
             </section>
 
             {/* ── JENIS NOTIFIKASI ──────────────────── */}
@@ -422,7 +432,7 @@ export default function NotifikasiPage() {
                 </h3>
                 {saving && <i className="fa-solid fa-spinner fa-spin text-xs text-slate-400"></i>}
               </div>
-              <p className="text-xs text-slate-500 mb-3">Yang dimatikan tidak membuat HP berbunyi, tapi tetap masuk riwayat.</p>
+              <p className="text-xs text-slate-500 mb-3">Yang dimatikan tidak dikirim ke HP maupun email, tapi tetap masuk riwayat.</p>
               <div className="space-y-1.5">
                 {kinds.map((k) => {
                   const on = !prefs.muted_kinds.includes(k.key);

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { createPortal } from "react-dom";
 import { getPushStatus, registerPushSubscription } from "@/lib/push";
 import { useToast } from "@/app/components/ToastProvider";
 
@@ -47,6 +48,8 @@ export default function NotificationBell() {
   const [pushState, setPushState] = useState<"unknown" | "on" | "off" | "unsupported" | "denied">("unknown");
   const [enabling, setEnabling] = useState(false);
   const boxRef = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState<{ top: number; right: number } | null>(null);
   const boundRef = useRef(false);
 
   const load = useCallback(async () => {
@@ -112,7 +115,9 @@ export default function NotificationBell() {
   useEffect(() => {
     if (!open) return;
     const onDown = (e: MouseEvent) => {
-      if (boxRef.current && !boxRef.current.contains(e.target as Node)) setOpen(false);
+      const t = e.target as Node;
+      if (boxRef.current?.contains(t) || panelRef.current?.contains(t)) return;
+      setOpen(false);
     };
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
     document.addEventListener("mousedown", onDown);
@@ -120,6 +125,22 @@ export default function NotificationBell() {
     return () => {
       document.removeEventListener("mousedown", onDown);
       document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  // Panel dirender di <body> (portal) supaya tidak tertutup elemen lain di halaman
+  useEffect(() => {
+    if (!open) return;
+    const place = () => {
+      const r = boxRef.current?.getBoundingClientRect();
+      if (r) setPos({ top: r.bottom + 8, right: Math.max(8, window.innerWidth - r.right) });
+    };
+    place();
+    window.addEventListener("resize", place);
+    window.addEventListener("scroll", place, true);
+    return () => {
+      window.removeEventListener("resize", place);
+      window.removeEventListener("scroll", place, true);
     };
   }, [open]);
 
@@ -175,8 +196,12 @@ export default function NotificationBell() {
         )}
       </button>
 
-      {open && (
-        <div className="fixed sm:absolute left-2 right-2 sm:left-auto sm:right-0 top-16 sm:top-12 sm:w-96 z-50 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xl shadow-slate-900/10 overflow-hidden">
+      {open && pos && typeof document !== "undefined" && createPortal(
+        <div
+          ref={panelRef}
+          style={{ top: pos.top, right: pos.right }}
+          className="fixed left-2 sm:left-auto sm:w-96 z-[1000] rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xl shadow-slate-900/20 overflow-hidden"
+        >
           <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 dark:border-slate-800">
             <div className="flex items-center gap-2">
               <h3 className="text-sm font-bold text-slate-900 dark:text-white">Notifikasi</h3>
@@ -293,7 +318,8 @@ export default function NotificationBell() {
           >
             Lihat semua & pengaturan<i className="fa-solid fa-arrow-right ml-1.5 text-[10px]"></i>
           </button>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

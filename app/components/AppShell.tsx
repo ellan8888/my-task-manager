@@ -3,7 +3,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
-import { registerPushSubscription, sendTestPush } from "@/lib/push";
 import NotificationBell from "@/app/components/NotificationBell";
 import type { CurrentUser } from "@/lib/types";
 import { useToast } from "@/app/components/ToastProvider";
@@ -100,9 +99,6 @@ export default function AppShell({
   const [botStatus, setBotStatus] = useState<{ isOnline: boolean; lastHeartbeatHuman: string } | null>(null);
   const [restarting, setRestarting] = useState(false);
 
-  const [showSettings, setShowSettings] = useState(false);
-  const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>("default");
-  const [defaultReminder, setDefaultReminder] = useState("20:00");
 
   const [counts, setCounts] = useState({ tasksTotal: 0, tasksDone: 0, joki: 0 });
 
@@ -158,58 +154,6 @@ export default function AppShell({
   // Di HP, tutup sidebar setelah pindah halaman
   const closeOnMobile = () => {
     if (window.innerWidth < 768) setSidebarOpen(false);
-  };
-
-  // ── Notification settings ───────────────────────────────────
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    if ("Notification" in window) setNotificationPermission(Notification.permission);
-    const saved = localStorage.getItem("defaultReminder");
-    if (saved) setDefaultReminder(saved);
-  }, []);
-
-  const updateDefaultReminder = (value: string) => {
-    setDefaultReminder(value);
-    localStorage.setItem("defaultReminder", value);
-  };
-
-  const enableNotifications = async () => {
-    if (!("Notification" in window)) {
-      toast.warning("Browser kamu tidak mendukung notifikasi");
-      return;
-    }
-    try {
-      const permission = await Notification.requestPermission();
-      setNotificationPermission(permission);
-      if (permission !== "granted") {
-        toast.warning("Izin notifikasi ditolak. Aktifkan dari pengaturan browser");
-        return;
-      }
-      if (!currentUser?.username) {
-        toast.warning("User belum siap, coba refresh halaman");
-        return;
-      }
-      await registerPushSubscription(currentUser.username);
-      toast.success("Notifikasi berhasil diaktifkan");
-    } catch (error) {
-      console.error("Gagal mengaktifkan push notification:", error);
-      toast.error("Gagal mengaktifkan notifikasi");
-    }
-  };
-
-  const testPushNotification = async () => {
-    try {
-      // Hanya ke perangkat milik user yang login (bukan ke semua orang)
-      const result = await sendTestPush();
-      if (result.success && (result.sent || 0) > 0) {
-        toast.success(`Notifikasi tes terkirim ke ${result.sent} perangkat kamu${result.failed ? `, ${result.failed} gagal` : ""}`);
-      } else {
-        toast.warning(result.message || "Belum ada perangkat aktif — aktifkan notifikasi dulu");
-      }
-    } catch (error) {
-      console.error("Test push error:", error);
-      toast.error("Gagal menghubungi Push API");
-    }
   };
 
   // ── Bot status ───────────────────────────────────────────────
@@ -407,19 +351,6 @@ export default function AppShell({
                 </span>
               </Link>
 
-              <NavGroupLabel>Lainnya</NavGroupLabel>
-              <button
-                onClick={() => setShowSettings((v) => !v)}
-                className={`${navBase} ${showSettings ? navActive : navIdle}`}
-              >
-                <NavIcon icon="fa-bell" active={showSettings} />
-                <span>Notification</span>
-                <span
-                  className={`ml-auto w-2 h-2 rounded-full ${
-                    notificationPermission === "granted" ? "bg-emerald-500" : "bg-slate-400"
-                  }`}
-                ></span>
-              </button>
             </nav>
 
             {/* Progres tugas kuliah */}
@@ -502,13 +433,6 @@ export default function AppShell({
             </div>
 
             <div className="flex items-center space-x-2.5">
-              <button
-                onClick={testPushNotification}
-                className="flex items-center space-x-2 bg-slate-100 dark:bg-slate-900 hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 px-3.5 py-2 rounded-xl text-xs md:text-sm font-semibold border border-slate-200 dark:border-slate-800 transition shadow-sm active:scale-95"
-              >
-                <i className="fa-solid fa-paper-plane text-violet-500 dark:text-violet-400"></i>
-                <span className="hidden sm:inline">Tes Notifikasi</span>
-              </button>
               {headerActions}
               <NotificationBell />
             </div>
@@ -516,78 +440,6 @@ export default function AppShell({
 
           <div className="flex-1 overflow-y-auto custom-scrollbar">
             <div className="px-4 md:px-8 py-4 space-y-4">
-              {/* NOTIFICATION SETTINGS */}
-              {showSettings && (
-                <div className="bg-white dark:bg-slate-900/50 backdrop-blur-xl border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-sm">
-                  <div className="mb-4 flex items-start justify-between gap-4">
-                    <div>
-                      <h2 className="text-base font-semibold text-slate-900 dark:text-white flex items-center gap-2">
-                        <i className="fa-solid fa-bell text-violet-600 dark:text-violet-400"></i>
-                        <span>Notification Settings</span>
-                      </h2>
-                      <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-                        Atur pengaturan reminder My Task Manager.
-                      </p>
-                    </div>
-                    <button
-                      onClick={() => setShowSettings(false)}
-                      className="text-slate-400 hover:text-slate-900 dark:hover:text-white p-1.5 rounded-lg"
-                    >
-                      <i className="fa-solid fa-xmark"></i>
-                    </button>
-                  </div>
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between gap-4">
-                      <div>
-                        <p className="text-sm font-medium text-slate-800 dark:text-slate-200">Push Notification</p>
-                        <p className="text-xs text-slate-500">Terima reminder meskipun aplikasi tidak sedang dibuka.</p>
-                      </div>
-                      <span
-                        className={`rounded-full px-3 py-1 text-xs font-semibold ${
-                          notificationPermission === "granted"
-                            ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400"
-                            : "bg-slate-200 text-slate-600 dark:bg-slate-800 dark:text-slate-400"
-                        }`}
-                      >
-                        {notificationPermission === "granted" ? "ON" : "OFF"}
-                      </span>
-                    </div>
-                    <div>
-                      <label className="mb-1.5 block text-sm font-medium text-slate-700 dark:text-slate-300">
-                        Default Daily Reminder (Tugas)
-                      </label>
-                      <div className="relative">
-                        <input
-                          type="text"
-                          value={defaultReminder}
-                          onChange={(e) => {
-                            let val = e.target.value.replace(/[^0-9:]/g, "");
-                            if (val.length === 2 && !val.includes(":")) val = val + ":";
-                            updateDefaultReminder(val.slice(0, 5));
-                          }}
-                          placeholder="20:00"
-                          maxLength={5}
-                          className="w-full rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 px-4 py-3 pr-11 text-sm text-slate-900 dark:text-slate-200 outline-none transition focus:border-violet-500 font-mono"
-                        />
-                        <i className="fa-regular fa-clock absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 text-sm pointer-events-none"></i>
-                      </div>
-                      <p className="mt-1 text-xs text-slate-500">
-                        Format 24 jam (HH:MM), contoh: <span className="font-mono">20:00</span>
-                      </p>
-                    </div>
-                    {notificationPermission !== "granted" && (
-                      <button
-                        onClick={enableNotifications}
-                        className="w-full rounded-xl bg-slate-200 dark:bg-slate-800 px-4 py-3 text-sm font-semibold text-slate-800 dark:text-slate-200 hover:bg-slate-300 dark:hover:bg-slate-700 transition flex items-center justify-center gap-2"
-                      >
-                        <i className="fa-solid fa-bell"></i>
-                        <span>Enable Push Notification</span>
-                      </button>
-                    )}
-                  </div>
-                </div>
-              )}
-
               {children}
             </div>
           </div>

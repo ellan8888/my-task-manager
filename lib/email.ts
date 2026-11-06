@@ -9,7 +9,8 @@
 // Saat ini dipakai untuk notifikasi PENARIKAN saldo:
 //   • request baru      → email ke owner
 //   • disetujui/ditolak → email ke staff pemilik saldo
-// Alamat email & on/off diatur tiap user di halaman Notifikasi (tabel notification_prefs).
+// Alamat email diatur tiap user di halaman Notifikasi. On/off ikut toggle "Penarikan saldo"
+// di bagian Jenis notifikasi (muted_kinds) — kalau dimatikan, HP & email sama-sama diam.
 import nodemailer from "nodemailer";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
@@ -139,15 +140,15 @@ type Withdrawal = {
   payment_proof_url?: string | null;
 };
 
-/** Alamat email user yang mengaktifkan email penarikan */
+/** Alamat email user yang tidak membisukan notifikasi penarikan */
 async function withdrawRecipients(usernames: string[]) {
   const { data, error } = await supabaseAdmin
     .from("notification_prefs")
-    .select("username, email, email_penarikan")
+    .select("username, email, muted_kinds")
     .in("username", usernames.map((u) => u.toLowerCase()));
   if (error) return [];
   return (data || [])
-    .filter((p) => p.email && EMAIL_RE.test(p.email) && p.email_penarikan !== false)
+    .filter((p) => p.email && EMAIL_RE.test(p.email) && !((p.muted_kinds as string[]) || []).includes("penarikan"))
     .map((p) => ({ username: p.username as string, email: p.email as string }));
 }
 

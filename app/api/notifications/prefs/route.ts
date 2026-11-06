@@ -20,7 +20,7 @@ export async function GET(req: NextRequest) {
 
   let { data: pref, error: pErr } = await supabaseAdmin
     .from("notification_prefs")
-    .select("muted_kinds, quiet_start, quiet_end, email, email_penarikan")
+    .select("muted_kinds, quiet_start, quiet_end, email")
     .eq("username", me)
     .maybeSingle();
   let emailSetupNeeded = false;
@@ -51,7 +51,7 @@ export async function GET(req: NextRequest) {
     setup_needed: !!pErr,
     email_setup_needed: emailSetupNeeded,
     email_ready: emailConfigured(),
-    prefs: { muted_kinds: [], quiet_start: null, quiet_end: null, email: null, email_penarikan: true, ...(pref || {}) },
+    prefs: { muted_kinds: [], quiet_start: null, quiet_end: null, email: null, ...(pref || {}) },
     kinds: NOTIFY_KINDS.map((k) => ({ key: k, label: KIND_LABEL[k] })),
     devices,
   });
@@ -80,7 +80,6 @@ export async function PUT(req: NextRequest) {
     }
     row.email = email || null;
   }
-  if ("email_penarikan" in b) row.email_penarikan = b.email_penarikan !== false;
 
   const { error } = await supabaseAdmin.from("notification_prefs").upsert(row, { onConflict: "username" });
   if (error) {
