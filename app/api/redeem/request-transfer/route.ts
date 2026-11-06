@@ -1,6 +1,7 @@
 // app/api/redeem/request-transfer/route.ts
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { notify } from "@/lib/notify";
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -62,10 +63,6 @@ export async function POST(request: Request) {
     // ⭐ PUSH NOTIF KE SEMUA SUPERADMIN
     // ══════════════════════════════════════════════════════════
     try {
-      const baseUrl =
-        process.env.NEXT_PUBLIC_BASE_URL ||
-        "https://my-task-manager-self.vercel.app";
-
       // Ambil semua superadmin aktif
       const { data: admins, error: adminsErr } = await supabaseAdmin
         .from("users")
@@ -91,38 +88,15 @@ export async function POST(request: Request) {
         adminUsernames
       );
 
-      // Kirim push ke tiap superadmin
-      for (const adminUser of adminUsernames) {
-        try {
-          const pushRes = await fetch(`${baseUrl}/api/push`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              username: adminUser,
-              title: "Pending Transfer Baru!",
-              body: `${user} — Rp 20.000${notes ? ` • "${notes}"` : ""}`,
-              url: "/redeem",
-            }),
-          });
-
-          if (pushRes.ok) {
-            const pushData = await pushRes.json();
-            console.log(
-              `[request-transfer] Push ke ${adminUser}: sent=${pushData.sent}, failed=${pushData.failed}`
-            );
-          } else {
-            const txt = await pushRes.text();
-            console.warn(
-              `[request-transfer] Push ke ${adminUser} gagal: HTTP ${pushRes.status} — ${txt}`
-            );
-          }
-        } catch (pushErr) {
-          console.error(
-            `[request-transfer] Error push ke ${adminUser}:`,
-            pushErr
-          );
-        }
-      }
+      // Kirim ke semua superadmin sekaligus (riwayat + push)
+      const r = await notify({
+        to: adminUsernames,
+        title: "Pending Transfer Baru!",
+        body: `${user} — Rp 20.000${notes ? ` • "${notes}"` : ""}`,
+        url: "/redeem",
+        kind: "transfer",
+      });
+      console.log(`[request-transfer] Notif superadmin: sent=${r.sent}, failed=${r.failed}`);
     } catch (notifErr) {
       // ⚠️ Notif gagal ≠ request gagal — tetap return success
       console.error("[request-transfer] Gagal kirim push notif:", notifErr);

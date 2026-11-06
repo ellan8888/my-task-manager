@@ -1,65 +1,9 @@
 import { NextResponse } from "next/server";
-import webpush from "web-push";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import { notify } from "@/lib/notify";
 
-const vapidPublicKey =
-  process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
-
-const vapidPrivateKey =
-  process.env.VAPID_PRIVATE_KEY;
-
-if (!vapidPublicKey || !vapidPrivateKey) {
-  throw new Error(
-    "VAPID keys belum tersedia."
-  );
-}
-
-webpush.setVapidDetails(
-  "mailto:admin@example.com",
-  vapidPublicKey,
-  vapidPrivateKey
-);
-
-// ⭐ Helper: log detail error dari web-push
-function logPushError(
-  context: string,
-  error: any,
-  subscription: any
-) {
-  console.error(`❌ ${context}:`, {
-    statusCode: error.statusCode,
-    body: error.body,
-    message: error.message,
-    endpoint: subscription?.endpoint?.slice(0, 80),
-  });
-}
-
-// ⭐ Helper: cek apakah subscription invalid
-function isInvalidSubscription(error: any): boolean {
-  return (
-    error.statusCode === 400 ||
-    error.statusCode === 401 ||
-    error.statusCode === 403 ||
-    error.statusCode === 404 ||
-    error.statusCode === 410
-  );
-}
-
-// ⭐ Helper: hapus subscription invalid
-async function deleteSubscription(endpoint: string) {
-  const { error } = await supabaseAdmin
-    .from("push_subscriptions")
-    .delete()
-    .eq("endpoint", endpoint);
-
-  if (error) {
-    console.error(`⚠️ Gagal hapus subscription: ${error.message}`);
-  } else {
-    console.log(
-      `🗑️ Subscription invalid dihapus: ${endpoint.slice(0, 60)}...`
-    );
-  }
-}
+// Kirim notifikasi lewat lib/notify → otomatis tersimpan di riwayat (ikon lonceng),
+// ikut pengaturan bisu / jam tenang user, dan dikirim paralel ke semua perangkatnya.
 
 export async function GET() {
   try {
@@ -154,42 +98,6 @@ export async function GET() {
       });
     }
 
-    // =========================
-    // AMBIL SUBSCRIPTIONS
-    // =========================
-
-    const { data: subscriptions, error: subError } =
-      await supabaseAdmin
-        .from("push_subscriptions")
-        .select("*");
-
-    if (subError) {
-      console.error(
-        "❌ Gagal mengambil subscriptions:",
-        subError
-      );
-
-      return NextResponse.json(
-        {
-          success: false,
-          error: subError.message,
-        },
-        { status: 500 }
-      );
-    }
-
-    if (
-      !subscriptions ||
-      subscriptions.length === 0
-    ) {
-      return NextResponse.json({
-        success: false,
-        message:
-          "Belum ada push subscription.",
-        sent: 0,
-      });
-    }
-
     let sent = 0;
     let skipped = 0;
     let failed = 0;
@@ -257,59 +165,21 @@ export async function GET() {
       // KIRIM PUSH
       // =========================
 
-      const payload =
-        JSON.stringify({
-          title: task.title,
-          body: `Reminder harian • Deadline ${task.deadline}`,
-          icon: "/icon-192.png",
-        });
+      const r = await notify({
+        to: task.username,
+        title: task.title,
+        body: `Reminder harian • Deadline ${task.deadline}`,
+        url: "/",
+        kind: "reminder",
+      });
 
-            // ⭐ FILTER subscription milik user ini
-      const userSubscriptions = subscriptions.filter(
-        (sub) => sub.username === task.username
-      );
-
-      if (userSubscriptions.length === 0) {
-        console.log(
-          `⚠️ User ${task.username} nggak punya subscription — skip task "${task.title}"`
-        );
+      if (!r.sent && !r.stored) {
+        console.log(`⚠️ User ${task.username} belum punya perangkat — skip task "${task.title}"`);
         skipped++;
         continue;
       }
-
-      console.log(
-        `🚨 Mengirim reminder: ${task.title} → ${userSubscriptions.length} device (user: ${task.username})`
-      );
-
-      for (const subscription of userSubscriptions) {
-        try {
-          await webpush.sendNotification(
-            {
-              endpoint: subscription.endpoint,
-              keys: {
-                p256dh: subscription.p256dh,
-                auth: subscription.auth,
-              },
-            },
-            payload
-          );
-
-          sent++;
-        } catch (error: any) {
-          logPushError(
-            `Push task "${task.title}" gagal`,
-            error,
-            subscription
-          );
-
-          failed++;
-
-          // ⭐ AUTO-DELETE subscription invalid
-          if (isInvalidSubscription(error)) {
-            await deleteSubscription(subscription.endpoint);
-          }
-        }
-      }
+      sent += r.sent;
+      failed += r.failed;
 
       // =========================
       // SIMPAN STATUS
@@ -389,73 +259,23 @@ export async function GET() {
         `🚨 Mengirim reminder Jokian: ${order.order_id}`
       );
 
-      const payload = JSON.stringify({
+      const r = await notify({
+        to: order.joki_name || "",
         title: "Waktunya Jokian!",
-        body:
-          `${order.product || "Jokian"} • ` +
-          `Joki: ${order.joki_name || "-"} • ` +
-          `Jam ${scheduleTime}`,
-        icon: "/icon-192.png",
+        body: `${order.product || "Jokian"} • Joki: ${order.joki_name || "-"} • Jam ${scheduleTime}`,
+        url: "/joki",
+        kind: "joki",
       });
+      const orderNotificationSent = r.sent > 0 || r.stored > 0;
 
-            let orderNotificationSent = false;
-
-      // ⭐ FILTER subscription milik joki ini
-      const jokiSubscriptions = subscriptions.filter(
-        (sub) => sub.username === order.joki_name
-      );
-
-      if (jokiSubscriptions.length === 0) {
-        console.log(
-          `⚠️ Joki ${order.joki_name} nggak punya subscription — skip order ${order.order_id}`
-        );
+      if (!orderNotificationSent) {
+        console.log(`⚠️ Joki ${order.joki_name} belum punya perangkat — skip order ${order.order_id}`);
         skipped++;
         continue;
       }
-
-      console.log(
-        `🚨 Mengirim reminder Jokian: ${order.order_id} → ${jokiSubscriptions.length} device (joki: ${order.joki_name})`
-      );
-
-      // =========================
-      // KIRIM KE SUBSCRIPTION JOKI
-      // =========================
-
-      for (const subscription of jokiSubscriptions) {
-        try {
-          await webpush.sendNotification(
-            {
-              endpoint: subscription.endpoint,
-              keys: {
-                p256dh: subscription.p256dh,
-                auth: subscription.auth,
-              },
-            },
-            payload
-          );
-
-          sent++;
-          jokiSent++;
-          orderNotificationSent = true;
-
-          console.log(
-            `✅ Notifikasi Jokian berhasil dikirim: ${order.order_id}`
-          );
-        } catch (error: any) {
-          logPushError(
-            `Push Jokian ${order.order_id} gagal`,
-            error,
-            subscription
-          );
-
-          failed++;
-
-          // ⭐ AUTO-DELETE subscription invalid
-          if (isInvalidSubscription(error)) {
-            await deleteSubscription(subscription.endpoint);
-          }
-        }
-      }
+      sent += r.sent;
+      jokiSent += r.sent;
+      failed += r.failed;
 
       // =========================
       // TANDAI REMINDER TERKIRIM

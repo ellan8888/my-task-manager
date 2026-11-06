@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import { notify } from "@/lib/notify";
 
 export const runtime = "nodejs";
 
@@ -71,25 +72,16 @@ export async function GET(req: Request) {
   }
 
   // === 5. Kirim push notif ===
-  const baseUrl =
-    process.env.NEXT_PUBLIC_SITE_URL ||
-    "https://my-task-manager-self.vercel.app";
-
   const diffMinutes = Math.floor(diffSeconds / 60);
 
   try {
-    const pushRes = await fetch(`${baseUrl}/api/push`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        username: NOTIF_TARGET,
-        title: "Bot Offline!",
-        body: `Bot itemku berhenti ${diffMinutes} menit lalu.`,
-        url: "/",
-      }),
+    await notify({
+      to: NOTIF_TARGET,
+      title: "Bot Offline!",
+      body: `Bot itemku berhenti ${diffMinutes} menit lalu.`,
+      url: "/",
+      kind: "bot",
     });
-
-    await pushRes.json();
 
     await supabaseAdmin
       .from("bot_offline_notifications")

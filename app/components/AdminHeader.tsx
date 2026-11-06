@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react";
 import { useSidebar } from "@/app/admin/SidebarContext";
+import NotificationBell from "@/app/components/NotificationBell";
 
 type Props = {
   /** Nama ikon Font Awesome, contoh "fa-wallet" */
@@ -63,7 +64,10 @@ export default function AdminHeader({
         </div>
       </div>
 
-      {children}
+      <div className="flex flex-1 items-center justify-end gap-2.5 min-w-0 ml-3">
+        {children}
+        <NotificationBell />
+      </div>
     </header>
   );
 }

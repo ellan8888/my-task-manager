@@ -215,6 +215,7 @@ const isEllan = currentUser?.username?.toLowerCase() === "ellan";
       items: [
         { href: "/", icon: "fa-book-open", label: "Tugas Kuliah", active: pathname === "/" },
         { href: "/admin", icon: "fa-chart-line", label: "Dashboard Admin", active: pathname === "/admin" },
+        { href: "/admin/notifikasi", icon: "fa-bell", label: "Notifikasi", active: pathname === "/admin/notifikasi" },
       ],
     },
     {

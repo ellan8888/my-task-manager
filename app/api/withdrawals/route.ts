@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import { createClient } from "@supabase/supabase-js";
 import crypto from "crypto";
 import { getBalance } from "@/lib/ledger";
+import { notify } from "@/lib/notify";
 
 export const runtime = "nodejs";
 
@@ -27,23 +28,10 @@ function verifySession(signedValue: string, secret: string) {
   }
 }
 
-// ⭐ Helper: push notif
-async function sendPush(
-  username: string,
-  title: string,
-  body: string,
-  url: string
-) {
+// ⭐ Helper: notifikasi (riwayat + push) — langsung lewat lib/notify, tanpa memanggil /api/push
+async function sendPush(username: string, title: string, body: string, url: string) {
   try {
-    const baseUrl =
-      process.env.NEXT_PUBLIC_SITE_URL ||
-      "https://my-task-manager-self.vercel.app";
-
-    await fetch(`${baseUrl}/api/push`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ username, title, body, url }),
-    });
+    await notify({ to: username, title, body, url, kind: "penarikan" });
   } catch (e) {
     console.error("[Push] Gagal kirim:", e);
   }

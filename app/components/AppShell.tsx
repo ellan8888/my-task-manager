@@ -3,7 +3,8 @@
 import { useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
-import { registerPushSubscription } from "@/lib/push";
+import { registerPushSubscription, sendTestPush } from "@/lib/push";
+import NotificationBell from "@/app/components/NotificationBell";
 import type { CurrentUser } from "@/lib/types";
 import { useToast } from "@/app/components/ToastProvider";
 import { useConfirmAsync } from "@/app/components/ConfirmDialog";
@@ -198,12 +199,12 @@ export default function AppShell({
 
   const testPushNotification = async () => {
     try {
-      const response = await fetch("/api/push", { method: "POST" });
-      const result = await response.json();
-      if (result.success) {
-        toast.success(`Push terkirim ke ${result.sent} perangkat${result.failed ? `, ${result.failed} gagal` : ""}`);
+      // Hanya ke perangkat milik user yang login (bukan ke semua orang)
+      const result = await sendTestPush();
+      if (result.success && (result.sent || 0) > 0) {
+        toast.success(`Notifikasi tes terkirim ke ${result.sent} perangkat kamu${result.failed ? `, ${result.failed} gagal` : ""}`);
       } else {
-        toast.error(`Push gagal: ${result.message || result.error}`);
+        toast.warning(result.message || "Belum ada perangkat aktif — aktifkan notifikasi dulu");
       }
     } catch (error) {
       console.error("Test push error:", error);
@@ -505,10 +506,11 @@ export default function AppShell({
                 onClick={testPushNotification}
                 className="flex items-center space-x-2 bg-slate-100 dark:bg-slate-900 hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 px-3.5 py-2 rounded-xl text-xs md:text-sm font-semibold border border-slate-200 dark:border-slate-800 transition shadow-sm active:scale-95"
               >
-                <i className="fa-solid fa-bolt text-amber-500 dark:text-amber-400"></i>
-                <span className="hidden sm:inline">Simulasi Webhook</span>
+                <i className="fa-solid fa-paper-plane text-violet-500 dark:text-violet-400"></i>
+                <span className="hidden sm:inline">Tes Notifikasi</span>
               </button>
               {headerActions}
+              <NotificationBell />
             </div>
           </header>
 
