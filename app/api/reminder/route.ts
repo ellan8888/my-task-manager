@@ -196,8 +196,16 @@ export async function GET() {
     // =========================
     // CEK JADWAL JOKIAN
     // =========================
+    // Untuk order COUNTDOWN, schedule_date + schedule_time = waktu countdown HABIS
+    // (diisi bot saat jokian mulai, ikut berubah saat "Tambah Waktu").
+    // Jadi notifikasi di sini = "jokian selesai", bukan "waktunya mulai jokian".
+    // Order PROGRESS tidak punya waktu selesai (selesai saat target tercapai) → dilewati.
 
     for (const order of jokiOrders || []) {
+      if (order.order_type === "progress") {
+        skipped++;
+        continue;
+      }
       if (!order.schedule_date || !order.schedule_time) {
         console.log(
           `⚠️ Data jadwal Jokian tidak lengkap: ${order.order_id}`
@@ -259,10 +267,12 @@ export async function GET() {
         `🚨 Mengirim reminder Jokian: ${order.order_id}`
       );
 
+      const productName = String(order.product || "Jokian").split("|")[0].trim() || "Jokian";
+      const shortOrder = "#" + String(order.order_id || "").replace(/^OD0*/i, "");
       const r = await notify({
         to: order.joki_name || "",
-        title: "Waktunya Jokian!",
-        body: `${order.product || "Jokian"} • Joki: ${order.joki_name || "-"} • Jam ${scheduleTime}`,
+        title: "Jokian Selesai",
+        body: `${productName} • Order ${shortOrder} • Waktu habis jam ${scheduleTime} WIB`,
         url: "/joki",
         kind: "joki",
       });

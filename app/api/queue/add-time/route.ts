@@ -132,6 +132,8 @@ export async function POST(request: Request) {
       estimated_end_at: newEndTimeISO,
       schedule_date: newScheduleDate,
       schedule_time: newScheduleTime,
+      // waktu selesai berubah → notifikasi "Jokian Selesai" dikirim lagi di waktu yang baru
+      reminder_sent: false,
       queue_status: "processing",
       processing_started_at:
         order.queue_status === "processing"
