@@ -45,6 +45,7 @@ const PROTECTED_API = [
   "/api/remove-account",
   "/api/progress-keywords",
   "/api/bot",
+  "/api/rf",
 ];
 
 // ⭐ Pakai Web Crypto API (bisa jalan di Edge Runtime)
