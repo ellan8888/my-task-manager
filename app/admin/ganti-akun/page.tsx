@@ -320,6 +320,36 @@ export default function GantiAkunPage() {
     }
   };
 
+  // Akun pengganti ternyata sudah laku di Itemku → batalkan, lalu pilih ulang dengan akun yang sama
+  const SOLD_MARKER = "sudah laku di Itemku";
+  const isSoldError = (h: Replacement) => h.status === "failed" && (h.error || "").includes(SOLD_MARKER);
+  const repickReplacement = async (rep: Replacement) => {
+    setBusyId(rep.id);
+    try {
+      const res = await fetch("/api/admin/ganti-akun", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: rep.id, action: "cancel" }),
+      });
+      const data = await res.json();
+      if (!data.success) {
+        toast.error(data.message || "Gagal");
+        return;
+      }
+      loadHistory();
+      resetFlow();
+      autoPick.current = rep.old_username.toLowerCase();
+      setQuery(rep.old_username);
+      await runSearch(rep.old_username);
+      window.scrollTo({ top: 0, behavior: "smooth" });
+      toast.info(`Pilih akun pengganti lain untuk ${rep.old_username}`);
+    } catch {
+      toast.error("Terjadi kesalahan");
+    } finally {
+      setBusyId(null);
+    }
+  };
+
   // ── Aksi riwayat ───────────────────────────────────────────
   const historyAction = async (rep: Replacement, action: "retry" | "cancel" | "finalize") => {
     if (action === "cancel") {
@@ -705,19 +735,33 @@ export default function GantiAkunPage() {
                         )}
                       </div>
 
-                      {h.error && (
-                        <p className="mt-2 text-[11px] text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-500/10 rounded-lg px-2.5 py-1.5 wrap-break-word">
-                          {h.step ? `Gagal saat ${STEP_LABEL[h.step] || h.step}: ` : ""}
-                          {h.error}
-                        </p>
-                      )}
+                      {h.error &&
+                        (isSoldError(h) ? (
+                          <p className="mt-2 text-[11px] text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-500/10 rounded-lg px-2.5 py-1.5 wrap-break-word flex items-start gap-1.5">
+                            <i className="fa-solid fa-tag text-[10px] mt-0.5"></i>
+                            <span>
+                              Akun pengganti <b>{h.new_username}</b> ternyata sudah laku di Itemku, jadi tidak bisa dipakai. Pilih akun pengganti lain.
+                            </span>
+                          </p>
+                        ) : (
+                          <p className="mt-2 text-[11px] text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-500/10 rounded-lg px-2.5 py-1.5 wrap-break-word">
+                            {h.step ? `Gagal saat ${STEP_LABEL[h.step] || h.step}: ` : ""}
+                            {h.error}
+                          </p>
+                        ))}
 
                       {(h.status === "failed" || h.status === "pending" || h.status === "finalize_failed") && (
                         <div className="mt-2.5 flex gap-2 justify-end">
-                          {h.status === "failed" && (
-                            <ActionButton busy={busyId === h.id} onClick={() => historyAction(h, "retry")} icon="fa-rotate-right" tone="violet">
-                              Coba ulang
+                          {isSoldError(h) ? (
+                            <ActionButton busy={busyId === h.id} onClick={() => repickReplacement(h)} icon="fa-arrow-right-arrow-left" tone="violet">
+                              Pilih pengganti lain
                             </ActionButton>
+                          ) : (
+                            h.status === "failed" && (
+                              <ActionButton busy={busyId === h.id} onClick={() => historyAction(h, "retry")} icon="fa-rotate-right" tone="violet">
+                                Coba ulang
+                              </ActionButton>
+                            )
                           )}
                           {h.status === "finalize_failed" && (
                             <ActionButton busy={busyId === h.id} onClick={() => historyAction(h, "finalize")} icon="fa-database" tone="violet">

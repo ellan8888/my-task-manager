@@ -4,7 +4,7 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { getSession } from "@/lib/auth";
-import { ACTIVE_STATUSES, canUseGantiAkun } from "@/lib/replacements";
+import { ACTIVE_STATUSES, SOLD_MARKER, canUseGantiAkun } from "@/lib/replacements";
 
 export const dynamic = "force-dynamic";
 
@@ -38,6 +38,13 @@ export async function GET(request: Request) {
       .select("new_username")
       .in("status", ACTIVE_STATUSES);
     const busySet = new Set((busy || []).map((r) => r.new_username.toLowerCase()));
+
+    // Pernah gagal karena "sudah laku di Itemku" (tidak ada tombol Hapus) → jangan ditawarkan lagi
+    const { data: sold } = await supabaseAdmin
+      .from("account_replacements")
+      .select("new_username")
+      .ilike("error", `%${SOLD_MARKER}%`);
+    (sold || []).forEach((r) => busySet.add(r.new_username.toLowerCase()));
 
     const list = (data || [])
       .filter((a) => !busySet.has(a.username.toLowerCase()))

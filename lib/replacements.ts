@@ -6,6 +6,9 @@ import type { Session } from "@/lib/auth";
 /** Status yang dianggap masih berjalan (akun pengganti sedang "dipesan") */
 export const ACTIVE_STATUSES = ["pending", "processing", "failed", "finalize_failed"];
 
+/** Teks yang dikirim bot kalau akun pengganti ternyata sudah laku di Itemku (tidak ada tombol Hapus) */
+export const SOLD_MARKER = "sudah laku di Itemku";
+
 export const isEllan = (s: Session | null) => s?.username?.toLowerCase() === "ellan";
 
 /** Ganti Akun boleh dipakai owner & staff (siapa pun yang login) */
