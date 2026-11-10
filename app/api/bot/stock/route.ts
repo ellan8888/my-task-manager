@@ -49,7 +49,7 @@ export async function GET(request: Request) {
     // ⭐ 2. Query kategori_links (source utama)
 const { data: kategoriLinks, error: katErr } = await supabaseAdmin
   .from("kategori_links")
-  .select("kategori, nama_produk, price")
+  .select("kategori, nama_produk, price, link")
   .order("kategori", { ascending: true });
 
     if (katErr) {
@@ -63,7 +63,7 @@ const { data: kategoriLinks, error: katErr } = await supabaseAdmin
     // ⭐ 3. Build list base dari kategori_links
     //     + exact map buat fuzzy matching
 const exactMap: Record<string, string> = {};
-const fuzzyList: { key: string; nama: string; price: number }[] = [];  // ⭐ +price
+const fuzzyList: { key: string; nama: string; price: number; id_item: number | null }[] = [];  // ⭐ +price +id_item
 const seenNama = new Set<string>();
 
     for (const row of kategoriLinks || []) {
@@ -79,7 +79,9 @@ const seenNama = new Set<string>();
   if (seenNama.has(row.nama_produk)) continue;
   seenNama.add(row.nama_produk);
 
-  fuzzyList.push({ key, nama: row.nama_produk, price: row.price || 0 });  // ⭐ +price
+  // ID produk Itemku dari link (…/pengiriman-otomatis/kode/4441818) → bot bisa ambil harga terbaru dari katalog
+  const idMatch = String(row.link || "").match(/\/(\d{5,})\/?(?:[?#].*)?$/);
+  fuzzyList.push({ key, nama: row.nama_produk, price: row.price || 0, id_item: idMatch ? Number(idMatch[1]) : null });
 }
 
     // ⭐ 4. Helper: exact + fuzzy match
@@ -123,7 +125,7 @@ const seenNama = new Set<string>();
     // ⭐ 6. Build result — base dari kategori_links (SEMUA kategori)
     //     + isi stock count (0 kalau nggak ada)
     const result = fuzzyList
-  .map(({ key, nama, price }) => {
+  .map(({ key, nama, price, id_item }) => {
         // Coba match dengan stockCount
         // 1. Exact match
         let stock = stockCount[key] || 0;
@@ -156,6 +158,7 @@ const seenNama = new Set<string>();
           nama_produk: nama,
           stock,
           price,   // ⭐ dari fuzzyList (destructure di map)
+          id_item, // ⭐ ID produk Itemku (untuk harga terbaru dari katalog bot)
         };
       })
       // Sort by numeric prefix
