@@ -161,6 +161,173 @@ function CopyLink({ value, label = "Salin" }: { value: string; label?: string })
   );
 }
 
+type RfDevice = {
+  number: number;
+  active: boolean;
+  note: string | null;
+  status: "ready" | "soon" | "busy" | "inactive";
+  orders: { order_id: string; estimated_end_at: string | null }[];
+};
+
+const timeWib = (iso?: string | null) =>
+  iso ? new Date(iso).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Jakarta" }) : "";
+
+/** HP Redfinger yang dipakai order ini — klik untuk pilih dari HP yang ready (joki_orders.rf_slot) */
+function RfSlot({ order }: { order: JokiOrder }) {
+  const toast = useToast();
+  const saved = order.rf_slot ?? null;
+  const [local, setLocal] = useState<{ base: number | null; value: number | null } | null>(null);
+  const current = local && local.base === saved ? local.value : saved;
+
+  const [open, setOpen] = useState(false);
+  const [devices, setDevices] = useState<RfDevice[] | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [saving, setSaving] = useState<number | "clear" | null>(null);
+
+  const openPicker = async () => {
+    setOpen(true);
+    setLoadError(null);
+    try {
+      const res = await fetch("/api/rf", { cache: "no-store" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.success) {
+        setLoadError(data.message || "Gagal memuat daftar HP");
+        return;
+      }
+      setDevices(data.devices as RfDevice[]);
+    } catch {
+      setLoadError("Gagal memuat daftar HP — cek koneksi");
+    }
+  };
+
+  const assign = async (value: number | null) => {
+    setSaving(value ?? "clear");
+    try {
+      const res = await fetch("/api/rf", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "assign", order_id: order.order_id, rf_slot: value }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.success) {
+        toast.error(data.message || "Gagal menyimpan HP Redfinger");
+        return;
+      }
+      setLocal({ base: saved, value });
+      setOpen(false);
+      toast.success(value ? `HP ${value} dipakai untuk order ini` : "HP Redfinger dikosongkan");
+    } catch {
+      toast.error("Gagal menyimpan — cek koneksi");
+    } finally {
+      setSaving(null);
+    }
+  };
+
+  if (open) {
+    const list = (devices || []).filter((d) => d.note !== "belum terdaftar" || d.number === current);
+    return (
+      <div className="mx-4 md:mx-5 mb-2 mt-1 rounded-xl border border-sky-300 dark:border-sky-500/40 bg-sky-50/60 dark:bg-sky-500/10 p-2.5">
+        <div className="flex items-center justify-between gap-2 mb-2">
+          <span className="text-xs font-bold text-sky-800 dark:text-sky-200 flex items-center gap-1.5">
+            <i className="fa-solid fa-mobile-screen-button"></i>
+            Pilih HP Redfinger
+          </span>
+          <button
+            type="button"
+            onClick={() => setOpen(false)}
+            className="text-[11px] font-bold text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 px-2 py-1"
+          >
+            Tutup
+          </button>
+        </div>
+        {loadError ? (
+          <p className="text-[11px] text-rose-600 dark:text-rose-400">{loadError}</p>
+        ) : !devices ? (
+          <p className="text-[11px] text-slate-500 flex items-center gap-1.5">
+            <i className="fa-solid fa-spinner fa-spin"></i> Memuat daftar HP...
+          </p>
+        ) : list.length === 0 ? (
+          <p className="text-[11px] text-slate-500">Belum ada HP terdaftar. Tambahkan lewat panel slot Redfinger di Discord.</p>
+        ) : (
+          <div className="flex flex-wrap gap-1.5">
+            {list.map((d) => {
+              const mine = d.number === current;
+              const usedByOther = d.orders.some((o) => o.order_id !== order.order_id);
+              const disabled = !mine && (usedByOther || !d.active);
+              const end = d.orders.find((o) => o.order_id !== order.order_id)?.estimated_end_at;
+              const hint = mine
+                ? "Dipakai order ini"
+                : !d.active
+                  ? "Nonaktif"
+                  : usedByOther
+                    ? end
+                      ? `Dipakai, kosong ${timeWib(end)}`
+                      : "Dipakai"
+                    : "Ready";
+              return (
+                <button
+                  key={d.number}
+                  type="button"
+                  disabled={disabled || saving !== null}
+                  onClick={() => (mine ? setOpen(false) : assign(d.number))}
+                  title={`HP ${d.number} · ${hint}`}
+                  className={`min-w-14 px-2.5 py-1.5 rounded-lg border text-xs font-bold flex flex-col items-center leading-tight transition active:scale-95 disabled:cursor-not-allowed ${
+                    mine
+                      ? "bg-sky-600 border-sky-600 text-white"
+                      : disabled
+                        ? usedByOther && d.status === "soon"
+                          ? "bg-amber-50 border-amber-200 text-amber-700 dark:bg-amber-500/10 dark:border-amber-500/30 dark:text-amber-300 opacity-80"
+                          : "bg-slate-100 border-slate-200 text-slate-400 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-500"
+                        : "bg-white border-emerald-300 text-emerald-700 hover:bg-emerald-50 dark:bg-slate-950 dark:border-emerald-500/40 dark:text-emerald-300 dark:hover:bg-emerald-500/10"
+                  }`}
+                >
+                  <span className="flex items-center gap-1">
+                    {saving === d.number && <i className="fa-solid fa-spinner fa-spin text-[10px]"></i>}
+                    {d.number}
+                  </span>
+                  <span className="text-[9px] font-semibold opacity-80">
+                    {mine ? "dipakai" : !d.active ? "nonaktif" : usedByOther ? (end ? timeWib(end) : "dipakai") : "ready"}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+        {current !== null && (
+          <button
+            type="button"
+            onClick={() => assign(null)}
+            disabled={saving !== null}
+            className="mt-2 text-[11px] font-bold text-rose-600 dark:text-rose-400 hover:underline disabled:opacity-50 flex items-center gap-1"
+          >
+            <i className={`fa-solid ${saving === "clear" ? "fa-spinner fa-spin" : "fa-xmark"} text-[10px]`}></i>
+            Kosongkan HP dari order ini
+          </button>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={openPicker}
+      title={current ? "Klik untuk ganti HP Redfinger" : "Klik untuk pilih HP Redfinger"}
+      className={`group/rf mx-4 md:mx-5 mb-2 mt-1 w-[calc(100%-2rem)] md:w-[calc(100%-2.5rem)] text-left px-3.5 py-2 rounded-xl border flex items-center gap-2 text-sm transition active:scale-[0.99] ${
+        current
+          ? "bg-sky-50 dark:bg-sky-500/10 border-sky-100 dark:border-sky-500/20 text-sky-800 dark:text-sky-200 hover:border-sky-300 dark:hover:border-sky-500/40"
+          : "border-dashed border-slate-300 dark:border-slate-700 text-slate-400 dark:text-slate-500 hover:border-sky-400 hover:text-sky-500 dark:hover:text-sky-400"
+      }`}
+    >
+      <i className="fa-solid fa-mobile-screen-button text-xs shrink-0"></i>
+      <span className={`flex-1 min-w-0 ${current ? "font-bold" : "italic"}`}>
+        {current ? `HP Redfinger ${current}` : "Pilih HP Redfinger..."}
+      </span>
+      <i className="fa-solid fa-pen text-[10px] shrink-0 opacity-50 group-hover/rf:opacity-100 transition"></i>
+    </button>
+  );
+}
+
 /** Catatan pribadi penjoki — klik untuk tulis / ubah, tersimpan di joki_orders.my_note */
 function MyNote({ order }: { order: JokiOrder }) {
   const saved = order.my_note ?? "";
@@ -680,6 +847,7 @@ export default function JokiOrderCard({
 
       {/* ═══ CATATAN SAYA (bisa diedit, bukan dari Itemku) ═══ */}
       {/* Tetap tampil walaupun card sudah pudar (selesai bot) */}
+      <RfSlot order={order} />
       <MyNote order={order} />
 
       {/* ═══ BOT SEDANG PROSES ═══ */}

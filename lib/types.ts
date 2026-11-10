@@ -50,6 +50,8 @@ export type JokiOrder = {
   bot_refetch_error?: string | null;
   // Catatan pribadi penjoki di card (bukan dari Itemku)
   my_note?: string | null;
+  /** Nomor HP Redfinger yang dipakai order ini */
+  rf_slot?: number | null;
 };
 
 export type CurrentUser = {
