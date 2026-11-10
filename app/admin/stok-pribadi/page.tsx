@@ -3,6 +3,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import KategoriDropdown from "../stock/KategoriDropdown";
+import GameFilter from "../stock/GameFilter";
+import { ALL_GAMES, gameCounts, gameOf, useGameFilter } from "@/lib/gameFilter";
 import { useToast } from "@/app/components/ToastProvider";
 import { SkeletonList } from "@/app/components/Skeleton";
 
@@ -46,6 +48,7 @@ export default function StokPribadiPage() {
   const [selling, setSelling] = useState<Set<number>>(new Set());
 
   const [searchQuery, setSearchQuery] = useState("");
+  const [gameFilter, setGameFilter] = useGameFilter("stok_pribadi_game");
   // ⭐ Filter idle
 const [filterIdle, setFilterIdle] = useState<"all" | "idle" | "active">("all");
 const [idleLoading, setIdleLoading] = useState<Set<number>>(new Set());
@@ -451,9 +454,13 @@ const handleToggleIdle = async (acc: StockAccount) => {
   // ══════════════════════════════════════════════════════
   // GROUP ACCOUNTS BY KATEGORI + FILTER SEARCH
   // ══════════════════════════════════════════════════════
+  const visibleAccounts = accounts.filter((acc) => !acc.logged_out);
+  // Game yang tersimpan tapi sudah tidak ada stoknya → tampilkan semua
+  const activeGame = gameCounts(visibleAccounts).some((g) => g.game === gameFilter) ? gameFilter : ALL_GAMES;
+
   const groupedAccounts = (() => {
-  const filtered = accounts.filter((acc) => {
-    if (acc.logged_out) return false;
+  const filtered = visibleAccounts.filter((acc) => {
+    if (activeGame !== ALL_GAMES && gameOf(acc.kategori) !== activeGame) return false;
     // ⭐ Cari di username ATAU catatan
     const q = searchQuery.toLowerCase();
     if (q && !acc.username.toLowerCase().includes(q) && !getNote(acc).toLowerCase().includes(q)) return false;
@@ -682,7 +689,11 @@ const idleCount = accounts.filter((a) => a.idle && !a.logged_out).length;
     )}
   </h2>
 
-  <div className="flex items-center gap-2">
+  <div className="flex flex-wrap items-center gap-2">
+    {/* Filter Game */}
+    <div className="w-full sm:w-60">
+      <GameFilter items={visibleAccounts} value={activeGame} onChange={setGameFilter} />
+    </div>
     {/* ⭐ Filter Idle */}
     <div className="flex items-center bg-slate-100 dark:bg-slate-950 p-1 rounded-xl border border-slate-200 dark:border-slate-800">
       <button
@@ -744,6 +755,12 @@ const idleCount = accounts.filter((a) => a.idle && !a.logged_out).length;
               </div>
             ) : (
               <div className="space-y-8">
+                {groupedAccounts.length === 0 && (
+                  <div className="text-center py-10">
+                    <i className="fa-solid fa-filter-circle-xmark text-3xl text-slate-300 dark:text-slate-700 mb-3"></i>
+                    <p className="text-slate-400 text-sm">Tidak ada akun yang cocok dengan filter.</p>
+                  </div>
+                )}
                 {groupedAccounts.map((group) => (
                   <div key={group.kategori}>
                     {/* Group Header */}

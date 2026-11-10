@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import KategoriDropdown from "./KategoriDropdown";
+import GameFilter from "./GameFilter";
+import { ALL_GAMES, gameCounts, gameOf, useGameFilter } from "@/lib/gameFilter";
 import { useToast } from "@/app/components/ToastProvider";
 import { useConfirmAsync } from "@/app/components/ConfirmDialog";
 import { SkeletonList } from "@/app/components/Skeleton";
@@ -39,6 +41,7 @@ export default function StockPage() {
   const [loadingKategori, setLoadingKategori] = useState(true);
 
   const [searchQuery, setSearchQuery] = useState("");
+  const [gameFilter, setGameFilter] = useGameFilter("stock_itemku_game");
     // State untuk Modal Pindah Kategori
   const [moveModalOpen, setMoveModalOpen] = useState(false);
   const [accountToMove, setAccountToMove] = useState<StockAccount | null>(null);
@@ -314,9 +317,13 @@ export default function StockPage() {
   // ══════════════════════════════════════════════════════
   // GROUP ACCOUNTS BY KATEGORI + FILTER SEARCH
   // ══════════════════════════════════════════════════════
+  const visibleAccounts = accounts.filter((acc) => !acc.logged_out);
+  // Game yang tersimpan tapi sudah tidak ada stoknya → tampilkan semua
+  const activeGame = gameCounts(visibleAccounts).some((g) => g.game === gameFilter) ? gameFilter : ALL_GAMES;
+
   const groupedAccounts = (() => {
-    const filtered = accounts.filter((acc) => {
-      if (acc.logged_out) return false;
+    const filtered = visibleAccounts.filter((acc) => {
+      if (activeGame !== ALL_GAMES && gameOf(acc.kategori) !== activeGame) return false;
       return acc.username.toLowerCase().includes(searchQuery.toLowerCase());
     });
 
@@ -565,7 +572,11 @@ export default function StockPage() {
                 <i className="fa-solid fa-table text-violet-600 dark:text-violet-400"></i>
                 <span>Daftar Stock ({accounts.length})</span>
               </h2>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
+                {/* Game */}
+                <div className="w-full sm:w-60">
+                  <GameFilter items={visibleAccounts} value={activeGame} onChange={setGameFilter} />
+                </div>
                 {/* Search */}
                 <div className="relative">
                   <i className="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
@@ -615,6 +626,12 @@ export default function StockPage() {
               </div>
             ) : (
               <div className="space-y-8">
+                {groupedAccounts.length === 0 && (
+                  <div className="text-center py-10">
+                    <i className="fa-solid fa-filter-circle-xmark text-3xl text-slate-300 dark:text-slate-700 mb-3"></i>
+                    <p className="text-slate-400 text-sm">Tidak ada akun yang cocok dengan filter.</p>
+                  </div>
+                )}
                 {groupedAccounts.map((group) => (
                   <div key={group.kategori}>
                     {/* Group Header */}
