@@ -195,12 +195,14 @@ export default function GantiAkunPage() {
   };
 
   // Prefill dari link: /admin/ganti-akun?u=username (&ticket=<id>&tname=<nama> dari Discord)
+  const prefillDone = useRef(false);
   useEffect(() => {
-    if (!isEllan) return;
+    if (!isEllan || prefillDone.current) return; // cukup sekali per buka halaman
     const params = new URLSearchParams(window.location.search);
     const u = params.get("u");
     const ticketId = params.get("ticket");
     const t = setTimeout(() => {
+      prefillDone.current = true;
       if (ticketId && /^\d{15,25}$/.test(ticketId)) {
         setTicket({ id: ticketId, name: params.get("tname") || "ticket" });
       }

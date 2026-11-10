@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useCallback, useContext, useState } from "react";
+import { createContext, useCallback, useContext, useMemo, useState } from "react";
 import Toast, { ToastItem, ToastType } from "./Toast";
 
 type ToastContextType = {
@@ -30,12 +30,18 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
     setToasts((prev) => prev.filter((t) => t.id !== id));
   }, []);
 
-  const ctx: ToastContextType = {
-    success: (msg, dur) => addToast(msg, "success", dur),
-    error: (msg, dur) => addToast(msg, "error", dur),
-    warning: (msg, dur) => addToast(msg, "warning", dur),
-    info: (msg, dur) => addToast(msg, "info", dur),
-  };
+  // Harus stabil (useMemo): banyak halaman memakai `toast` di dependency useCallback/useEffect.
+  // Kalau objek ini dibuat ulang tiap ada toast baru, efek-efek itu ikut jalan ulang → toast
+  // yang sama muncul terus-menerus (kejadian di halaman Ganti Akun).
+  const ctx = useMemo<ToastContextType>(
+    () => ({
+      success: (msg, dur) => addToast(msg, "success", dur),
+      error: (msg, dur) => addToast(msg, "error", dur),
+      warning: (msg, dur) => addToast(msg, "warning", dur),
+      info: (msg, dur) => addToast(msg, "info", dur),
+    }),
+    [addToast]
+  );
 
   return (
     <ToastContext.Provider value={ctx}>
