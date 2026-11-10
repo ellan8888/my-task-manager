@@ -1,7 +1,7 @@
 // app/admin/stok-pribadi/page.tsx
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import KategoriDropdown from "../stock/KategoriDropdown";
 import { useToast } from "@/app/components/ToastProvider";
 import { SkeletonList } from "@/app/components/Skeleton";
@@ -106,7 +106,7 @@ const [currentUserLoading, setCurrentUserLoading] = useState(true);
       const data = await res.json();
       if (data.success) {
         setKategoriList(data.list || []);
-        if (!kategori && data.list?.length > 0) setKategori(data.list[0].kategori);
+        if (data.list?.length > 0) setKategori((prev) => prev || data.list[0].kategori);
       }
     } catch {}
   };
@@ -163,6 +163,47 @@ useEffect(() => {
     } catch {
       toast.error("Gagal menyalin — salin manual dari kolomnya");
     }
+  };
+
+  // ── Draft form: username/password yang sudah di-generate tidak hilang saat pindah halaman ──
+  // Disimpan di browser ini saja (localStorage), dihapus otomatis setelah akun berhasil disimpan.
+  const DRAFT_KEY = "stok_pribadi_draft";
+  const draftLoaded = useRef(false);
+  useEffect(() => {
+    const t = setTimeout(() => {
+      try {
+        const raw = localStorage.getItem(DRAFT_KEY);
+        if (raw) {
+          const d = JSON.parse(raw) as { username?: string; password?: string; kategori?: string; note?: string };
+          if (d.username) setUsername(d.username);
+          if (d.password) setPassword(d.password);
+          if (d.kategori) setKategori(d.kategori);
+          if (d.note) setNote(d.note);
+        }
+      } catch {
+        /* browser tidak mengizinkan penyimpanan — form tetap jalan biasa */
+      }
+      draftLoaded.current = true;
+    }, 0);
+    return () => clearTimeout(t);
+  }, []);
+  useEffect(() => {
+    if (!draftLoaded.current) return;
+    try {
+      if (username || password || note) {
+        localStorage.setItem(DRAFT_KEY, JSON.stringify({ username, password, kategori, note }));
+      } else {
+        localStorage.removeItem(DRAFT_KEY);
+      }
+    } catch {
+      /* abaikan */
+    }
+  }, [username, password, kategori, note]);
+  const hasDraft = !!(username || password || note);
+  const clearDraft = () => {
+    setUsername("");
+    setPassword("");
+    setNote("");
   };
 
   const handleGenerateUsername = () => setUsername(generateUsername());
@@ -472,6 +513,18 @@ const idleCount = accounts.filter((a) => a.idle && !a.logged_out).length;
                 <i className="fa-solid fa-plus text-blue-600 dark:text-blue-400"></i>
                 <span>Tambah Akun ke Stok Pribadi</span>
               </h2>
+              <div className="flex items-center gap-2">
+              {hasDraft && (
+                <button
+                  type="button"
+                  onClick={clearDraft}
+                  className="px-3 py-2 rounded-xl text-xs font-bold text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-200 dark:hover:bg-slate-700 transition flex items-center gap-1.5"
+                  title="Kosongkan isian form"
+                >
+                  <i className="fa-solid fa-eraser text-[11px]"></i>
+                  Kosongkan
+                </button>
+              )}
               <button
                 type="button"
                 onClick={handleGenerateBoth}
@@ -481,6 +534,7 @@ const idleCount = accounts.filter((a) => a.idle && !a.logged_out).length;
                 <i className="fa-solid fa-dice text-[11px]"></i>
                 Acak keduanya
               </button>
+              </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
