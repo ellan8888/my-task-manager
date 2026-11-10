@@ -1,5 +1,6 @@
 // app/api/redeem/request-transfer/route.ts
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
+import { getSession } from "@/lib/auth";
 import { createClient } from "@supabase/supabase-js";
 import { notify } from "@/lib/notify";
 
@@ -8,13 +9,15 @@ const supabaseAdmin = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
-    const { username, proof_url, notes } = await request.json();
+    const { proof_url, notes } = await request.json();
+    // Identitas dari sesi login, bukan dari isi request
+    const username = getSession(request)?.username;
 
     if (!username || !proof_url) {
       return NextResponse.json(
-        { success: false, message: "username & proof_url wajib" },
+        { success: false, message: username ? "proof_url wajib" : "Silakan login dulu" },
         { status: 400 }
       );
     }

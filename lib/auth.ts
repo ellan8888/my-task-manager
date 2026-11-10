@@ -23,10 +23,25 @@ export function verifySession(signedValue: string, secret: string): Session | nu
   if (!crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected))) return null;
 
   try {
-    return JSON.parse(value) as Session;
+    const parsed = JSON.parse(value) as Session;
+    return isSessionExpired(parsed) ? null : parsed;
   } catch {
     return null;
   }
+}
+
+/** Lama sesi login (sama dengan umur cookie). */
+export const SESSION_MAX_AGE_SEC = 60 * 60 * 24 * 7;
+
+/**
+ * Cookie lama (sebelum ada `exp`) masih diterima sampai tanggal ini supaya tidak ada yang
+ * mendadak ter-logout; setelahnya wajib login ulang. Dipakai juga oleh middleware.
+ */
+export const LEGACY_SESSION_CUTOFF_MS = Date.parse("2026-11-17T17:00:00Z");
+
+export function isSessionExpired(s: Record<string, unknown>, now = Date.now()): boolean {
+  if (typeof s.exp === "number") return s.exp < now;
+  return now > LEGACY_SESSION_CUTOFF_MS;
 }
 
 /** Ambil session dari request. Return null kalau tidak login / cookie palsu. */
@@ -61,3 +76,14 @@ export function startOfMonthWIB(now = new Date()): Date {
   const wib = new Date(now.getTime() + 7 * 3600_000);
   return new Date(Date.UTC(wib.getUTCFullYear(), wib.getUTCMonth(), 1) - 7 * 3600_000);
 }
+
+/** Request dari bot Python (header x-bot-api-key = BOT_API_KEY). */
+export function isBotRequest(req: Request): boolean {
+  const key = process.env.BOT_API_KEY;
+  const got = req.headers.get("x-bot-api-key");
+  if (!key || !got || got.length !== key.length) return false;
+  return crypto.timingSafeEqual(Buffer.from(got), Buffer.from(key));
+}
+
+/** Bot atau user yang login — boleh melihat data lengkap. */
+export const isTrustedRequest = (req: Request) => isBotRequest(req) || !!getSession(req);

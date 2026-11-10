@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
-import { supabase } from "@/lib/supabase";
+import { useOrdersChanged } from "@/app/hooks/useOrdersChanged";
 import Link from "next/link";
 import { useToast } from "@/app/components/ToastProvider";
 import {
@@ -76,7 +76,16 @@ export default function QueuePage() {
   }, []);
 
   const loadQueue = async () => {
-    const { data, error } = await supabase.from("joki_orders").select("*").eq("completed", false);
+    let data: QueueOrder[] | null = null;
+    let error: string | null = null;
+    try {
+      const res = await fetch("/api/queue", { cache: "no-store" });
+      const json = await res.json();
+      if (res.ok && Array.isArray(json.data)) data = json.data;
+      else error = json.error || `HTTP ${res.status}`;
+    } catch (e) {
+      error = e instanceof Error ? e.message : String(e);
+    }
 
     if (error) {
       console.error("[Queue] load error:", error);
@@ -99,16 +108,10 @@ export default function QueuePage() {
 
   useEffect(() => {
     loadQueue();
-
-    const channel = supabase
-      .channel("queue_updates")
-      .on("postgres_changes", { event: "*", schema: "public", table: "joki_orders" }, () => loadQueue())
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
   }, []);
+
+  // Muat ulang setiap ada perubahan order (sinyal realtime tanpa data)
+  useOrdersChanged(() => loadQueue());
 
   useEffect(() => {
     // Load max_parallel dari API

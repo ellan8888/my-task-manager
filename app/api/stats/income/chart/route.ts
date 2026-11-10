@@ -1,7 +1,7 @@
 // app/api/stats/income/chart/route.ts
 import { NextRequest, NextResponse } from "next/server";
+import { verifySession } from "@/lib/auth";
 import { createClient } from "@supabase/supabase-js";
-import crypto from "crypto";
 
 export const runtime = "nodejs";
 
@@ -10,23 +10,7 @@ const supabaseAdmin = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-function verifySession(
-  signedValue: string,
-  secret: string
-): Record<string, any> | null {
-  const parts = signedValue.split(".");
-  if (parts.length < 2) return null;
-  const signature = parts[parts.length - 1];
-  const value = parts.slice(0, -1).join(".");
-  const hmac = crypto.createHmac("sha256", secret);
-  hmac.update(value);
-  if (signature !== hmac.digest("hex")) return null;
-  try {
-    return JSON.parse(value);
-  } catch {
-    return null;
-  }
-}
+
 
 // ⭐ Helper: format Date ke YYYY-MM-DD dalam timezone WIB (Asia/Jakarta)
 function toWIBDateStr(date: Date): string {

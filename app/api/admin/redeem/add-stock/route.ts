@@ -1,5 +1,7 @@
 // app/api/admin/redeem/add-stock/route.ts
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
+import { getSession } from "@/lib/auth";
+import { isRedeemOwner } from "@/lib/redeem";
 import { createClient } from "@supabase/supabase-js";
 
 const supabaseAdmin = createClient(
@@ -7,15 +9,16 @@ const supabaseAdmin = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-const OWNER_USERNAMES = ["ellan"];
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { username, code, codes, target_username, notes } = body;
+    const { code, codes, target_username, notes } = body;
+    const session = getSession(request);
+    const username = session?.username || "";
 
     // ⭐ Auth check
-    if (!OWNER_USERNAMES.includes(username?.toLowerCase())) {
+    if (!isRedeemOwner(session)) {
       return NextResponse.json(
         { success: false, message: "Unauthorized" },
         { status: 403 }

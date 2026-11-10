@@ -27,8 +27,6 @@ const BYPASS_PATHS = [
   "/api/bot",
   "/api/eternal",
   "/api/progress-keywords",
-  "/api/manual-complete",
-  "/admin/withdrawals",
   "/api/cron",
   "/api/vziir0",
 ];
@@ -46,7 +44,20 @@ const PROTECTED_API = [
   "/api/progress-keywords",
   "/api/bot",
   "/api/rf",
+  // Dipakai bot saja (bot selalu mengirim x-bot-api-key)
+  "/api/jokian",
+  // "/api/eternal" — menyusul setelah bot Discord (aiohttp) ikut mengirim kunci bot
+  "/api/queue/update",
+  "/api/queue/promote",
+  "/api/queue/set-end-time",
+  "/api/queue/failed",
+  "/api/queue/check-completed",
+  "/api/queue/update-progress",
+  "/api/queue/complete-progress",
 ];
+
+// Pengecualian di dalam PROTECTED_API yang memang dibuka untuk pembeli (halaman /queue/[order_id])
+const PUBLIC_API_EXCEPTIONS = [/^\/api\/eternal\/order\/[^/]+$/];
 
 // ⭐ Pakai Web Crypto API (bisa jalan di Edge Runtime)
 async function verifySession(
@@ -84,7 +95,12 @@ async function verifySession(
 
     if (signature !== expectedSig) return null;
 
-    return JSON.parse(value);
+    const parsed = JSON.parse(value);
+    // Sesi kedaluwarsa (lihat lib/auth.ts — isSessionExpired; Edge tidak bisa impor modul crypto Node)
+    const legacyCutoff = Date.parse("2026-11-17T17:00:00Z");
+    const now = Date.now();
+    if (typeof parsed.exp === "number" ? parsed.exp < now : now > legacyCutoff) return null;
+    return parsed;
   } catch (err) {
     console.error("[middleware] verifySession error:", err);
     return null;
@@ -95,7 +111,10 @@ export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // 1. API yang dilindungi: kunci bot ATAU login
-  if (PROTECTED_API.some((p) => pathname === p || pathname.startsWith(p + "/"))) {
+  if (
+    PROTECTED_API.some((p) => pathname === p || pathname.startsWith(p + "/")) &&
+    !(request.method === "GET" && PUBLIC_API_EXCEPTIONS.some((re) => re.test(pathname)))
+  ) {
     const botKey = process.env.BOT_API_KEY;
     if (botKey && request.headers.get("x-bot-api-key") === botKey) {
       return NextResponse.next();

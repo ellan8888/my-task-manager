@@ -2,7 +2,6 @@
 
 import { useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
-import { supabase } from "@/lib/supabase";
 import NotificationBell from "@/app/components/NotificationBell";
 import type { CurrentUser } from "@/lib/types";
 import { useToast } from "@/app/components/ToastProvider";
@@ -167,7 +166,9 @@ export default function AppShell({
 
   useEffect(() => {
     fetchBotStatus();
-    const interval = setInterval(fetchBotStatus, 30000);
+    const interval = setInterval(() => {
+      if (document.visibilityState === "visible") fetchBotStatus();
+    }, 30000);
     return () => clearInterval(interval);
   }, []);
 
@@ -200,19 +201,14 @@ export default function AppShell({
   // ── Badge counts (task & joki) ───────────────────────────────
   useEffect(() => {
     if (!currentUser) return;
-    const u = currentUser.username;
-
     (async () => {
-      const [total, done, joki] = await Promise.all([
-        supabase.from("tasks").select("id", { count: "exact", head: true }).eq("username", u),
-        supabase.from("tasks").select("id", { count: "exact", head: true }).eq("username", u).eq("completed", true),
-        supabase.from("joki_orders").select("id", { count: "exact", head: true }).eq("joki_name", u).eq("completed", false),
-      ]);
-      setCounts({
-        tasksTotal: total.count ?? 0,
-        tasksDone: done.count ?? 0,
-        joki: joki.count ?? 0,
-      });
+      try {
+        const res = await fetch("/api/me/summary", { cache: "no-store" });
+        const d = await res.json();
+        if (d.success) setCounts({ tasksTotal: d.tasksTotal, tasksDone: d.tasksDone, joki: d.joki });
+      } catch {
+        // badge tidak wajib
+      }
     })();
   }, [currentUser, refreshKey]);
 

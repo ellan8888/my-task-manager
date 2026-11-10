@@ -1,5 +1,6 @@
 // app/api/redeem/my-codes/route.ts
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
+import { getSession } from "@/lib/auth";
 import { createClient } from "@supabase/supabase-js";
 
 const supabaseAdmin = createClient(
@@ -7,15 +8,15 @@ const supabaseAdmin = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
   try {
-    const { searchParams } = new URL(request.url);
-    const username = searchParams.get("username");
+    // Hanya code milik user yang login (parameter ?username diabaikan)
+    const username = getSession(request)?.username;
 
     if (!username) {
       return NextResponse.json(
-        { success: false, message: "username wajib" },
-        { status: 400 }
+        { success: false, message: "Silakan login dulu" },
+        { status: 401 }
       );
     }
 

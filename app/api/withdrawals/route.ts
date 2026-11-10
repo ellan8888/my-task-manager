@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
+import { verifySession } from "@/lib/auth";
 import { cookies } from "next/headers";
 import { createClient } from "@supabase/supabase-js";
-import crypto from "crypto";
 import { getBalance } from "@/lib/ledger";
 import { notify } from "@/lib/notify";
 import { emailWithdrawRequest, emailWithdrawResult } from "@/lib/email";
@@ -14,20 +14,7 @@ const supabaseAdmin = createClient(
 );
 
 
-function verifySession(signedValue: string, secret: string) {
-  const parts = signedValue.split(".");
-  if (parts.length < 2) return null;
-  const signature = parts[parts.length - 1];
-  const value = parts.slice(0, -1).join(".");
-  const hmac = crypto.createHmac("sha256", secret);
-  hmac.update(value);
-  if (signature !== hmac.digest("hex")) return null;
-  try {
-    return JSON.parse(value);
-  } catch {
-    return null;
-  }
-}
+
 
 // ⭐ Helper: notifikasi (riwayat + push) — langsung lewat lib/notify, tanpa memanggil /api/push
 async function sendPush(username: string, title: string, body: string, url: string) {
@@ -133,7 +120,8 @@ export async function POST(req: NextRequest) {
 
     // 2️⃣ Parse body
     const body = await req.json();
-    const { amount, note, joki_name, bank_account_id } = body;
+    const { note, joki_name, bank_account_id } = body;
+    const amount = Number(body.amount);
 
     // 3️⃣ Tentukan target joki
     const targetJoki =
@@ -142,9 +130,9 @@ export async function POST(req: NextRequest) {
         : parsed.username;
 
     // 4️⃣ Validasi input
-    if (!amount || amount <= 0) {
+    if (!Number.isInteger(amount) || amount <= 0) {
       return NextResponse.json(
-        { success: false, message: "Jumlah harus > 0" },
+        { success: false, message: "Jumlah harus angka bulat > 0" },
         { status: 400 }
       );
     }
@@ -208,6 +196,15 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(
         { success: false, error: error.message },
         { status: 500 }
+      );
+    }
+
+    // 7️⃣b Dua pengajuan bersamaan bisa sama-sama lolos cek saldo → cek ulang setelah tercatat
+    if ((await getBalance(targetJoki)) < 0) {
+      await supabaseAdmin.from("withdrawals").delete().eq("id", data.id);
+      return NextResponse.json(
+        { success: false, message: "Saldo nggak cukup (ada pengajuan lain yang baru masuk)." },
+        { status: 400 }
       );
     }
 
@@ -287,13 +284,21 @@ const { id, action, reject_reason, transfer_note, payment_proof_url } = body;
       .from("withdrawals")
       .update(updateData)
       .eq("id", id)
+      .eq("status", "pending") // sudah diproses (mis. klik dobel) → tidak diubah lagi
       .select()
-      .single();
+      .maybeSingle();
 
     if (error) {
       return NextResponse.json(
         { success: false, error: error.message },
         { status: 500 }
+      );
+    }
+
+    if (!data) {
+      return NextResponse.json(
+        { success: false, message: "Pengajuan ini sudah diproses sebelumnya" },
+        { status: 409 }
       );
     }
 

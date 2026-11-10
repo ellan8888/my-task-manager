@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { supabase } from "@/lib/supabase";
 import { useCurrentUser } from "@/app/hooks/useCurrentUser";
 import type { Task } from "@/lib/types";
 import AppShell from "@/app/components/AppShell";
@@ -44,18 +43,37 @@ const getDefaultReminder = () => {
   }
 };
 
-async function fetchTasks(username: string): Promise<Task[] | null> {
-  const { data, error } = await supabase
-    .from("tasks")
-    .select("*")
-    .eq("username", username)
-    .order("created_at", { ascending: false });
-
-  if (error) {
-    console.error(error);
+async function fetchTasks(): Promise<Task[] | null> {
+  try {
+    const res = await fetch("/api/tasks", { cache: "no-store" });
+    const json = await res.json();
+    if (!json.success) {
+      console.error(json.message);
+      return null;
+    }
+    return json.data || [];
+  } catch (e) {
+    console.error(e);
     return null;
   }
-  return data || [];
+}
+
+/** Kirim perubahan task ke server. Return pesan error, atau null kalau berhasil. */
+async function taskRequest(method: "POST" | "PATCH" | "DELETE", body: Record<string, unknown>): Promise<string | null> {
+  try {
+    const res =
+      method === "DELETE"
+        ? await fetch(`/api/tasks?id=${encodeURIComponent(String(body.id))}`, { method })
+        : await fetch("/api/tasks", {
+            method,
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+          });
+    const json = await res.json().catch(() => ({}));
+    return json.success ? null : json.message || `HTTP ${res.status}`;
+  } catch (e) {
+    return e instanceof Error ? e.message : "Gagal terhubung";
+  }
 }
 
 const formatDate = (date: string) =>
@@ -125,7 +143,7 @@ export default function TasksPage() {
   // Reminder default diisi ulang dari localStorage tiap form dibuka (resetForm)
   useEffect(() => {
     if (!currentUser) return;
-    fetchTasks(currentUser.username).then((data) => {
+    fetchTasks().then((data) => {
       if (data) setTasks(data);
     });
   }, [currentUser]);
@@ -166,7 +184,7 @@ export default function TasksPage() {
       username: currentUser.username,
     };
 
-    const { error } = await supabase.from("tasks").insert([newTask]);
+    const error = await taskRequest("POST", newTask);
     if (error) {
       console.error(error);
       toast.error("Gagal menyimpan task");
@@ -194,7 +212,7 @@ export default function TasksPage() {
       notes,
     };
 
-    const { error } = await supabase.from("tasks").update(changes).eq("id", editingId);
+    const error = await taskRequest("PATCH", { id: editingId, ...changes });
     if (error) {
       console.error(error);
       toast.error("Gagal mengupdate task");
@@ -224,7 +242,7 @@ export default function TasksPage() {
       "Ya, Hapus",
       async () => {
         closeConfirm();
-        const { error } = await supabase.from("tasks").delete().eq("id", id);
+        const error = await taskRequest("DELETE", { id });
         if (error) {
           console.error(error);
           toast.error("Gagal menghapus task");
@@ -247,7 +265,7 @@ export default function TasksPage() {
       next ? "Ya, Selesai" : "Ya, Kembalikan",
       async () => {
         closeConfirm();
-        const { error } = await supabase.from("tasks").update({ completed: next }).eq("id", id);
+        const error = await taskRequest("PATCH", { id, completed: next });
         if (error) {
           console.error(error);
           toast.error("Gagal mengubah status task");

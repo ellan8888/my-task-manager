@@ -37,7 +37,9 @@ export async function POST(request: Request) {
     }
 
     // Bikin nama file unik
-    const ext = file.name.split(".").pop() || "jpg";
+    // Ekstensi dari whitelist saja (jangan percaya nama file dari browser)
+    const rawExt = (file.name.split(".").pop() || "").toLowerCase();
+    const ext = ["jpg", "jpeg", "png", "webp", "gif"].includes(rawExt) ? rawExt : "jpg";
     const fileName = `proof-${username || "anon"}-${Date.now()}.${ext}`;
 
     // Upload ke Supabase Storage

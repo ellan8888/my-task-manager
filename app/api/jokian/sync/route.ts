@@ -46,7 +46,7 @@ export async function POST(request: Request) {
     // Cek dulu order-nya udah ada atau belum
     const { data: existingOrder } = await supabaseAdmin
       .from("joki_orders")
-      .select("order_id, order_type")
+      .select("order_id, order_type, joki_name, progress_count, confirmed_by, webhook_url")
       .eq("order_id", cleanedOrderId)
       .maybeSingle();
 
@@ -110,6 +110,27 @@ export async function POST(request: Request) {
     const deadline = cleanText(response_deadline);
     if (deadline && !Number.isNaN(new Date(deadline).getTime())) {
       upsertData.response_deadline = deadline;
+    }
+
+    // ⭐ ORDER SUDAH ADA → jangan timpa data yang sudah berjalan dengan nilai awal/kosong.
+    //    Bot bisa mengirim ulang "order masuk" (mis. setelah restart): payload itu selalu membawa
+    //    progress 0, webhook kosong, jadwal kosong, catatan "-", dan penjoki default.
+    if (existingOrder) {
+      const isMeaningful = (v: unknown) =>
+        v !== null && v !== undefined && !(typeof v === "string" && (v.trim() === "" || v.trim() === "-"));
+      for (const k of ["roblox_username", "product", "schedule_date", "schedule_time", "note"]) {
+        if (!isMeaningful(upsertData[k])) delete upsertData[k];
+      }
+      // Penjoki hanya diganti lewat sync "set jadwal" (yang membawa tanggal), atau kalau masih kosong
+      const hasSchedule = isMeaningful(schedule_date);
+      if (!isMeaningful(upsertData.joki_name) || (!hasSchedule && existingOrder.joki_name)) {
+        delete upsertData.joki_name;
+      }
+      if ((Number(upsertData.progress_count) || 0) <= (Number(existingOrder.progress_count) || 0)) {
+        delete upsertData.progress_count;
+      }
+      if (!isMeaningful(upsertData.confirmed_by)) delete upsertData.confirmed_by;
+      if (!isMeaningful(upsertData.webhook_url)) delete upsertData.webhook_url;
     }
 
     // Upsert berdasarkan order_id

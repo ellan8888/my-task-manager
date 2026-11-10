@@ -1,5 +1,7 @@
 // app/api/admin/redeem/verify/route.ts
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
+import { getSession } from "@/lib/auth";
+import { claimCode, isRedeemOwner, releaseCode } from "@/lib/redeem";
 import { createClient } from "@supabase/supabase-js";
 
 const supabaseAdmin = createClient(
@@ -7,13 +9,14 @@ const supabaseAdmin = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-const OWNER_USERNAMES = ["ellan"];
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
-    const { username, purchase_id, action, reject_reason } = await request.json();
+    const { purchase_id, action, reject_reason } = await request.json();
+    const session = getSession(request);
+    const username = session?.username || "";
 
-    if (!OWNER_USERNAMES.includes(username?.toLowerCase())) {
+    if (!isRedeemOwner(session)) {
       return NextResponse.json(
         { success: false, message: "Unauthorized" },
         { status: 403 }
@@ -40,6 +43,14 @@ export async function POST(request: Request) {
       );
     }
 
+    // Sudah diproses sebelumnya (mis. tombol diklik dua kali) → jangan kasih code lagi
+    if (purchase.status !== "pending") {
+      return NextResponse.json(
+        { success: false, message: `Pengajuan ini sudah ${purchase.status === "approved" ? "disetujui" : "ditolak"}` },
+        { status: 409 }
+      );
+    }
+
     // ═══════════════════════════════════════════════════════
     // REJECT
     // ═══════════════════════════════════════════════════════
@@ -52,7 +63,8 @@ export async function POST(request: Request) {
           approved_at: new Date().toISOString(),
           approved_by: username,
         })
-        .eq("id", purchase_id);
+        .eq("id", purchase_id)
+        .eq("status", "pending");
 
       return NextResponse.json({ success: true });
     }
@@ -61,32 +73,8 @@ export async function POST(request: Request) {
     // APPROVE — auto-assign code RANDOM dari stock available
     // ═══════════════════════════════════════════════════════
     if (action === "approve") {
-      // Prioritas 1: code yang di-assign ke user ini
-      let code: any = null;
-
-      const { data: ownCode } = await supabaseAdmin
-        .from("redeem_codes")
-        .select("id, code")
-        .eq("username", purchase.username)
-        .eq("status", "available")
-        .limit(1)
-        .maybeSingle();
-
-      if (ownCode) code = ownCode;
-
-      // Prioritas 2: code kosong
-      if (!code) {
-        const { data: anyCode } = await supabaseAdmin
-          .from("redeem_codes")
-          .select("id, code")
-          .or(`username.is.null,username.eq.`)
-          .eq("status", "available")
-          .limit(1)
-          .maybeSingle();
-
-        if (anyCode) code = anyCode;
-      }
-
+      // Kunci 1 code secara aman (prioritas code milik user, lalu code bebas)
+      const code = await claimCode(purchase.username, "transfer");
       if (!code) {
         return NextResponse.json(
           { success: false, message: "Stock code kosong" },
@@ -94,20 +82,8 @@ export async function POST(request: Request) {
         );
       }
 
-      // Update code → used
-      await supabaseAdmin
-        .from("redeem_codes")
-        .update({
-          username: purchase.username,
-          status: "used",
-          payment_method: "transfer",
-          verified_by: username,
-          used_at: new Date().toISOString(),
-        })
-        .eq("id", code.id);
-
-      // Update purchase → approved
-      await supabaseAdmin
+      // Setujui hanya kalau MASIH pending — klik dobel tidak menghabiskan 2 code
+      const { data: approved } = await supabaseAdmin
         .from("redeem_purchases")
         .update({
           status: "approved",
@@ -115,7 +91,17 @@ export async function POST(request: Request) {
           approved_at: new Date().toISOString(),
           approved_by: username,
         })
-        .eq("id", purchase_id);
+        .eq("id", purchase_id)
+        .eq("status", "pending")
+        .select("id");
+      if (!approved?.length) {
+        await releaseCode(code.id, code.prevUsername);
+        return NextResponse.json(
+          { success: false, message: "Pengajuan ini sudah diproses" },
+          { status: 409 }
+        );
+      }
+      await supabaseAdmin.from("redeem_codes").update({ verified_by: username }).eq("id", code.id);
 
       return NextResponse.json({
         success: true,

@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { supabase } from "@/lib/supabase";
+import { useEffect, useRef, useState } from "react";
+import { useOrdersChanged } from "@/app/hooks/useOrdersChanged";
 import { useCurrentUser } from "@/app/hooks/useCurrentUser";
 import type { JokiOrder, RamAccount } from "@/lib/types";
 import AppShell from "@/app/components/AppShell";
@@ -44,20 +44,19 @@ const endDayOf = (o: JokiOrder) => {
   return d.getTime();
 };
 
-async function fetchJokiOrders(username: string): Promise<JokiOrder[] | null> {
-  const { data, error } = await supabase
-    .from("joki_orders")
-    .select("*")
-    .eq("completed", false)
-    .eq("joki_name", username)
-    .order("schedule_date", { ascending: true })
-    .order("schedule_time", { ascending: true });
-
-  if (error) {
-    console.error("Gagal mengambil data Jokian:", error);
+async function fetchJokiOrders(): Promise<JokiOrder[] | null> {
+  try {
+    const res = await fetch("/api/queue?mine=1", { cache: "no-store" });
+    const json = await res.json();
+    if (!res.ok || !Array.isArray(json.data)) {
+      console.error("Gagal mengambil data Jokian:", json.error || res.status);
+      return null;
+    }
+    return json.data as JokiOrder[];
+  } catch (e) {
+    console.error("Gagal mengambil data Jokian:", e);
     return null;
   }
-  return data || [];
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -86,13 +85,28 @@ export default function JokiPage() {
   const [now, setNow] = useState(() => Date.now());
 
   // ── Load + realtime ──────────────────────────────────────────
-  const loadJokiOrders = (username: string) =>
-    fetchJokiOrders(username).then((data) => {
-      if (data) setJokiOrders(data);
+  // Isi terakhir tiap order — untuk tahu order mana yang berubah sejak dimuat
+  const lastSeen = useRef<Map<number, string>>(new Map());
+
+  const loadJokiOrders = () =>
+    fetchJokiOrders().then((data) => {
+      if (!data) return;
+      // Bersihin centang untuk order yang berubah (bot sukses/gagal) atau sudah hilang
+      const next = new Map(data.map((o) => [o.id, JSON.stringify(o)]));
+      const changed = [...lastSeen.current.keys()].filter((id) => next.get(id) !== lastSeen.current.get(id));
+      lastSeen.current = next;
+      if (changed.length) {
+        setCheckedOrders((prev) => {
+          let out = prev;
+          for (const id of changed) if (out.has(id)) out = withId(out, id, false);
+          return out;
+        });
+      }
+      setJokiOrders(data);
     });
 
   const reload = () => {
-    if (currentUser) return loadJokiOrders(currentUser.username);
+    if (currentUser) return loadJokiOrders();
   };
 
   useEffect(() => {
@@ -102,23 +116,11 @@ export default function JokiPage() {
 
   useEffect(() => {
     if (!currentUser) return;
-    loadJokiOrders(currentUser.username);
-
-    const channel = supabase
-      .channel("joki_orders_realtime")
-      .on("postgres_changes", { event: "*", schema: "public", table: "joki_orders" }, (payload) => {
-        loadJokiOrders(currentUser.username);
-
-        // Bersihin centang untuk order yang udah berubah (bot sukses/gagal)
-        const changedId = (payload.new as { id?: number })?.id;
-        if (changedId) setCheckedOrders((prev) => withId(prev, changedId, false));
-      })
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
+    loadJokiOrders();
   }, [currentUser]);
+
+  // Muat ulang setiap ada perubahan order (sinyal realtime tanpa data)
+  useOrdersChanged(() => loadJokiOrders(), { enabled: !!currentUser });
 
   // ── Handlers ─────────────────────────────────────────────────
   const handleStartProgressOrder = (order: JokiOrder) => {

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { supabase } from "@/lib/supabase";
+import { useOrdersChanged } from "@/app/hooks/useOrdersChanged";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
@@ -54,7 +54,7 @@ type QueueOrder = {
   schedule_time: string;
   completed_by_bot: boolean;
   buyer_confirmed: boolean;
-  confirm_token: string | null;
+  // confirm_token sengaja tidak dikirim ke halaman publik — token pembeli datang dari link (?token=)
   progress_count: number | null;        // ← TAMBAH
   progress_keyword: string | null;      // ← TAMBAH
   target_count: number | null;          // ← TAMBAH
@@ -177,11 +177,16 @@ useEffect(() => {
     const cleanId = orderId.replace(/\s*\([A-Z]{2}\)\s*$/, "").trim();
     console.log("[QueueDetail] Loading:", cleanId);
 
-    const { data, error } = await supabase
-      .from("joki_orders")
-      .select("*")
-      .eq("order_id", cleanId)
-      .maybeSingle();
+    let data: QueueOrder | null = null;
+    let error: string | null = null;
+    try {
+      const res = await fetch(`/api/queue?order_id=${encodeURIComponent(cleanId)}&any_status=1`, { cache: "no-store" });
+      const json = await res.json();
+      if (res.ok && Array.isArray(json.data)) data = (json.data[0] as QueueOrder) ?? null;
+      else error = json.error || `HTTP ${res.status}`;
+    } catch (e) {
+      error = e instanceof Error ? e.message : String(e);
+    }
 
     if (error) {
       console.error("[QueueDetail] error:", error);
@@ -201,17 +206,17 @@ useEffect(() => {
 
   // ⭐ Daftar order aktif — hanya diambil saat order ini masih di antrian
   const loadQueueList = async () => {
-    const { data, error } = await supabase
-      .from("joki_orders")
-      .select(
-        "order_id, queue_status, queue_position, processing_started_at, estimated_end_at, order_type, progress_keyword, target_count"
-      )
-      .eq("completed", false);
-    if (error) {
-      console.error("[QueueDetail] queue list error:", error);
-      return;
+    try {
+      const res = await fetch("/api/queue", { cache: "no-store" });
+      const json = await res.json();
+      if (!res.ok || !Array.isArray(json.data)) {
+        console.error("[QueueDetail] queue list error:", json.error || res.status);
+        return;
+      }
+      setQueueList(json.data as QueueEstimateOrder[]);
+    } catch (e) {
+      console.error("[QueueDetail] queue list error:", e);
     }
-    setQueueList((data as QueueEstimateOrder[]) || []);
   };
 
   useEffect(() => {
@@ -257,20 +262,10 @@ useEffect(() => {
   useEffect(() => {
     if (!orderId) return;
     loadOrder();
-
-    const channel = supabase
-      .channel(`order_${orderId}`)
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "joki_orders" },
-        () => loadOrder()
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
   }, [orderId]);
+
+  // Muat ulang setiap ada perubahan order (sinyal realtime tanpa data)
+  useOrdersChanged(() => loadOrder(), { enabled: !!orderId });
 
   // === HANDLE ADD TIME ===
   const handleAddTime = async (addMinutes: number) => {

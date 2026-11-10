@@ -1,8 +1,7 @@
 // app/api/stats/income/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import crypto from "crypto";
-import { startOfTodayWIB, startOfMonthWIB } from "@/lib/auth";
+import { startOfTodayWIB, startOfMonthWIB, verifySession } from "@/lib/auth";
 
 export const runtime = "nodejs";
 
@@ -12,23 +11,7 @@ const supabaseAdmin = createClient(
 );
 
 // Helper verify signed cookie
-function verifySession(
-  signedValue: string,
-  secret: string
-): Record<string, any> | null {
-  const parts = signedValue.split(".");
-  if (parts.length < 2) return null;
-  const signature = parts[parts.length - 1];
-  const value = parts.slice(0, -1).join(".");
-  const hmac = crypto.createHmac("sha256", secret);
-  hmac.update(value);
-  if (signature !== hmac.digest("hex")) return null;
-  try {
-    return JSON.parse(value);
-  } catch {
-    return null;
-  }
-}
+
 
 export async function GET(req: NextRequest) {
   try {

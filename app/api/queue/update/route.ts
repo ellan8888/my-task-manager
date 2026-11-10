@@ -1,5 +1,6 @@
 // app/api/queue/update/route.ts
 import { NextResponse } from "next/server";
+import { promoteQueue } from "@/lib/queuePromote";
 import { createClient } from "@supabase/supabase-js";
 
 const supabaseAdmin = createClient(
@@ -43,6 +44,15 @@ const FAILED_FLAGS = [
   "bot_failed_source",
   "bot_failed_context",
 ] as const;
+
+// Urutan status antrean — status tidak boleh turun peringkat
+const STATUS_RANK: Record<string, number> = {
+  queued: 1,
+  waiting_confirm: 1,
+  processing: 2,
+  completed: 3,
+};
+const statusRank = (s: unknown) => (typeof s === "string" ? STATUS_RANK[s] ?? 0 : 0);
 
 export async function POST(request: Request) {
   try {
@@ -120,6 +130,33 @@ export async function POST(request: Request) {
     }
 
     // ══════════════════════════════════════════════════════════
+    // ⭐ STEP 3b: STATUS HANYA BOLEH MAJU
+    // queued / waiting_confirm → processing → completed.
+    // Contoh kasus: order sudah di-set waktunya (processing), lalu langkah
+    // "set antrean" dari bot datang belakangan dan menimpanya jadi queued.
+    // Status yang mundur diabaikan; field lain tetap disimpan.
+    // ══════════════════════════════════════════════════════════
+    if (typeof updates.queue_status === "string") {
+      const { data: current } = await supabaseAdmin
+        .from("joki_orders")
+        .select("queue_status")
+        .eq("order_id", cleanedOrderId)
+        .maybeSingle();
+      const from = statusRank(current?.queue_status);
+      const to = statusRank(updates.queue_status);
+      if (current && from > to) {
+        console.warn(
+          `[Queue Update] ⛔ ${cleanedOrderId}: status ${current.queue_status} → ${updates.queue_status} diabaikan (tidak boleh mundur)`
+        );
+        delete updates.queue_status;
+        delete updates.queue_position;
+        if (Object.keys(updates).length === 0) {
+          return NextResponse.json({ success: true, skipped: true, data: current, rows_affected: 0 });
+        }
+      }
+    }
+
+    // ══════════════════════════════════════════════════════════
     // ⭐ STEP 4: UPDATE DB
     // ══════════════════════════════════════════════════════════
     const { data, error } = await supabaseAdmin
@@ -156,9 +193,7 @@ export async function POST(request: Request) {
     // ⭐ STEP 5: PROMOTE ANTRIAN (kalau completed)
     // ══════════════════════════════════════════════════════════
     if (updates.queue_status === "completed" || updates.completed === true) {
-      const baseUrl =
-        process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
-      fetch(`${baseUrl}/api/queue/promote`, { method: "POST" }).catch(() => {});
+      await promoteQueue().catch((e) => console.error("[Queue Update] promote gagal:", e));
     }
 
     return NextResponse.json({

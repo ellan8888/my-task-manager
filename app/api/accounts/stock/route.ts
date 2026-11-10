@@ -1,7 +1,7 @@
 // app/api/accounts/stock/route.ts
 import { NextRequest, NextResponse } from "next/server";
+import { verifySession } from "@/lib/auth";
 import { createClient } from "@supabase/supabase-js";
-import crypto from "crypto";
 
 export const runtime = "nodejs";
 
@@ -11,23 +11,7 @@ const supabase = createClient(
 );
 
 // ⭐ Helper verify signed cookie
-function verifySession(
-  signedValue: string,
-  secret: string
-): Record<string, any> | null {
-  const parts = signedValue.split(".");
-  if (parts.length < 2) return null;
-  const signature = parts[parts.length - 1];
-  const value = parts.slice(0, -1).join(".");
-  const hmac = crypto.createHmac("sha256", secret);
-  hmac.update(value);
-  if (signature !== hmac.digest("hex")) return null;
-  try {
-    return JSON.parse(value);
-  } catch {
-    return null;
-  }
-}
+
 
 // ⭐ Kolom `note` (catatan staff) baru ada setelah SQL 004 dijalankan.
 //    Kalau kolomnya belum ada, simpan tanpa catatan supaya tambah/edit akun tetap jalan.

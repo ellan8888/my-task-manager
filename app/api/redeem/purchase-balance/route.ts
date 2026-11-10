@@ -1,86 +1,37 @@
-// app/api/redeem/purchase-balance/route.ts
-import { NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+// app/api/redeem/purchase-balance/route.ts — beli code Redfinger pakai saldo (user yang login).
+import { NextRequest, NextResponse } from "next/server";
+import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { getBalance } from "@/lib/ledger";
+import { getSession } from "@/lib/auth";
+import { PRICE_PER_CODE, claimCode, isRedeemOwner, releaseCode } from "@/lib/redeem";
 
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+export const runtime = "nodejs";
 
-const PRICE_PER_CODE = 20000;
-const OWNER_USERNAMES = ["ellan"];
 const PURCHASE_NOTE_PREFIX = "[BELI CODE] ";
 
-function isOwner(u: string | null) {
-  return !!u && OWNER_USERNAMES.includes(u.toLowerCase());
-}
+const fail = (message: string, status = 400) => NextResponse.json({ success: false, message }, { status });
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
-    const { username } = await request.json();
+    // Identitas SELALU dari sesi login — username di isi request diabaikan
+    const session = getSession(request);
+    if (!session) return fail("Silakan login dulu", 401);
+    const user = session.username.toLowerCase().trim();
+    const isFree = isRedeemOwner(session);
 
-    if (!username) {
-      return NextResponse.json(
-        { success: false, message: "username wajib" },
-        { status: 400 }
-      );
-    }
-
-    const user = username.toLowerCase().trim();
-    const isFree = isOwner(user);
-
-    // 1. Cek saldo (skip kalau owner)
+    // 1. Cek saldo (owner gratis)
     if (!isFree) {
-      // Saldo dari buku kas (SQL 009); kalau belum ada, pakai hitungan lama
       const sisa = await getBalance(user);
-
       if (sisa < PRICE_PER_CODE) {
-        return NextResponse.json(
-          {
-            success: false,
-            message: `Saldo kamu Rp ${sisa.toLocaleString("id-ID")}, butuh Rp 20.000`,
-          },
-          { status: 400 }
-        );
+        return fail(`Saldo kamu Rp ${sisa.toLocaleString("id-ID")}, butuh Rp ${PRICE_PER_CODE.toLocaleString("id-ID")}`);
       }
     }
 
-    // 2. Ambil code RANDOM dari stock available
-    let code: any = null;
+    // 2. Kunci 1 code (aman dari dobel ambil)
+    const code = await claimCode(user, isFree ? "free_admin" : "balance");
+    if (!code) return fail("Stock code kosong. Hubungi admin.");
 
-    const { data: ownCode } = await supabaseAdmin
-      .from("redeem_codes")
-      .select("id, code")
-      .eq("username", user)
-      .eq("status", "available")
-      .limit(1)
-      .maybeSingle();
-
-    if (ownCode) code = ownCode;
-
-    if (!code) {
-      const { data: anyCode } = await supabaseAdmin
-        .from("redeem_codes")
-        .select("id, code")
-        .or(`username.is.null,username.eq.`)
-        .eq("status", "available")
-        .limit(1)
-        .maybeSingle();
-
-      if (anyCode) code = anyCode;
-    }
-
-    if (!code) {
-      return NextResponse.json(
-        { success: false, message: "Stock code kosong. Hubungi admin." },
-        { status: 400 }
-      );
-    }
-
-    // 3. ⭐ INSERT WITHDRAWAL DULU (biar saldo berkurang)
-    let withdrawalId: number | null = null;
-
+    // 3. Catat pengeluaran (trigger buku kas memotong saldo)
     if (!isFree) {
       const { data: wdRow, error: wdErr } = await supabaseAdmin
         .from("withdrawals")
@@ -96,41 +47,21 @@ export async function POST(request: Request) {
         .select("id")
         .single();
 
-      if (wdErr) {
-        console.error("[purchase-balance] Gagal insert withdrawal:", wdErr);
-        return NextResponse.json(
-          { success: false, message: "Gagal nyatet pengeluaran: " + wdErr.message },
-          { status: 500 }
-        );
+      if (wdErr || !wdRow) {
+        await releaseCode(code.id, code.prevUsername);
+        return fail("Gagal nyatet pengeluaran: " + (wdErr?.message || "-"), 500);
       }
 
-      withdrawalId = wdRow.id;
-    }
-
-    // 4. Update code → used, assign ke user
-    const { error: err } = await supabaseAdmin
-      .from("redeem_codes")
-      .update({
-        username: user,
-        status: "used",
-        payment_method: isFree ? "free_admin" : "balance",
-        used_at: new Date().toISOString(),
-      })
-      .eq("id", code.id);
-
-    if (err) {
-      // ⚠️ Rollback: hapus withdrawal kalau update code gagal
-      if (withdrawalId) {
-        await supabaseAdmin.from("withdrawals").delete().eq("id", withdrawalId);
-        console.warn("[purchase-balance] Rollback withdrawal id:", withdrawalId);
+      // Dua pembelian bersamaan bisa sama-sama lolos cek saldo → cek ulang setelah tercatat
+      const after = await getBalance(user);
+      if (after < 0) {
+        await supabaseAdmin.from("withdrawals").delete().eq("id", wdRow.id);
+        await releaseCode(code.id, code.prevUsername);
+        return fail("Saldo tidak cukup (ada pembelian lain yang sedang diproses).");
       }
-      return NextResponse.json(
-        { success: false, message: err.message },
-        { status: 500 }
-      );
     }
 
-    // 5. Audit trail di redeem_purchases
+    // 4. Jejak audit
     await supabaseAdmin.from("redeem_purchases").insert({
       username: user,
       amount: isFree ? 0 : PRICE_PER_CODE,
@@ -141,17 +72,8 @@ export async function POST(request: Request) {
       approved_by: isFree ? "system_free" : "system",
     });
 
-    return NextResponse.json({
-      success: true,
-      data: {
-        code: code.code,
-        is_free: isFree,
-      },
-    });
-  } catch (err: any) {
-    return NextResponse.json(
-      { success: false, message: err.message },
-      { status: 500 }
-    );
+    return NextResponse.json({ success: true, data: { code: code.code, is_free: isFree } });
+  } catch (err: unknown) {
+    return fail(err instanceof Error ? err.message : "Terjadi kesalahan", 500);
   }
 }

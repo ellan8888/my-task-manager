@@ -1,8 +1,8 @@
 // app/api/queue/add-time/route.ts
 import { NextResponse } from "next/server";
+import { verifySession } from "@/lib/auth";
 import { cookies } from "next/headers";
 import { createClient } from "@supabase/supabase-js";
-import crypto from "crypto";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -10,33 +10,7 @@ const supabase = createClient(
 );
 
 // ⭐ Verify HMAC signed cookie — format: <payload_json>.<hmac_signature>
-function verifySession(
-  signedValue: string,
-  secret: string
-): Record<string, any> | null {
-  const parts = signedValue.split(".");
-  if (parts.length < 2) return null;
 
-  const signature = parts[parts.length - 1];
-  const value = parts.slice(0, -1).join(".");
-
-  const hmac = crypto.createHmac("sha256", secret);
-  hmac.update(value);
-  const expectedSig = hmac.digest("hex");
-
-  // Pakai timingSafeEqual biar aman dari timing attack
-  const sigBuf = Buffer.from(signature);
-  const expBuf = Buffer.from(expectedSig);
-
-  if (sigBuf.length !== expBuf.length) return null;
-  if (!crypto.timingSafeEqual(sigBuf, expBuf)) return null;
-
-  try {
-    return JSON.parse(value);
-  } catch {
-    return null;
-  }
-}
 
 export async function POST(request: Request) {
   // 1. Cek auth — verify HMAC signed cookie

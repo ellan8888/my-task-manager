@@ -1,5 +1,6 @@
 // app/api/queue/check-completed/route.ts
 import { NextResponse } from "next/server";
+import { promoteQueue } from "@/lib/queuePromote";
 import { createClient } from "@supabase/supabase-js";
 
 const supabaseAdmin = createClient(
@@ -91,8 +92,7 @@ export async function POST() {
 
     // 3. Promote antrian kalau ada yang selesai
     if (completedIds.length > 0) {
-      const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
-      fetch(`${baseUrl}/api/queue/promote`, { method: "POST" }).catch(console.error);
+      await promoteQueue().catch((e) => console.error("[CheckCompleted] promote gagal:", e));
     }
 
     return NextResponse.json({

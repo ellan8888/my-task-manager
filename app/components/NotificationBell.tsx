@@ -89,7 +89,9 @@ export default function NotificationBell() {
       load();
       refreshPushState();
     }, 0);
-    const t = setInterval(load, POLL_MS);
+    const t = setInterval(() => {
+      if (document.visibilityState === "visible") load();
+    }, POLL_MS);
     const onFocus = () => load();
     const onMsg = (e: MessageEvent) => {
       if (e.data?.type === "notif:new") load();

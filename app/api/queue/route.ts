@@ -1,6 +1,8 @@
 // app/api/queue/route.ts
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { getSession, isBotRequest } from "@/lib/auth";
+import { PUBLIC_ORDER_COLUMNS } from "@/lib/publicOrder";
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -22,9 +24,23 @@ export async function GET(request: Request) {
       order_id = order_id.replace(/\s*\([A-Z]{2}\)\s*$/, "").trim();
     }
 
+    // Bot & user login → data lengkap. Pengunjung (halaman antrean publik) → kolom aman saja.
+    const session = getSession(request);
+    const trusted = isBotRequest(request) || !!session;
+
+    // ?mine=1 → order milik user yang login (halaman Jokian)
+    const mine = searchParams.get("mine") === "1";
+    if (mine && !session) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     let query = supabaseAdmin
       .from("joki_orders")
-      .select("*");
+      .select(trusted ? "*" : PUBLIC_ORDER_COLUMNS);
+
+    if (mine && session) {
+      query = query.eq("joki_name", session.username);
+    }
 
     // ═══════════════════════════════════════════════════════════
     // ⭐ LOGIC FILTER "completed"
@@ -42,6 +58,8 @@ export async function GET(request: Request) {
     } else if (botRefetchRequested === "true") {
       // ⭐ Order yang minta bot ambil ulang datanya dari Itemku
       query = query.eq("bot_refetch_requested", true).eq("completed", false);
+    } else if (searchParams.get("any_status") === "1" && order_id) {
+      // Halaman detail order: tetap tampil walau sudah selesai
     } else {
       query = query.eq("completed", false);
     }
@@ -60,7 +78,11 @@ export async function GET(request: Request) {
 
     // Order
         // Order
-    if (status === "queued") {
+    if (mine) {
+      query = query
+        .order("schedule_date", { ascending: true })
+        .order("schedule_time", { ascending: true });
+    } else if (status === "queued") {
       query = query.order("queue_position", { ascending: true, nullsFirst: false });
     } else if (status === "processing") {
       // ⭐ FIX: nullsFirst: false, biar order yang processing_started_at = NULL tetap muncul

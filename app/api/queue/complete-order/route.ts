@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
+import { verifySession } from "@/lib/auth";
+import { removeFromRam } from "@/lib/ram";
 import { cookies } from "next/headers";
 import { createClient } from "@supabase/supabase-js";
-import crypto from "crypto";
 
 export const runtime = "nodejs";
 
@@ -11,23 +12,7 @@ const supabaseAdmin = createClient(
 );
 
 // ⭐ Helper verify signed cookie
-function verifySession(
-  signedValue: string,
-  secret: string
-): Record<string, any> | null {
-  const parts = signedValue.split(".");
-  if (parts.length < 2) return null;
-  const signature = parts[parts.length - 1];
-  const value = parts.slice(0, -1).join(".");
-  const hmac = crypto.createHmac("sha256", secret);
-  hmac.update(value);
-  if (signature !== hmac.digest("hex")) return null;
-  try {
-    return JSON.parse(value);
-  } catch {
-    return null;
-  }
-}
+
 
 export async function POST(request: Request) {
   try {
@@ -89,19 +74,10 @@ export async function POST(request: Request) {
     }
 
     // === 1. CLOSE ROBLOX ===
+    // Dipanggil langsung (bukan lewat HTTP) — sebelumnya panggilan HTTP ditolak middleware (401)
     if (order.roblox_username) {
-      try {
-        await fetch(
-          `${process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000"}/api/remove-account`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ username: order.roblox_username }),
-          }
-        );
-      } catch (err) {
-        console.error("[CompleteOrder] Gagal close roblox:", err);
-      }
+      const ram = await removeFromRam(order.roblox_username);
+      if (!ram.success) console.error(`[CompleteOrder] Gagal close roblox ${order.roblox_username}: ${ram.message}`);
     }
 
     try {

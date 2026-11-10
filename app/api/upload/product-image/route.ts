@@ -33,7 +33,9 @@ export async function POST(request: Request) {
       );
     }
 
-    const ext = file.name.split(".").pop() || "jpg";
+    // Ekstensi dari whitelist saja (jangan percaya nama file dari browser)
+    const rawExt = (file.name.split(".").pop() || "").toLowerCase();
+    const ext = ["jpg", "jpeg", "png", "webp", "gif"].includes(rawExt) ? rawExt : "jpg";
     const fileName = `product-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
 
     const arrayBuffer = await file.arrayBuffer();

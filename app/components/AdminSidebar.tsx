@@ -111,7 +111,9 @@ const isEllan = currentUser?.username?.toLowerCase() === "ellan";
     };
 
     fetchFailedCount();
-    const interval = setInterval(fetchFailedCount, 30000);
+    const interval = setInterval(() => {
+      if (document.visibilityState === "visible") fetchFailedCount();
+    }, 30000);
     return () => clearInterval(interval);
   }, [isSuperadmin]);
 
@@ -135,7 +137,9 @@ const isEllan = currentUser?.username?.toLowerCase() === "ellan";
     };
 
     fetchPendingWithdraw();
-    const interval = setInterval(fetchPendingWithdraw, 20000);
+    const interval = setInterval(() => {
+      if (document.visibilityState === "visible") fetchPendingWithdraw();
+    }, 20000);
     const onVisible = () => {
       if (document.visibilityState === "visible") fetchPendingWithdraw();
     };

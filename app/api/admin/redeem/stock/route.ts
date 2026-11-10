@@ -1,5 +1,7 @@
 // app/api/admin/redeem/stock/route.ts
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
+import { getSession } from "@/lib/auth";
+import { isRedeemOwner } from "@/lib/redeem";
 import { createClient } from "@supabase/supabase-js";
 
 const supabaseAdmin = createClient(
@@ -7,14 +9,13 @@ const supabaseAdmin = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-const OWNER_USERNAMES = ["ellan"];
 
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
-    const username = searchParams.get("username");
+    const session = getSession(request);
 
-    if (!OWNER_USERNAMES.includes(username?.toLowerCase() || "")) {
+    if (!isRedeemOwner(session)) {
       return NextResponse.json(
         { success: false, message: "Unauthorized" },
         { status: 403 }
