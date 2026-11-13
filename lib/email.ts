@@ -14,7 +14,7 @@
 import nodemailer from "nodemailer";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
-const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL || "https://my-task-manager-self.vercel.app").replace(/\/$/, "");
+const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL || "https://my-task-manager.ellanaryaalqohari8888.workers.dev").replace(/\/$/, "");
 export const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
 let transporter: nodemailer.Transporter | null = null;
