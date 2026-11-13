@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { POST as completeOrder } from "../complete-order/route";
 import { createClient } from "@supabase/supabase-js";
 
 const supabaseAdmin = createClient(
@@ -79,13 +80,14 @@ export async function POST(request: Request) {
 
     // === 6. AUTO-TRIGGER complete-order ===
     try {
-      const completeRes = await fetch(
-        `${process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000"}/api/queue/complete-order`,
-        {
+      // Dipanggil langsung (bukan lewat HTTP ke alamat web sendiri — di Cloudflare Workers
+      // request ke domain sendiri ditolak, dan cara ini juga lebih cepat)
+      const completeRes = await completeOrder(
+        new Request("https://internal/api/queue/complete-order", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ order_id, token }),
-        }
+        })
       );
       const completeData = await completeRes.json();
       console.log(`[Confirm] Auto-trigger result:`, completeData);
