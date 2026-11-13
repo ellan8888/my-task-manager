@@ -46,7 +46,9 @@ const PROTECTED_API = [
   "/api/rf",
   // Dipakai bot saja (bot selalu mengirim x-bot-api-key)
   "/api/jokian",
-  // "/api/eternal" — menyusul setelah bot Discord (aiohttp) ikut mengirim kunci bot
+  // Bot (log egg, progress) + halaman admin progress-orders. Halaman pembeli tetap bisa baca
+  // /api/eternal/order/[id] lewat PUBLIC_API_EXCEPTIONS.
+  "/api/eternal",
   "/api/queue/update",
   "/api/queue/promote",
   "/api/queue/set-end-time",

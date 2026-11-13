@@ -31,6 +31,8 @@ export default defineConfig({
     },
     // Satu cron tiap menit — pembagian tugasnya ada di worker/index.ts
     triggers: [triggers.scheduled({ schedule: "* * * * *" })],
-    observability: { enabled: true, redactQueryString: true },  // token di URL tidak ikut tercatat
+    observability: { enabled: true, redactQueryString: true },
+    // Tanpa alamat preview acak per versi — hanya alamat utama yang bisa dibuka
+    previewUrls: false,  // token di URL tidak ikut tercatat
   }),
 });
