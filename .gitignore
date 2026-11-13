@@ -42,3 +42,9 @@ next-env.d.ts
 
 .vercel
 .env*
+/dist/
+.vinext/
+.cloudflare/
+
+# Cloudflare local secrets
+.dev.vars*
