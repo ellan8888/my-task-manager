@@ -319,6 +319,7 @@ export async function POST(req: NextRequest) {
           headers: { 
             "Content-Type": "application/json",
             "ngrok-skip-browser-warning": "true",
+            "x-bot-api-key": process.env.BOT_API_KEY || "",
           },
           body: JSON.stringify({
             username,

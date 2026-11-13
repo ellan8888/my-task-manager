@@ -333,7 +333,7 @@ async function queueAndSendNotif(data: {
 
     const res = await fetch(`${BOT_API_URL}/api/notify-product`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", "x-bot-api-key": process.env.BOT_API_KEY || "" },
       body: JSON.stringify({
         ...data,
         notif_id: notifRow?.id,
