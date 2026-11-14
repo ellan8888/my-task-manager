@@ -29,23 +29,26 @@ export async function GET() {
 
     const jokiName = parsed.username;
 
-    // Total income all-time
-    const { data: incomeData, error } = await supabaseAdmin
-      .from("income_log")
-      .select("amount")
-      .eq("joki_name", jokiName);
+    // Total income all-time — dibaca per 1000 baris (Supabase membatasi 1000 baris per request,
+    // jadi tanpa ini total terpotong begitu pendapatan seseorang lewat 1000 transaksi)
+    let totalIncome = 0;
+    for (let from = 0; ; from += 1000) {
+      const { data: page, error } = await supabaseAdmin
+        .from("income_log")
+        .select("amount")
+        .eq("joki_name", jokiName)
+        .order("id", { ascending: true })
+        .range(from, from + 999);
 
-    if (error) {
-      return NextResponse.json(
-        { success: false, error: error.message },
-        { status: 500 }
-      );
+      if (error) {
+        return NextResponse.json(
+          { success: false, error: error.message },
+          { status: 500 }
+        );
+      }
+      totalIncome += (page || []).reduce((sum, r) => sum + (r.amount || 0), 0);
+      if (!page || page.length < 1000) break;
     }
-
-    const totalIncome = (incomeData || []).reduce(
-      (sum, r) => sum + (r.amount || 0),
-      0
-    );
 
     return NextResponse.json({
       success: true,

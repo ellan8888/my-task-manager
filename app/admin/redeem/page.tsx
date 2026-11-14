@@ -75,14 +75,23 @@ export default function RedeemPage() {
   const fetchAll = async () => {
     if (!user) return;
     try {
-      const [inc, wd] = await Promise.all([
-        fetch("/api/stats/income/me").then((r) => r.json()),
-        fetch("/api/withdrawals").then((r) => r.json()),
-      ]);
-      const totalIncome = inc.total || 0;
-      const totalWithdrawn =
-        (wd.totals?.[user.username] || 0) + (wd.pendingTotals?.[user.username] || 0);
-      setSisa(totalIncome - totalWithdrawn);
+      // Saldo = buku kas (sama dengan Riwayat Saldo & Penarikan, termasuk penyesuaian manual).
+      // Hitungan lama (pendapatan − penarikan) hanya dipakai kalau buku kas belum tersedia.
+      const ledger = await fetch("/api/saldo/riwayat?limit=1")
+        .then((r) => r.json())
+        .catch(() => null);
+      if (ledger?.success && ledger.ready && typeof ledger.balance === "number") {
+        setSisa(ledger.balance);
+      } else {
+        const [inc, wd] = await Promise.all([
+          fetch("/api/stats/income/me").then((r) => r.json()),
+          fetch("/api/withdrawals").then((r) => r.json()),
+        ]);
+        const totalIncome = inc.total || 0;
+        const totalWithdrawn =
+          (wd.totals?.[user.username] || 0) + (wd.pendingTotals?.[user.username] || 0);
+        setSisa(totalIncome - totalWithdrawn);
+      }
 
       const codesRes = await fetch(`/api/redeem/my-codes?username=${user.username}`);
       const codesData = await codesRes.json();
