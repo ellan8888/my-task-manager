@@ -8,6 +8,7 @@
 //   3. Kirim push ke semua perangkat user SEKALIGUS (paralel), hapus perangkat yang sudah mati.
 // Emoji di judul/isi dibuang (aturan tampilan My Task: pakai ikon, bukan emoji).
 import webpush from "web-push";
+import { createECDH } from "node:crypto";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
 export const NOTIFY_KINDS = ["akun_laku", "penarikan", "transfer", "joki", "bot", "reminder", "sistem"] as const;
@@ -29,13 +30,32 @@ const CRITICAL_KINDS: NotifyKind[] = ["bot"];
 type Sub = { id?: number; endpoint: string; p256dh: string; auth: string; username: string | null };
 
 let vapidReady = false;
+/** Alasan push tidak bisa dikirim sama sekali (ditampilkan di tombol Tes) */
+let vapidError: string | null = null;
+
+const b64url = (buf: Buffer) => buf.toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+
 function ensureVapid() {
   if (vapidReady) return true;
   const pub = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
   const priv = process.env.VAPID_PRIVATE_KEY;
   if (!pub || !priv) {
-    console.error("[notify] VAPID key belum diatur di environment");
+    vapidError = "Kunci VAPID belum diatur (NEXT_PUBLIC_VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY)";
+    console.error("[notify]", vapidError);
     return false;
+  }
+  // Kunci publik (build) dan privat (secret) harus berpasangan — kalau tidak, semua push ditolak
+  try {
+    const ecdh = createECDH("prime256v1");
+    ecdh.setPrivateKey(Buffer.from(priv.replace(/-/g, "+").replace(/_/g, "/"), "base64"));
+    if (b64url(ecdh.getPublicKey()) !== pub.trim()) {
+      vapidError =
+        "Kunci VAPID tidak berpasangan: NEXT_PUBLIC_VAPID_PUBLIC_KEY (build) tidak cocok dengan VAPID_PRIVATE_KEY (secret)";
+      console.error("[notify]", vapidError);
+      return false;
+    }
+  } catch (e) {
+    console.error("[notify] Gagal memeriksa kunci VAPID:", e);
   }
   webpush.setVapidDetails(process.env.VAPID_SUBJECT || "mailto:admin@example.com", pub, priv);
   vapidReady = true;
@@ -89,7 +109,15 @@ export type NotifyInput = {
   force?: boolean;
 };
 
-export type NotifyResult = { recipients: number; stored: number; sent: number; failed: number; skipped: number };
+export type NotifyResult = {
+  recipients: number;
+  stored: number;
+  sent: number;
+  failed: number;
+  skipped: number;
+  /** ringkasan alasan gagal (untuk tombol Tes) */
+  errors?: string[];
+};
 
 async function resolveRecipients(to: NotifyInput["to"]) {
   if (to === "all") {
@@ -137,7 +165,11 @@ export async function notify(input: NotifyInput): Promise<NotifyResult> {
     return true;
   });
   result.skipped = users.length - pushTo.length;
-  if (!pushTo.length || !ensureVapid()) return result;
+  if (!pushTo.length) return result;
+  if (!ensureVapid()) {
+    result.errors = [vapidError || "Kunci VAPID bermasalah"];
+    return result;
+  }
 
   // 3. Push paralel ke semua perangkat
   const { data: subs, error: subErr } = await supabaseAdmin
@@ -161,6 +193,7 @@ export async function notify(input: NotifyInput): Promise<NotifyResult> {
 
   const dead: string[] = [];
   const used: string[] = [];
+  const errors: string[] = [];
   const outcomes = await Promise.allSettled(
     (subs as Sub[]).map((s) =>
       webpush
@@ -182,7 +215,17 @@ export async function notify(input: NotifyInput): Promise<NotifyResult> {
         .then(() => used.push(s.endpoint))
         .catch((err: { statusCode?: number; body?: string; message?: string }) => {
           // 404/410 = perangkat sudah berhenti langganan → hapus
-          if (err.statusCode === 404 || err.statusCode === 410) dead.push(s.endpoint);
+          // 401/403 = langganan dibuat dengan kunci VAPID lama → tidak akan pernah bisa dipakai lagi
+          if (err.statusCode === 404 || err.statusCode === 410 || err.statusCode === 401 || err.statusCode === 403)
+            dead.push(s.endpoint);
+          const host = (() => {
+            try {
+              return new URL(s.endpoint).host;
+            } catch {
+              return "?";
+            }
+          })();
+          errors.push(`${host}: ${err.statusCode ?? ""} ${String(err.body || err.message || "").slice(0, 120)}`.trim());
           console.error(`[notify] Push gagal (${s.username}):`, err.statusCode, err.body || err.message);
           throw err;
         })
@@ -190,6 +233,7 @@ export async function notify(input: NotifyInput): Promise<NotifyResult> {
   );
   result.sent = outcomes.filter((o) => o.status === "fulfilled").length;
   result.failed = outcomes.length - result.sent;
+  if (errors.length) result.errors = errors.slice(0, 3);
 
   if (dead.length) await supabaseAdmin.from("push_subscriptions").delete().in("endpoint", dead);
   if (used.length) {

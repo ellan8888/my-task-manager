@@ -64,6 +64,12 @@ export async function POST(req: NextRequest) {
     failed: result.failed,
     skipped: result.skipped,
     stored: result.stored,
-    message: result.sent === 0 && !result.skipped ? "Belum ada perangkat yang aktif untuk target ini" : undefined,
+    errors: result.errors,
+    message:
+      result.sent === 0 && !result.skipped
+        ? result.errors?.length
+          ? `Push gagal — ${result.errors[0]}`
+          : "Belum ada perangkat yang aktif untuk target ini"
+        : undefined,
   });
 }
