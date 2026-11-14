@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import AdminHeader from "@/app/components/AdminHeader";
+import { CODE_KEEP_HOURS } from "@/lib/redeemConfig";
 type RedeemCode = {
   id: number;
   code: string;
@@ -47,6 +48,8 @@ export default function RedeemPage() {
   const [toast, setToast] = useState<{ type: "success" | "error"; msg: string } | null>(null);
 
   const [myCodes, setMyCodes] = useState<RedeemCode[]>([]);
+  // Waktu data diambil — dipakai menghitung sisa waktu tiap code (tidak memanggil Date.now() saat render)
+  const [codesAt, setCodesAt] = useState(0);
   const [newCodes, setNewCodes] = useState("");
   const [stockCount, setStockCount] = useState(0);
   const [addingStock, setAddingStock] = useState(false);
@@ -95,7 +98,10 @@ export default function RedeemPage() {
 
       const codesRes = await fetch(`/api/redeem/my-codes?username=${user.username}`);
       const codesData = await codesRes.json();
-      if (codesData.success) setMyCodes(codesData.data || []);
+      if (codesData.success) {
+        setMyCodes(codesData.data || []);
+        setCodesAt(Date.now());
+      }
 
       // ⭐ Fetch stock count buat SEMUA user (bukan cuma owner)
       const stockCountRes = await fetch("/api/redeem/stock-count");
@@ -191,7 +197,7 @@ export default function RedeemPage() {
     } else {
       setConfirmState({
         title: "Beli Code pake Saldo",
-        message: "Saldo kamu bakal berkurang dan code langsung masuk ke Kode Saya.",
+        message: `Saldo kamu bakal berkurang dan code langsung masuk ke Kode Saya (tersimpan ${CODE_KEEP_HOURS / 24} hari).`,
         detail: [
           { label: "Harga Code", value: formatRupiah(20000) },
           { label: "Saldo Sekarang", value: formatRupiah(sisa) },
@@ -551,9 +557,14 @@ export default function RedeemPage() {
                   <div className="w-7 h-7 rounded-lg bg-violet-100 dark:bg-violet-500/10 text-violet-600 dark:text-violet-400 flex items-center justify-center">
                     <i className="fa-solid fa-list-check text-xs"></i>
                   </div>
-                  <h3 className="font-bold text-slate-900 dark:text-white text-sm">
-                    Kode Saya
-                  </h3>
+                  <div>
+                    <h3 className="font-bold text-slate-900 dark:text-white text-sm">
+                      Kode Saya
+                    </h3>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                      Terhapus otomatis {CODE_KEEP_HOURS / 24} hari setelah dibeli — salin & pakai sebelum itu
+                    </p>
+                  </div>
                 </div>
                 <span className="text-[10px] bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 px-2 py-0.5 rounded-full font-bold">
                   {myCodes.length}
@@ -610,6 +621,29 @@ export default function RedeemPage() {
                                     month: "short",
                                   })}
                                 </span>
+                                {codesAt > 0 && (() => {
+                                  const left = Math.max(
+                                    0,
+                                    Math.ceil(
+                                      (new Date(c.used_at).getTime() + CODE_KEEP_HOURS * 3600_000 - codesAt) / 3600_000
+                                    )
+                                  );
+                                  return (
+                                    <>
+                                      <span className="text-slate-300 dark:text-slate-600">•</span>
+                                      <span
+                                        className={
+                                          left <= 12
+                                            ? "flex items-center gap-1 text-amber-600 dark:text-amber-400 font-semibold"
+                                            : "flex items-center gap-1"
+                                        }
+                                      >
+                                        <i className="fa-regular fa-clock text-[9px]"></i>
+                                        {left <= 1 ? "hilang < 1 jam" : `hilang ${left} jam lagi`}
+                                      </span>
+                                    </>
+                                  );
+                                })()}
                               </>
                             )}
                           </div>

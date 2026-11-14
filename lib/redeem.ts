@@ -3,6 +3,8 @@ import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import type { Session } from "@/lib/auth";
 
 export const PRICE_PER_CODE = 20000;
+
+export { CODE_KEEP_HOURS, codeExpiryCutoff } from "@/lib/redeemConfig";
 const OWNER_USERNAMES = ["ellan"];
 
 /** Owner (ambil code gratis, kelola stok & verifikasi). Selalu dari sesi login, bukan dari isi request. */

@@ -15,6 +15,8 @@ const JOBS: { path: string; when: (d: Date) => boolean; auth?: boolean }[] = [
   { path: "/api/cron/check-bot", when: (d) => d.getUTCMinutes() % 5 === 0, auth: true },
   // Egg yang belum punya order — tiap 5 menit (geser 2 menit supaya tidak bareng)
   { path: "/api/cron/reclaim-eggs", when: (d) => d.getUTCMinutes() % 5 === 2, auth: true },
+  // Code Redfinger yang sudah dibeli > 2 hari — tiap jam (menit ke-12)
+  { path: "/api/cron/cleanup-redeem-codes", when: (d) => d.getUTCMinutes() === 12, auth: true },
   // Hapus log egg lama — tiap hari 03:00 UTC (10:00 WIB), sama seperti di Vercel
   { path: "/api/cron/cleanup-eggs", when: (d) => d.getUTCHours() === 3 && d.getUTCMinutes() === 0, auth: true },
   // Ringkasan tugas harian ke Telegram — 07:00 WIB (route-nya sendiri menjaga sekali sehari)

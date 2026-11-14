@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { createClient } from "@supabase/supabase-js";
+import { codeExpiryCutoff } from "@/lib/redeem";
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -25,6 +26,8 @@ export async function GET(request: NextRequest) {
       .select("*")
       .eq("username", username.toLowerCase().trim())
       .eq("status", "used")
+      // Lewat 2 hari → tidak ditampilkan (baris dihapus cron tiap jam)
+      .gte("used_at", codeExpiryCutoff())
       .order("used_at", { ascending: false });
 
     if (error) {
