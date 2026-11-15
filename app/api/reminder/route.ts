@@ -76,9 +76,14 @@ export async function GET() {
     const { data: jokiOrders, error: jokiError } =
       await supabaseAdmin
         .from("joki_orders")
-        .select("*")
+        // Hanya kolom yang dipakai & hanya order berjadwal (progress tidak punya jam selesai).
+        // Job ini jalan tiap menit, jadi select("*") semua order aktif = boros egress Supabase.
+        .select("id, order_id, order_type, product, joki_name, schedule_date, schedule_time")
         .eq("completed", false)
-        .eq("reminder_sent", false);
+        .eq("reminder_sent", false)
+        .or("order_type.is.null,order_type.neq.progress")
+        .not("schedule_date", "is", null)
+        .not("schedule_time", "is", null);
 
     if (jokiError) {
       console.error(

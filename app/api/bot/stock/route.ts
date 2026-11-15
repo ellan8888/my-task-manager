@@ -7,7 +7,6 @@ const supabaseAdmin = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-const BOT_API_KEY = process.env.BOT_API_KEY || "bot-secret-tokoku-2026-xYz123";
 
 // ⭐ Manual mapping untuk kategori yang nggak bisa di-fuzzy match
 const MANUAL_MAP: Record<string, string> = {
@@ -17,33 +16,45 @@ const MANUAL_MAP: Record<string, string> = {
 
 export async function GET(request: Request) {
   try {
-    // ⭐ Auth
-    const { searchParams } = new URL(request.url);
-    const headerKey = request.headers.get("x-bot-api-key");
-    const queryKey = searchParams.get("api_key");
-    const apiKey = headerKey || queryKey;
-
-    if (apiKey !== BOT_API_KEY) {
+    // ⭐ Auth — kunci hanya dari header & hanya dari environment (tanpa kunci cadangan di kode)
+    const BOT_API_KEY = process.env.BOT_API_KEY;
+    if (!BOT_API_KEY || request.headers.get("x-bot-api-key") !== BOT_API_KEY) {
       return NextResponse.json(
         { success: false, message: "Unauthorized" },
         { status: 403 }
       );
     }
 
-    // ⭐ 1. Query stock dari accounts_stock (yang READY)
-    const { data: accounts, error: stockErr } = await supabaseAdmin
-      .from("accounts_stock")
-      .select("kategori")
-      .eq("used", true)
-      .eq("logged_out", false)
-      .eq("deleted", false);
+    // ⭐ 1. Jumlah stok siap jual per kategori — dihitung di database (sql/020_stock_counts.sql),
+    //    jadi yang dikirim hanya ±25 baris hasil hitung, bukan semua baris akun.
+    const stockCount: Record<string, number> = {};
+    const { data: counts, error: countErr } = await supabaseAdmin.rpc("stock_counts");
+    if (!countErr && Array.isArray(counts)) {
+      for (const row of counts as { kategori: string; n: number | string }[]) {
+        const kat = String(row.kategori || "").trim().toLowerCase();
+        if (kat) stockCount[kat] = (stockCount[kat] || 0) + Number(row.n || 0);
+      }
+    } else {
+      // Cadangan kalau fungsi belum ada: cara lama (ambil semua baris lalu hitung)
+      const { data: accounts, error: stockErr } = await supabaseAdmin
+        .from("accounts_stock")
+        .select("kategori")
+        .eq("used", true)
+        .eq("logged_out", false)
+        .eq("deleted", false);
 
-    if (stockErr) {
-      console.error("[bot/stock] Stock query error:", stockErr);
-      return NextResponse.json(
-        { success: false, message: stockErr.message },
-        { status: 500 }
-      );
+      if (stockErr) {
+        console.error("[bot/stock] Stock query error:", stockErr);
+        return NextResponse.json(
+          { success: false, message: stockErr.message },
+          { status: 500 }
+        );
+      }
+      for (const acc of accounts || []) {
+        const kat = (acc.kategori || "").trim().toLowerCase();
+        if (!kat) continue;
+        stockCount[kat] = (stockCount[kat] || 0) + 1;
+      }
     }
 
     // ⭐ 2. Query kategori_links (source utama)
@@ -113,14 +124,6 @@ const seenNama = new Set<string>();
 
       return null;
     };
-
-    // ⭐ 5. Count stock per kategori (dari accounts_stock)
-    const stockCount: Record<string, number> = {};
-    for (const acc of accounts || []) {
-      const kat = (acc.kategori || "").trim().toLowerCase();
-      if (!kat) continue;
-      stockCount[kat] = (stockCount[kat] || 0) + 1;
-    }
 
     // ⭐ 6. Build result — base dari kategori_links (SEMUA kategori)
     //     + isi stock count (0 kalau nggak ada)
