@@ -5,6 +5,7 @@ import AdminHeader from "@/app/components/AdminHeader";
 import { useToast } from "@/app/components/ToastProvider";
 import { useConfirmAsync } from "@/app/components/ConfirmDialog";
 import { useCurrentUser } from "@/app/hooks/useCurrentUser";
+import { SkeletonList, SkeletonPage, SkeletonTable } from "@/app/components/Skeleton";
 
 // ══════════════════════════════════════════════════════════════
 // TYPES
@@ -396,9 +397,7 @@ export default function GantiAkunPage() {
     return (
       <>
         {header}
-        <div className="flex-1 flex items-center justify-center">
-          <i className="fa-solid fa-spinner fa-spin text-violet-500 text-2xl"></i>
-        </div>
+        <SkeletonPage stats={0} rows={5} />
       </>
     );
   }
@@ -571,10 +570,7 @@ export default function GantiAkunPage() {
             </p>
 
             {loadingCandidates ? (
-              <div className="py-8 text-center text-sm text-slate-500">
-                <i className="fa-solid fa-spinner fa-spin mr-2 text-violet-500"></i>
-                Memuat stok Itemku...
-              </div>
+              <SkeletonList count={4} />
             ) : selected && candidates.length === 0 ? (
               <div className="py-8 text-center">
                 <i className="fa-solid fa-box-open text-2xl text-slate-300 dark:text-slate-600 mb-2"></i>
@@ -688,9 +684,7 @@ export default function GantiAkunPage() {
             </div>
 
             {historyLoading ? (
-              <div className="py-8 text-center text-sm text-slate-500">
-                <i className="fa-solid fa-spinner fa-spin mr-2"></i>Memuat...
-              </div>
+              <SkeletonTable rows={4} />
             ) : history.length === 0 ? (
               <div className="bg-white dark:bg-slate-900/40 border border-dashed border-slate-300 dark:border-slate-800 rounded-2xl p-8 text-center text-sm text-slate-500 dark:text-slate-400">
                 Belum ada penggantian akun.

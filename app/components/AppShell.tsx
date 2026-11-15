@@ -6,6 +6,7 @@ import NotificationBell from "@/app/components/NotificationBell";
 import type { CurrentUser } from "@/lib/types";
 import { useToast } from "@/app/components/ToastProvider";
 import { useConfirmAsync } from "@/app/components/ConfirmDialog";
+import { SkeletonText } from "@/app/components/Skeleton";
 
 type ActivePage = "tasks" | "joki";
 
@@ -387,7 +388,7 @@ export default function AppShell({
                 </div>
                 <div>
                   <p className="text-sm font-bold text-slate-800 dark:text-slate-200 group-hover:text-violet-700 dark:group-hover:text-violet-300 transition">
-                    {currentUser?.display_name || "Loading..."}
+                    {currentUser?.display_name || <SkeletonText className="w-20 h-3.5" />}
                   </p>
                   <p className="text-[11px] text-slate-500 dark:text-slate-400 group-hover:text-violet-600 dark:group-hover:text-violet-400 transition flex items-center gap-1">
                     <i className="fa-solid fa-shield-halved text-[9px]"></i>

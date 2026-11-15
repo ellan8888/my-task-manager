@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { SkeletonText } from "@/app/components/Skeleton";
 
 type Kategori = {
   id: number;
@@ -159,7 +160,7 @@ export default function KategoriDropdown({
             }`}
           >
             <i className="fa-solid fa-tag text-[10px] text-violet-500 dark:text-violet-400"></i>
-            <span className="truncate">{loading ? "Loading..." : selectedOption?.kategori || placeholder}</span>
+            <span className="truncate">{loading ? <SkeletonText className="w-32 h-3.5" /> : selectedOption?.kategori || placeholder}</span>
           </span>
 
           <i

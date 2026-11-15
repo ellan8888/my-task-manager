@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 
 import AdminHeader from "@/app/components/AdminHeader";
 import { CODE_KEEP_HOURS } from "@/lib/redeemConfig";
+import { SkeletonPage } from "@/app/components/Skeleton";
 type RedeemCode = {
   id: number;
   code: string;
@@ -424,12 +425,7 @@ export default function RedeemPage() {
       {/* CONTENT */}
       <div className="flex-1 overflow-y-auto scrollbar-hide p-4 md:p-8">
         {loading ? (
-          <div className="flex items-center justify-center py-20">
-            <div className="text-center">
-              <i className="fa-solid fa-spinner fa-spin text-3xl text-violet-600"></i>
-              <p className="text-sm text-slate-500 mt-3">Memuat data...</p>
-            </div>
-          </div>
+          <SkeletonPage stats={3} rows={6} padded={false} />
         ) : (
           <div className="space-y-5">
             {/* ═══════════ SECTION 1: SALDO & BELI ═══════════ */}

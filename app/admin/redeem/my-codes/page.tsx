@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import AdminHeader from "@/app/components/AdminHeader";
 import { useToast } from "@/app/components/ToastProvider";
+import { SkeletonTable } from "@/app/components/Skeleton";
 
 export default function MyCodesPage() {
   const toast = useToast();
@@ -37,9 +38,7 @@ export default function MyCodesPage() {
 
       <div className="flex-1 overflow-y-auto p-4 md:p-8">
         {loading ? (
-          <div className="flex justify-center py-20">
-            <i className="fa-solid fa-spinner fa-spin text-3xl text-violet-600"></i>
-          </div>
+          <SkeletonTable rows={6} />
         ) : codes.length === 0 ? (
           <div className="text-center py-20">
             <i className="fa-solid fa-ticket text-4xl text-slate-300 mb-3"></i>

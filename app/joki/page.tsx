@@ -17,6 +17,7 @@ import {
   EmptyState,
   KanbanColumn,
 } from "@/app/components/ui";
+import { SkeletonTable, SkeletonText } from "@/app/components/Skeleton";
 
 type JokiFilter = "All" | "Today" | "NotScheduled" | "Overdue";
 
@@ -68,6 +69,8 @@ export default function JokiPage() {
   const { dialog, showConfirm, closeConfirm } = useConfirm();
 
   const [jokiOrders, setJokiOrders] = useState<JokiOrder[]>([]);
+  // false sampai data pertama datang → tampilkan skeleton, bukan "tidak ada order"
+  const [ordersLoaded, setOrdersLoaded] = useState(false);
   const [processingOrders, setProcessingOrders] = useState<Set<number>>(new Set());
   const [startingOrders, setStartingOrders] = useState<Set<number>>(new Set());
   const [checkedOrders, setCheckedOrders] = useState<Set<number>>(new Set());
@@ -90,7 +93,10 @@ export default function JokiPage() {
 
   const loadJokiOrders = () =>
     fetchJokiOrders().then((data) => {
-      if (!data) return;
+      if (!data) {
+        setOrdersLoaded(true); // gagal muat → jangan skeleton selamanya
+        return;
+      }
       // Bersihin centang untuk order yang berubah (bot sukses/gagal) atau sudah hilang
       const next = new Map(data.map((o) => [o.id, JSON.stringify(o)]));
       const changed = [...lastSeen.current.keys()].filter((id) => next.get(id) !== lastSeen.current.get(id));
@@ -103,6 +109,7 @@ export default function JokiPage() {
         });
       }
       setJokiOrders(data);
+      setOrdersLoaded(true);
     });
 
   const reload = () => {
@@ -464,10 +471,10 @@ export default function JokiPage() {
       >
         {/* METRICS */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <StatCard label="Total Jokian" value={jokiOrders.length} icon="fa-boxes-stacked" color="violet" footerIcon="fa-robot" footerText="Sync Tokoku-bot" />
-          <StatCard label="Hari Ini" value={jokiToday} icon="fa-fire" color="amber" footerIcon="fa-clock" footerText="Prioritas Pengerjaan" />
-          <StatCard label="Belum Dijadwalkan" value={jokiNotScheduled} icon="fa-clock" color="indigo" footerIcon="fa-hourglass-half" footerText="Nunggu Jadwal" />
-          <StatCard label="Selesai Bot" value={jokiDoneByBot} icon="fa-circle-check" color="emerald" footerIcon="fa-user-check" footerText="Nunggu konfirmasi buyer" />
+          <StatCard label="Total Jokian" value={ordersLoaded ? jokiOrders.length : <SkeletonText className="w-10 h-7" />} icon="fa-boxes-stacked" color="violet" footerIcon="fa-robot" footerText="Sync Tokoku-bot" />
+          <StatCard label="Hari Ini" value={ordersLoaded ? jokiToday : <SkeletonText className="w-10 h-7" />} icon="fa-fire" color="amber" footerIcon="fa-clock" footerText="Prioritas Pengerjaan" />
+          <StatCard label="Belum Dijadwalkan" value={ordersLoaded ? jokiNotScheduled : <SkeletonText className="w-10 h-7" />} icon="fa-clock" color="indigo" footerIcon="fa-hourglass-half" footerText="Nunggu Jadwal" />
+          <StatCard label="Selesai Bot" value={ordersLoaded ? jokiDoneByBot : <SkeletonText className="w-10 h-7" />} icon="fa-circle-check" color="emerald" footerIcon="fa-user-check" footerText="Nunggu konfirmasi buyer" />
         </div>
 
         {/* TOOLBAR */}
@@ -498,7 +505,9 @@ export default function JokiPage() {
             <section>
               <SectionHeader icon="fa-hourglass-half" title="Jadwal Jokian (Countdown)" count={countdownOrders.length} />
               <div className="pt-4 pb-6 space-y-3.5">
-                {countdownOrders.length === 0 ? (
+                {!ordersLoaded ? (
+                  <SkeletonTable rows={2} />
+                ) : countdownOrders.length === 0 ? (
                   <EmptyState
                     icon="fa-solid fa-hourglass-half"
                     color="amber"
@@ -514,7 +523,9 @@ export default function JokiPage() {
             <section>
               <SectionHeader icon="fa-egg" title="Progress Order" count={progressOrders.length} />
               <div className="pt-4 pb-6 space-y-3.5">
-                {progressOrders.length === 0 ? (
+                {!ordersLoaded ? (
+                  <SkeletonTable rows={3} />
+                ) : progressOrders.length === 0 ? (
                   <EmptyState
                     icon="fa-solid fa-egg"
                     title="Tidak ada progress order aktif"

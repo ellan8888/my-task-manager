@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { createPortal } from "react-dom";
 import { getPushStatus, registerPushSubscription } from "@/lib/push";
 import { useToast } from "@/app/components/ToastProvider";
+import { Skeleton } from "@/app/components/Skeleton";
 
 type Notif = {
   id: number;
@@ -268,8 +269,16 @@ export default function NotificationBell() {
 
           <div className="max-h-[min(28rem,70vh)] overflow-y-auto custom-scrollbar py-1.5">
             {loading ? (
-              <div className="py-10 text-center text-sm text-slate-400">
-                <i className="fa-solid fa-spinner fa-spin mr-2"></i>Memuat...
+              <div className="px-3 py-2 space-y-3" aria-busy="true" aria-label="Memuat">
+                {Array.from({ length: 4 }).map((_, i) => (
+                  <div key={i} className="flex gap-3">
+                    <Skeleton className="w-9 h-9 rounded-xl shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <Skeleton className="h-3.5 w-2/3 mb-2" />
+                      <Skeleton className="h-3 w-full" />
+                    </div>
+                  </div>
+                ))}
               </div>
             ) : items.length === 0 ? (
               <div className="py-12 text-center">

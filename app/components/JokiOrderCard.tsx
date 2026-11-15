@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, type KeyboardEvent, type MouseEvent, type 
 import { useRouter } from "next/navigation";
 import type { JokiOrder, RamAccount } from "@/lib/types";
 import { useToast } from "@/app/components/ToastProvider";
+import { Skeleton } from "@/app/components/Skeleton";
 
 // ══════════════════════════════════════════════════════════════
 // HELPERS (di-export, dipakai juga di app/joki/page.tsx)
@@ -243,9 +244,11 @@ function RfSlot({ order }: { order: JokiOrder }) {
         {loadError ? (
           <p className="text-[11px] text-rose-600 dark:text-rose-400">{loadError}</p>
         ) : !devices ? (
-          <p className="text-[11px] text-slate-500 flex items-center gap-1.5">
-            <i className="fa-solid fa-spinner fa-spin"></i> Memuat daftar HP...
-          </p>
+          <div className="flex flex-wrap gap-1.5" aria-busy="true" aria-label="Memuat daftar HP">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <Skeleton key={i} className="h-7 w-14 rounded-lg" />
+            ))}
+          </div>
         ) : list.length === 0 ? (
           <p className="text-[11px] text-slate-500">Belum ada HP terdaftar. Tambahkan lewat panel slot Redfinger di Discord.</p>
         ) : (
@@ -751,9 +754,10 @@ export default function JokiOrderCard({
           </div>
 
           {loadingAccounts ? (
-            <div className="text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-2 px-2">
-              <i className="fa-solid fa-spinner fa-spin text-[10px]"></i>
-              Memuat akun dari RAM...
+            <div className="space-y-1.5" aria-busy="true" aria-label="Memuat akun dari RAM">
+              {Array.from({ length: 3 }).map((_, i) => (
+                <Skeleton key={i} className="h-8 w-full rounded-lg" />
+              ))}
             </div>
           ) : ramAccounts.length > 0 ? (
             <div className="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg max-h-48 overflow-y-auto custom-scrollbar">

@@ -6,7 +6,7 @@ import GameFilter from "./GameFilter";
 import { ALL_GAMES, gameCounts, gameOf, useGameFilter } from "@/lib/gameFilter";
 import { useToast } from "@/app/components/ToastProvider";
 import { useConfirmAsync } from "@/app/components/ConfirmDialog";
-import { SkeletonList } from "@/app/components/Skeleton";
+import { SkeletonList, SkeletonText } from "@/app/components/Skeleton";
 
 import AdminHeader from "@/app/components/AdminHeader";
 type StockAccount = {
@@ -513,7 +513,7 @@ export default function StockPage() {
                     style={{ height: "46px" }}
                   >
                     <span className="font-mono font-bold text-sm text-slate-700 dark:text-slate-300">
-                      {currentUserLoading ? "Loading..." : currentUser?.username || "-"}
+                      {currentUserLoading ? <SkeletonText className="w-20 h-3.5" /> : currentUser?.username || "-"}
                     </span>
                     <i className="fa-solid fa-lock text-slate-400 text-xs"></i>
                   </div>

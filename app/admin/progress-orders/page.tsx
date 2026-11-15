@@ -4,6 +4,7 @@
 import { useEffect, useState } from "react";
 
 import { useToast } from "@/app/components/ToastProvider";
+import { SkeletonList } from "@/app/components/Skeleton";
 type ProgressOrder = {
   id: number;
   order_id: string;
@@ -62,10 +63,12 @@ export default function ProgressOrdersPage() {
   return (
     <div className="p-8">
       <h1 className="text-2xl font-bold mb-6 flex items-center gap-2.5">
-        <i className="fa-solid fa-spinner text-violet-500"></i>
+        <i className="fa-solid fa-bars-progress text-violet-500"></i>
         Progress Orders (Eternal)
       </h1>
       
+      {loading && orders.length === 0 && <SkeletonList count={4} />}
+
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {orders.map((order) => {
           const percent = (order.progress_count / order.target_count) * 100;

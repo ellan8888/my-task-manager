@@ -9,6 +9,7 @@ import AddBankModal from "@/app/components/AddBankModal";
 import AdminHeader from "@/app/components/AdminHeader";
 import { useToast } from "@/app/components/ToastProvider";
 import { useConfirmAsync } from "@/app/components/ConfirmDialog";
+import { SkeletonPage } from "@/app/components/Skeleton";
 type HistoryFilter = "all" | "pending" | "approved" | "rejected";
 
 const HISTORY_TABS: { key: HistoryFilter; label: string; dot: string }[] = [
@@ -255,12 +256,7 @@ export default function WithdrawalsPage() {
 
       <div className="flex-1 overflow-y-auto scrollbar-hide p-4 md:p-8">
         {loading ? (
-          <div className="flex items-center justify-center py-20">
-            <div className="text-center">
-              <i className="fa-solid fa-spinner fa-spin text-3xl text-violet-600"></i>
-              <p className="text-sm text-slate-500 mt-3">Memuat data...</p>
-            </div>
-          </div>
+          <SkeletonPage stats={3} rows={5} padded={false} />
         ) : (
           <>
             {/* ═══════════ USER BIASA ═══════════ */}

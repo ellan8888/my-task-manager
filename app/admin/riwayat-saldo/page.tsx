@@ -10,6 +10,7 @@ import RoleBadge from "@/app/components/RoleBadge";
 import { DatePicker, FieldLabel, SegmentedChoice } from "@/app/components/Pickers";
 import { useToast } from "@/app/components/ToastProvider";
 import { useCurrentUser } from "@/app/hooks/useCurrentUser";
+import { SkeletonPage } from "@/app/components/Skeleton";
 
 // ══════════════════════════════════════════════════════════════
 // TYPES
@@ -277,9 +278,7 @@ export default function RiwayatSaldoPage() {
     return (
       <>
         {header}
-        <div className="flex-1 flex items-center justify-center">
-          <i className="fa-solid fa-spinner fa-spin text-emerald-500 text-2xl"></i>
-        </div>
+        <SkeletonPage stats={4} rows={6} />
       </>
     );
   }

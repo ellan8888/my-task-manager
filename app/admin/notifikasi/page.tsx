@@ -7,6 +7,7 @@ import { useToast } from "@/app/components/ToastProvider";
 import { useConfirmAsync } from "@/app/components/ConfirmDialog";
 import { KIND_STYLE, timeAgo } from "@/app/components/NotificationBell";
 import { getPushStatus, registerPushSubscription, sendTestPush, unregisterPushSubscription } from "@/lib/push";
+import { SkeletonTable } from "@/app/components/Skeleton";
 
 type Notif = { id: number; kind: string; title: string; body: string | null; url: string | null; read_at: string | null; created_at: string };
 type Device = { id: number; endpoint: string; user_agent?: string | null; created_at?: string | null; last_used_at?: string | null };
@@ -271,7 +272,7 @@ export default function NotifikasiPage() {
             </div>
 
             {loading ? (
-              <div className="py-12 text-center text-sm text-slate-400"><i className="fa-solid fa-spinner fa-spin mr-2"></i>Memuat...</div>
+              <SkeletonTable rows={4} />
             ) : shown.length === 0 ? (
               <div className="py-14 text-center">
                 <i className="fa-regular fa-bell-slash text-2xl text-slate-300 dark:text-slate-600"></i>

@@ -6,7 +6,7 @@ import KategoriDropdown from "../stock/KategoriDropdown";
 import GameFilter from "../stock/GameFilter";
 import { ALL_GAMES, gameCounts, gameOf, useGameFilter } from "@/lib/gameFilter";
 import { useToast } from "@/app/components/ToastProvider";
-import { SkeletonList } from "@/app/components/Skeleton";
+import { SkeletonList, SkeletonText } from "@/app/components/Skeleton";
 
 import AdminHeader from "@/app/components/AdminHeader";
 import { generatePassword, generateUsername } from "@/lib/accountGenerator";
@@ -637,7 +637,7 @@ const idleCount = accounts.filter((a) => a.idle && !a.logged_out).length;
   <div className="w-full bg-slate-100 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm text-slate-700 dark:text-slate-300 flex items-center gap-2">
     <i className="fa-solid fa-lock text-slate-400 text-xs"></i>
     <span className="font-mono font-bold">
-      {currentUserLoading ? "Loading..." : currentUser?.username || "-"}
+      {currentUserLoading ? <SkeletonText className="w-20 h-3.5" /> : currentUser?.username || "-"}
     </span>
   </div>
   <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1 flex items-center gap-1">

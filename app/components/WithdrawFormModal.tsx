@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useToast } from "@/app/components/ToastProvider";
+import { Skeleton } from "@/app/components/Skeleton";
 
 type Props = {
   maxAmount: number;
@@ -99,9 +100,9 @@ export default function WithdrawFormModal({ maxAmount, onClose, onSuccess }: Pro
         </label>
 
         {loadingBanks ? (
-          <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400 p-3 bg-slate-50 dark:bg-slate-950/50 rounded-xl border border-slate-200 dark:border-slate-800">
-            <i className="fa-solid fa-spinner fa-spin"></i>
-            Memuat rekening...
+          <div className="space-y-2" aria-busy="true" aria-label="Memuat rekening">
+            <Skeleton className="h-14 w-full rounded-xl" />
+            <Skeleton className="h-14 w-full rounded-xl" />
           </div>
         ) : bankAccounts.length === 0 ? (
           <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20">

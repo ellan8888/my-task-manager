@@ -7,6 +7,7 @@ import RoleBadge from "@/app/components/RoleBadge";
 import { DatePicker, SegmentedChoice } from "@/app/components/Pickers";
 import { useToast } from "@/app/components/ToastProvider";
 import { useCurrentUser } from "@/app/hooks/useCurrentUser";
+import { SkeletonPage, SkeletonTable } from "@/app/components/Skeleton";
 
 // ══════════════════════════════════════════════════════════════
 // TYPES
@@ -165,9 +166,7 @@ export default function PendapatanTimPage() {
     return (
       <>
         {header}
-        <div className="flex-1 flex items-center justify-center">
-          <i className="fa-solid fa-spinner fa-spin text-emerald-500 text-2xl"></i>
-        </div>
+        <SkeletonPage stats={4} rows={6} />
       </>
     );
   }
@@ -496,8 +495,12 @@ function RingkasanTab() {
           </div>
         </div>
 
-        {transactions.length === 0 ? (
-          <p className="p-8 text-center text-sm text-slate-500 dark:text-slate-400">{loading ? "Memuat..." : "Belum ada transaksi di periode ini."}</p>
+        {transactions.length === 0 && loading ? (
+          <div className="p-4">
+            <SkeletonTable rows={5} />
+          </div>
+        ) : transactions.length === 0 ? (
+          <p className="p-8 text-center text-sm text-slate-500 dark:text-slate-400">Belum ada transaksi di periode ini.</p>
         ) : (
           <div className="divide-y divide-slate-100 dark:divide-slate-800">
             {transactions.map((t) => {

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 
 import { useToast } from "@/app/components/ToastProvider";
+import { SkeletonList } from "@/app/components/Skeleton";
 type ProgressKeyword = {
   keyword: string;
   label: string;
@@ -132,7 +133,7 @@ export default function ProgressKeywordsPage() {
       
       {/* List Keywords */}
       {loading ? (
-        <p>Loading...</p>
+        <SkeletonList count={5} />
       ) : (
         <div className="space-y-3">
           {Object.entries(keywords).map(([keyword, config]) => (

@@ -8,6 +8,7 @@ import RoleBadge from "@/app/components/RoleBadge";
 import { DatePicker } from "@/app/components/Pickers";
 import { useToast } from "@/app/components/ToastProvider";
 import { useConfirmAsync } from "@/app/components/ConfirmDialog";
+import { SkeletonPage } from "@/app/components/Skeleton";
 type FeeDetail = {
   id: number;
   order_id: string;
@@ -326,9 +327,7 @@ export default function FeeReportPage() {
           title="Laporan Fee"
           subtitle="Data rahasia — cuma owner yang bisa akses"
         />
-        <div className="flex-1 flex items-center justify-center">
-          <i className="fa-solid fa-spinner fa-spin text-3xl text-emerald-600"></i>
-        </div>
+        <SkeletonPage stats={4} rows={6} />
       </>
     );
   }

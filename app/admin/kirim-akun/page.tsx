@@ -11,6 +11,7 @@ import { FieldLabel, SegmentedChoice, SelectMenu, type MenuOption } from "@/app/
 import { useToast } from "@/app/components/ToastProvider";
 import { useConfirmAsync } from "@/app/components/ConfirmDialog";
 import { useCurrentUser } from "@/app/hooks/useCurrentUser";
+import { SkeletonTable } from "@/app/components/Skeleton";
 
 // ══════════════════════════════════════════════════════════════
 // TYPES & HELPERS
@@ -651,9 +652,7 @@ export default function KirimAkunPage() {
               )}
             </div>
             {historyLoading ? (
-              <div className="py-10 text-center text-sm text-slate-500">
-                <i className="fa-solid fa-spinner fa-spin mr-2 text-blue-500"></i>Memuat...
-              </div>
+              <SkeletonTable rows={4} />
             ) : history.length === 0 ? (
               <div className="py-10 text-center text-sm text-slate-500 dark:text-slate-400">Belum ada pengiriman manual.</div>
             ) : (

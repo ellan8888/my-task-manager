@@ -11,6 +11,7 @@ import RoleBadge from "@/app/components/RoleBadge";
 import { Avatar } from "@/app/components/Pickers";
 import { useCurrentUser } from "@/app/hooks/useCurrentUser";
 import KategoriDropdown from "../stock/KategoriDropdown";
+import { SkeletonPage } from "@/app/components/Skeleton";
 
 type Preview = {
   from: string;
@@ -188,9 +189,7 @@ export default function BulkMigratePage() {
     return (
       <>
         {header}
-        <div className="flex-1 flex items-center justify-center">
-          <i className="fa-solid fa-spinner fa-spin text-3xl text-orange-500"></i>
-        </div>
+        <SkeletonPage stats={0} rows={5} />
       </>
     );
   }

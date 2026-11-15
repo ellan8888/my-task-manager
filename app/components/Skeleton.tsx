@@ -114,3 +114,28 @@ export function SkeletonTable({ rows = 5 }: { rows?: number }) {
     </div>
   );
 }
+// ══════════════════════════════════════════════════════
+// PAGE SKELETON — isi halaman saat data pertama dimuat
+// (baris kartu angka + daftar). Dipakai semua halaman admin supaya loading seragam.
+// ══════════════════════════════════════════════════════
+export function SkeletonPage({ stats = 3, rows = 6, padded = true }: { stats?: number; rows?: number; padded?: boolean }) {
+  return (
+    <div className={`${padded ? "flex-1 overflow-hidden p-4 md:p-8" : ""} space-y-5`} aria-busy="true" aria-label="Memuat">
+      {stats > 0 && (
+        <div className={`grid grid-cols-1 sm:grid-cols-2 ${stats >= 3 ? "lg:grid-cols-3" : ""} ${stats >= 4 ? "xl:grid-cols-4" : ""} gap-3 md:gap-4`}>
+          {Array.from({ length: stats }).map((_, i) => (
+            <SkeletonStatsCard key={i} />
+          ))}
+        </div>
+      )}
+      <SkeletonTable rows={rows} />
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════
+// INLINE SKELETON — pengganti teks "Loading..." pendek (nama user, angka)
+// ══════════════════════════════════════════════════════
+export function SkeletonText({ className = "w-24 h-3.5" }: { className?: string }) {
+  return <span className={`inline-block align-middle animate-pulse bg-slate-200 dark:bg-slate-800 rounded ${className}`} />;
+}
