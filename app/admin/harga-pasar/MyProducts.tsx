@@ -36,6 +36,7 @@ type Listing = {
   prev_image_url?: string | null;
   prev_specs?: Specs | null;
   banner_changed_at?: string | null;
+  manual?: boolean;
 };
 type Watch = { our_product_id: number; competitor_id: number; added_by: string | null; created_at: string };
 type Cand = [number, number, string[]];
@@ -104,6 +105,8 @@ export default function MyProducts() {
   const [busy, setBusy] = useState<number | null>(null);
   const [toast, setToast] = useState("");
   const [loadedAt, setLoadedAt] = useState(0);
+  const [manualLink, setManualLink] = useState("");
+  const [manualBusy, setManualBusy] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -226,6 +229,26 @@ export default function MyProducts() {
       setToast(e instanceof Error ? e.message : String(e));
     } finally {
       setBusy(null);
+    }
+  };
+
+  const addManual = async () => {
+    if (!current || !manualLink.trim()) return;
+    setManualBusy(true);
+    try {
+      const res = await fetch("/api/market/watch", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ our_product_id: current.product_id, link: manualLink.trim() }),
+      }).then((r) => r.json());
+      if (!res.success) throw new Error(res.message || "Gagal menambah");
+      setManualLink("");
+      setToast(res.already ? "Sudah dipantau di produk ini" : res.created ? "Ditambahkan — bot membaca produknya dalam beberapa menit" : "Pesaing dipantau");
+      await load();
+    } catch (e) {
+      setToast(e instanceof Error ? e.message : String(e));
+    } finally {
+      setManualBusy(false);
     }
   };
 
@@ -366,7 +389,7 @@ export default function MyProducts() {
                           <div className="min-w-0 flex-1">
                             <div className="flex items-start justify-between gap-2">
                               <a href={l!.url || "#"} target="_blank" rel="noreferrer" className="text-sm font-semibold text-slate-900 dark:text-white line-clamp-1 hover:text-cyan-600">
-                                {l!.name}
+                                {l!.name || `Produk ${l!.product_id}`}
                               </a>
                               <div className="text-right shrink-0">
                                 <div className="font-bold text-sm">{rupiah(l!.price)}</div>
@@ -383,7 +406,9 @@ export default function MyProducts() {
                                 {l!.seller || "-"}
                               </span>
                               <span>· {(l!.sold ?? 0).toLocaleString("id-ID")} terjual</span>
-                              {!l!.active && <span className="text-amber-600">· tidak tampil lagi di kategori</span>}
+                              {l!.manual && <span className="px-1.5 py-0.5 rounded text-[11px] font-semibold bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300">manual</span>}
+                              {!l!.analyzed_at && <span className="text-slate-400"><i className="fa-solid fa-hourglass-half mr-1"></i>menunggu dibaca bot</span>}
+                              {!l!.active && !l!.manual && <span className="text-amber-600">· tidak tampil lagi di kategori</span>}
                               {l!.stock === 0 && <span className="text-amber-600">· stok habis</span>}
                               {(l!.sold ?? 0) === 0 && <span className="text-slate-400">· belum pernah laku</span>}
                               <SpecChips specs={l!.specs} />
@@ -418,6 +443,30 @@ export default function MyProducts() {
                     })}
                 </div>
               )}
+            </section>
+
+            {/* Tambah manual */}
+            <section className="rounded-xl border border-dashed border-slate-300 dark:border-slate-700 p-3">
+              <div className="text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+                <i className="fa-solid fa-link mr-1.5 text-cyan-600"></i>Tambah pesaing manual
+                <span className="font-normal text-slate-500"> — untuk produk yang tidak ada di daftar kandidat</span>
+              </div>
+              <div className="flex gap-2">
+                <input
+                  value={manualLink}
+                  onChange={(e) => setManualLink(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && addManual()}
+                  placeholder="Tempel link produk Itemku, mis. https://www.itemku.com/id/dagangan/nama-produk/4340221"
+                  className="flex-1 min-w-0 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-xs"
+                />
+                <button
+                  onClick={addManual}
+                  disabled={manualBusy || !manualLink.trim()}
+                  className="px-3 py-1.5 rounded-lg bg-cyan-600 hover:bg-cyan-700 text-white text-xs font-semibold disabled:opacity-50 shrink-0"
+                >
+                  {manualBusy ? <i className="fa-solid fa-spinner fa-spin"></i> : <><i className="fa-solid fa-plus mr-1"></i>Pantau</>}
+                </button>
+              </div>
             </section>
 
             {/* Kandidat */}

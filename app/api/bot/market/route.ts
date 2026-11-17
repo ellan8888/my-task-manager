@@ -102,6 +102,7 @@ export async function POST(request: Request) {
         .update({ active: false, updated_at: now })
         .eq("game_slug", game)
         .eq("active", true)
+        .eq("manual", false)                 // pesaing manual tidak tampil di kategori — dicek langsung
         .not("product_id", "in", `(${seen.join(",")})`)
         .select("product_id");
       out.deactivated = gone?.length || 0;
