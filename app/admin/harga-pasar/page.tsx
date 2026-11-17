@@ -6,6 +6,7 @@
 import { useEffect, useMemo, useState } from "react";
 import AdminHeader from "@/app/components/AdminHeader";
 import { SkeletonTable } from "@/app/components/Skeleton";
+import MyProducts from "./MyProducts";
 
 type Specs = { income?: [number, number | null]; speed?: [number, number | null]; max?: boolean; starter?: boolean };
 type Listing = {
@@ -59,6 +60,37 @@ const SOURCE: Record<string, { label: string; cls: string }> = {
 };
 
 export default function HargaPasarPage() {
+  const [tab, setTab] = useState<"mine" | "all">("mine");
+  return (
+    <>
+      <AdminHeader
+        icon="fa-chart-column"
+        iconClassName="from-cyan-600 to-sky-500 shadow-cyan-600/30"
+        title="Harga Pasar"
+        subtitle="Produk akun di kategori Itemku, dibaca dari judul, deskripsi & banner"
+      />
+      <div className="flex-1 overflow-y-auto p-4 md:p-8 space-y-5">
+        <div className="flex gap-1 border-b border-slate-200 dark:border-slate-800">
+          {([["mine", "Produk Saya", "fa-store"], ["all", "Semua Produk", "fa-layer-group"]] as const).map(([k, label, icon]) => (
+            <button
+              key={k}
+              onClick={() => setTab(k)}
+              className={`px-4 py-2 -mb-px text-sm font-semibold border-b-2 transition ${
+                tab === k ? "border-cyan-600 text-cyan-700 dark:text-cyan-400" : "border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
+              }`}
+            >
+              <i className={`fa-solid ${icon} mr-1.5`}></i>
+              {label}
+            </button>
+          ))}
+        </div>
+        {tab === "mine" ? <MyProducts /> : <AllListings />}
+      </div>
+    </>
+  );
+}
+
+function AllListings() {
   const [game, setGame] = useState(GAMES[0].slug);
   const [rows, setRows] = useState<Listing[]>([]);
   const [counts, setCounts] = useState<Record<string, number>>({});
@@ -107,14 +139,7 @@ export default function HargaPasarPage() {
 
   return (
     <>
-      <AdminHeader
-        icon="fa-chart-column"
-        iconClassName="from-cyan-600 to-sky-500 shadow-cyan-600/30"
-        title="Harga Pasar"
-        subtitle="Semua produk akun di kategori Itemku, dibaca dari deskripsi & banner"
-      />
-
-      <div className="flex-1 overflow-y-auto p-4 md:p-8 space-y-5">
+      <div className="space-y-5">
         {/* Pilih game */}
         <div className="flex flex-wrap gap-2">
           {GAMES.map((g) => (
