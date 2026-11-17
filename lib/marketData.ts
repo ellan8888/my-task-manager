@@ -10,7 +10,10 @@ export type OurProduct = {
   kategori: string;
   name: string;
   game_slug: string;
-  price: number | null;        // harga yang sedang tayang di Itemku (kalau terbaca), lalu harga di Live Stock
+  // Urutan sumber sama dengan channel Live Stock: daftar produk Itemku (katalog bot) → harga tayang
+  // di halaman kategori → harga isian lama di My Task
+  price: number | null;
+  price_source: "katalog" | "kategori" | "mytask" | null;
   stock: number;               // stok siap jual di My Task
   url: string;
   thumb_url: string | null;
@@ -20,7 +23,7 @@ export type OurProduct = {
 
 export async function loadOurProducts(): Promise<OurProduct[]> {
   const [{ data: links, error }, { data: counts }] = await Promise.all([
-    supabaseAdmin.from("kategori_links").select("kategori, nama_produk, price, link, active, default_income, default_speed").order("kategori"),
+    supabaseAdmin.from("kategori_links").select("kategori, nama_produk, price, price_synced_at, link, active, default_income, default_speed").order("kategori"),
     supabaseAdmin.rpc("stock_counts"),
   ]);
   if (error) throw error;
@@ -50,7 +53,13 @@ export async function loadOurProducts(): Promise<OurProduct[]> {
       kategori,
       name,
       game_slug: gameSlugOf(kategori) || gameSlugOf(name),
-      price: o?.price ?? (l.price ? Number(l.price) : null),
+      ...(l.price_synced_at && Number(l.price) > 0
+        ? { price: Number(l.price), price_source: "katalog" as const }
+        : o?.price != null
+          ? { price: Number(o.price), price_source: "kategori" as const }
+          : Number(l.price) > 0
+            ? { price: Number(l.price), price_source: "mytask" as const }
+            : { price: null, price_source: null }),
       stock: stock[kategori.toLowerCase()] || 0,
       url: o?.url || l.link,
       thumb_url: o?.thumb_url ?? null,

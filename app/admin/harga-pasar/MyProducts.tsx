@@ -15,6 +15,7 @@ type Product = {
   name: string;
   game_slug: string;
   price: number | null;
+  price_source?: "katalog" | "kategori" | "mytask" | null;
   stock: number;
   url: string;
   thumb_url: string | null;
@@ -627,6 +628,23 @@ export default function MyProducts() {
                       <span>{GAME_LABEL[current.game_slug]}</span>
                       <span className="text-slate-300 dark:text-slate-700">/</span>
                       <span className="tabular-nums">stok {current.stock}</span>
+                      {current.price_source && (
+                        <>
+                          <span className="text-slate-300 dark:text-slate-700">/</span>
+                          <span
+                            className={current.price_source === "mytask" ? "text-amber-600 dark:text-amber-400" : ""}
+                            title={
+                              current.price_source === "katalog"
+                                ? "Sama dengan channel Live Stock: dari daftar produk tokomu di Itemku"
+                                : current.price_source === "kategori"
+                                  ? "Dibaca dari halaman kategori Itemku"
+                                  : "Isian lama di My Task — bisa jadi sudah tidak sesuai"
+                            }
+                          >
+                            harga dari {current.price_source === "katalog" ? "daftar produk Itemku" : current.price_source === "kategori" ? "halaman kategori" : "My Task (lama)"}
+                          </span>
+                        </>
+                      )}
                     </div>
                   </div>
                   <div className={`hidden sm:block self-start px-2.5 py-1 rounded-full text-xs font-semibold ${LEVEL[cur.level].soft}`}>{LEVEL[cur.level].label}</div>
