@@ -11,11 +11,12 @@ import webpush from "web-push";
 import { createECDH } from "node:crypto";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
-export const NOTIFY_KINDS = ["akun_laku", "penarikan", "transfer", "joki", "bot", "reminder", "sistem"] as const;
+export const NOTIFY_KINDS = ["akun_laku", "chat", "penarikan", "transfer", "joki", "bot", "reminder", "sistem"] as const;
 export type NotifyKind = (typeof NOTIFY_KINDS)[number];
 
 export const KIND_LABEL: Record<NotifyKind, string> = {
   akun_laku: "Akun laku",
+  chat: "Pesan pembeli (Itemku)",
   penarikan: "Penarikan saldo",
   transfer: "Transfer & redeem",
   joki: "Order jokian",

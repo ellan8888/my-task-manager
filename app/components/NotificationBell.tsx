@@ -19,6 +19,7 @@ type Notif = {
 
 export const KIND_STYLE: Record<string, { icon: string; cls: string; label: string }> = {
   akun_laku: { icon: "fa-bag-shopping", cls: "bg-emerald-100 text-emerald-600 dark:bg-emerald-500/15 dark:text-emerald-400", label: "Akun laku" },
+  chat: { icon: "fa-comment-dots", cls: "bg-cyan-100 text-cyan-600 dark:bg-cyan-500/15 dark:text-cyan-400", label: "Chat" },
   penarikan: { icon: "fa-money-bill-transfer", cls: "bg-amber-100 text-amber-600 dark:bg-amber-500/15 dark:text-amber-400", label: "Penarikan" },
   transfer: { icon: "fa-right-left", cls: "bg-sky-100 text-sky-600 dark:bg-sky-500/15 dark:text-sky-400", label: "Transfer" },
   joki: { icon: "fa-gamepad", cls: "bg-violet-100 text-violet-600 dark:bg-violet-500/15 dark:text-violet-400", label: "Jokian" },
