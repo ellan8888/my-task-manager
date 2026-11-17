@@ -244,6 +244,7 @@ const isEllan = currentUser?.username?.toLowerCase() === "ellan";
       label: "Toko",
       items: [
         { href: "/admin/kategori", icon: "fa-folder-tree", label: "Kategori Link", active: pathname === "/admin/kategori" },
+        { href: "/admin/harga-pasar", icon: "fa-chart-column", label: "Harga Pasar", active: pathname === "/admin/harga-pasar" },
         { href: "/admin/redeem", icon: "fa-ticket", label: "Code Redfinger", active: pathname === "/admin/redeem" },
         {
           href: "/admin/ganti-akun",
