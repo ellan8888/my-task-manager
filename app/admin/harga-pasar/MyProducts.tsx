@@ -32,6 +32,10 @@ type Listing = {
   active: boolean;
   first_seen: string;
   analyzed_at: string | null;
+  image_url?: string | null;
+  prev_image_url?: string | null;
+  prev_specs?: Specs | null;
+  banner_changed_at?: string | null;
 };
 type Watch = { our_product_id: number; competitor_id: number; added_by: string | null; created_at: string };
 type Cand = [number, number, string[]];
@@ -43,6 +47,7 @@ const GAME_LABEL: Record<string, string> = {
 };
 const NEAR_PCT = 5;
 const NEW_HOURS = 48;
+const BANNER_DAYS = 7;      // tanda "banner berubah" tampil selama 7 hari
 
 const rupiah = (n: number | null | undefined) => (n == null ? "-" : "Rp " + n.toLocaleString("id-ID"));
 const usable = (l?: Listing) => !!l && l.active && l.stock !== 0 && l.price != null;
@@ -138,14 +143,26 @@ export default function MyProducts() {
     return m;
   }, [watches]);
 
+  // pesaing → produk kita yang memantaunya (satu pesaing hanya untuk satu produk)
+  const takenBy = useMemo(() => new Map(watches.map((w) => [w.competitor_id, w.our_product_id])), [watches]);
+  const bannerChanged = useCallback(
+    (l?: Listing) => !!l?.banner_changed_at && loadedAt - new Date(l.banner_changed_at).getTime() < BANNER_DAYS * 86400e3,
+    [loadedAt],
+  );
+  const freeCands = useCallback(
+    (ourId: number) => (candidates[ourId] || []).filter((c) => (takenBy.get(c[0]) ?? ourId) === ourId && !(watchedBy.get(ourId)?.has(c[0]))),
+    [candidates, takenBy, watchedBy],
+  );
+
   const summary = useCallback(
     (p: Product) => {
       const ids = [...(watchedBy.get(p.product_id) || [])];
       const prices = ids.map((id) => listingMap.get(id)).filter(usable).map((l) => l!.price!) as number[];
       const cheapest = prices.length ? Math.min(...prices) : null;
-      return { watched: ids.length, cheapest, level: levelOf(p.price, cheapest) };
+      const banner = ids.filter((id) => bannerChanged(listingMap.get(id))).length;
+      return { watched: ids.length, cheapest, level: levelOf(p.price, cheapest), banner };
     },
-    [watchedBy, listingMap],
+    [watchedBy, listingMap, bannerChanged],
   );
 
   const games = useMemo(() => {
@@ -174,7 +191,7 @@ export default function MyProducts() {
     } else {
       rows = listings.filter((l) => l.game_slug === current.game_slug && l.active).map((l) => ({ l, match: rel.get(l.product_id) || null }));
     }
-    rows = rows.filter((r) => !watched.has(r.l.product_id));
+    rows = rows.filter((r) => !watched.has(r.l.product_id) && (takenBy.get(r.l.product_id) ?? current.product_id) === current.product_id);
     const s = q.trim().toLowerCase();
     if (s) rows = rows.filter((r) => `${r.l.name} ${r.l.seller}`.toLowerCase().includes(s));
     rows.sort((a, b) => {
@@ -183,7 +200,11 @@ export default function MyProducts() {
       return (a.match ? a.match[1] : 99) - (b.match ? b.match[1] : 99) || (b.l.sold ?? 0) - (a.l.sold ?? 0);
     });
     return rows;
-  }, [current, candidates, listings, listingMap, watchedBy, mode, q, sort]);
+  }, [current, candidates, listings, listingMap, watchedBy, takenBy, mode, q, sort]);
+
+  const hiddenTaken = current
+    ? listings.filter((l) => l.game_slug === current.game_slug && l.active && takenBy.has(l.product_id) && takenBy.get(l.product_id) !== current.product_id).length
+    : 0;
 
   const setWatch = async (competitor: number, watch: boolean) => {
     if (!current) return;
@@ -246,7 +267,7 @@ export default function MyProducts() {
           {shown.length === 0 && <div className="text-sm text-slate-500 py-8 text-center">Belum ada produk di Live Stock untuk game ini.</div>}
           {shown.map((p) => {
             const s = summary(p);
-            const rel = (candidates[p.product_id] || []).length;
+            const rel = freeCands(p.product_id).length;
             return (
               <button
                 key={p.product_id}
@@ -280,6 +301,12 @@ export default function MyProducts() {
                         {s.watched} dipantau
                       </span>
                       {s.cheapest != null && <span className={LEVEL[s.level].text}>termurah {rupiah(s.cheapest)}</span>}
+                      {s.banner > 0 && (
+                        <span className="text-amber-600 dark:text-amber-400 font-semibold">
+                          <i className="fa-solid fa-image mr-1"></i>
+                          {s.banner} banner berubah
+                        </span>
+                      )}
                       {s.watched === 0 && rel > 0 && <span className="text-cyan-600 dark:text-cyan-400">{rel} kandidat relevan</span>}
                     </div>
                   </div>
@@ -368,6 +395,23 @@ export default function MyProducts() {
                                 <i className="fa-solid fa-xmark mr-1"></i>Lepas
                               </button>
                             </div>
+                            {bannerChanged(l) && (
+                              <div className="mt-2 rounded-lg bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 px-2.5 py-1.5 text-xs text-amber-800 dark:text-amber-300 flex flex-wrap items-center gap-1.5">
+                                <i className="fa-solid fa-image"></i>
+                                <b>Banner berubah</b>
+                                <span>{new Date(l!.banner_changed_at!).toLocaleString("id-ID", { dateStyle: "medium", timeStyle: "short" })}</span>
+                                <span className="opacity-70">· sebelumnya</span>
+                                {l!.prev_specs && (l!.prev_specs.income || l!.prev_specs.speed || l!.prev_specs.max) ? <SpecChips specs={l!.prev_specs} /> : <span>-</span>}
+                                <span className="opacity-70">· sekarang</span>
+                                {l!.specs && (l!.specs.income || l!.specs.speed || l!.specs.max) ? <SpecChips specs={l!.specs} /> : <span>-</span>}
+                                {l!.prev_image_url && (
+                                  <a href={l!.prev_image_url} target="_blank" rel="noreferrer" className="underline ml-1">banner lama</a>
+                                )}
+                                {l!.image_url && (
+                                  <a href={l!.image_url} target="_blank" rel="noreferrer" className="underline">banner baru</a>
+                                )}
+                              </div>
+                            )}
                           </div>
                         </div>
                       );
@@ -389,7 +433,7 @@ export default function MyProducts() {
                       onClick={() => setMode(m)}
                       className={`px-2.5 py-1 font-semibold ${mode === m ? "bg-cyan-600 text-white" : "bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400"}`}
                     >
-                      {m === "relevant" ? `Relevan (${(candidates[current.product_id] || []).length})` : "Semua"}
+                      {m === "relevant" ? `Relevan (${freeCands(current.product_id).length})` : "Semua"}
                     </button>
                   ))}
                 </div>
@@ -412,11 +456,10 @@ export default function MyProducts() {
                   />
                 </div>
               </div>
-              {mode === "relevant" && (
-                <p className="text-[11px] text-slate-500 mb-2">
-                  Relevan = income/speed/MAX hasil baca bot (judul, deskripsi, banner) sebanding dengan produk ini. Yang tidak terbaca ada di &quot;Semua&quot;.
-                </p>
-              )}
+              <p className="text-[11px] text-slate-500 mb-2">
+                {mode === "relevant" && <>Relevan = income/speed/MAX hasil baca bot (judul, deskripsi, banner) sebanding dengan produk ini. Yang tidak terbaca ada di &quot;Semua&quot;. </>}
+                {hiddenTaken > 0 && <>{hiddenTaken} pesaing disembunyikan karena sudah dipantau di produk lain.</>}
+              </p>
               {candList.length === 0 ? (
                 <div className="text-sm text-slate-500 py-6 text-center">
                   {mode === "relevant" ? "Tidak ada kandidat relevan — coba lihat \"Semua\"." : "Tidak ada produk yang cocok."}

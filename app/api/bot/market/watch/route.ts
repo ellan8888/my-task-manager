@@ -18,7 +18,7 @@ export async function GET(req: Request) {
       compIds.length
         ? supabaseAdmin
             .from("market_listings")
-            .select("product_id, name, seller, url, price, sold, stock, active, last_seen")
+            .select("product_id, name, seller, url, price, sold, stock, active, last_seen, image_url, specs, prev_image_url, prev_specs, banner_changed_at")
             .in("product_id", compIds)
         : Promise.resolve({ data: [] as never[] }),
     ]);

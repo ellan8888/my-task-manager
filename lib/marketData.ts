@@ -68,7 +68,7 @@ export async function loadOurProducts(): Promise<OurProduct[]> {
 }
 
 export const LISTING_COLS =
-  "product_id, game_slug, name, url, seller, is_own, price, sold, stock, thumb_url, specs, spec_source, active, first_seen, last_seen, analyzed_at";
+  "product_id, game_slug, name, url, seller, is_own, price, sold, stock, thumb_url, image_url, specs, spec_source, active, first_seen, last_seen, analyzed_at, prev_image_url, prev_specs, banner_changed_at";
 
 /** Kandidat relevan per produk kita → { our_id: [[competitor_id, score, reasons]] } (urut paling mirip). */
 export async function relevantCandidates(products: OurProduct[]) {

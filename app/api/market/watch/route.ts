@@ -24,6 +24,21 @@ export async function POST(req: Request) {
     return NextResponse.json({ success: true });
   }
 
+  // satu pesaing hanya untuk satu produk kita
+  const { data: taken } = await supabaseAdmin
+    .from("market_watch")
+    .select("our_product_id")
+    .eq("competitor_id", comp)
+    .maybeSingle();
+  if (taken && Number(taken.our_product_id) !== our) {
+    const { data: links } = await supabaseAdmin.from("kategori_links").select("nama_produk, link");
+    const owner = (links || []).find((l) => String(l.link || "").match(new RegExp(`/${taken.our_product_id}/?$`)));
+    return NextResponse.json(
+      { success: false, message: `Pesaing ini sudah dipantau untuk "${owner?.nama_produk || taken.our_product_id}" — lepas dulu di sana` },
+      { status: 409 },
+    );
+  }
+
   const { count } = await supabaseAdmin
     .from("market_watch")
     .select("competitor_id", { count: "exact", head: true })

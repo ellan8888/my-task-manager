@@ -20,6 +20,17 @@ type Detail = {
 
 const int = (v: unknown) => (Number.isFinite(Number(v)) ? Math.round(Number(v)) : null);
 const str = (v: unknown, n: number) => (v == null ? null : String(v).slice(0, n));
+/** alamat gambar tanpa query / domain — nama file banner berubah kalau penjual mengunggah banner baru */
+//  (dibandingkan nama filenya saja: banner bisa datang dari API produk atau dari thumbnail kategori)
+const imgKey = (u: string) => {
+  let path = String(u);
+  try {
+    path = new URL(u).pathname;
+  } catch {
+    path = path.split("?")[0];
+  }
+  return (path.split("/").pop() || "").replace(/_thumbnail/i, "").replace(/\.[a-z0-9]+$/i, "").toLowerCase();
+};
 
 export async function POST(request: Request) {
   if (!isBotRequest(request)) return NextResponse.json({ success: false, message: "Unauthorized" }, { status: 401 });
@@ -58,8 +69,19 @@ export async function POST(request: Request) {
 
     // 2. Detail + OCR (satu per satu: kolomnya bisa berbeda-beda)
     const details: Detail[] = (Array.isArray(body.details) ? body.details : []).filter((d: Detail) => int(d?.product_id));
+    const { data: before } = details.length
+      ? await supabaseAdmin.from("market_listings").select("product_id, image_url, specs").in("product_id", details.map((d) => int(d.product_id)!))
+      : { data: [] };
+    const beforeMap = new Map((before || []).map((b) => [Number(b.product_id), b]));
     for (const d of details) {
       const patch: Record<string, unknown> = { analyzed_at: now, updated_at: now };
+      // Banner berganti (file gambar berbeda) → simpan yang lama untuk notif "banner pesaing berubah"
+      const prev = beforeMap.get(int(d.product_id)!);
+      if ("image_url" in d && d.image_url && prev?.image_url && imgKey(prev.image_url) !== imgKey(d.image_url)) {
+        patch.prev_image_url = prev.image_url;
+        patch.prev_specs = prev.specs ?? null;
+        patch.banner_changed_at = now;
+      }
       if ("seller" in d) patch.seller = str(d.seller, 120);
       if ("stock" in d) patch.stock = int(d.stock);
       if ("image_url" in d) patch.image_url = str(d.image_url, 600);
