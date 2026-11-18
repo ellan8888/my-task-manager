@@ -2,6 +2,7 @@
 //   GET ?hours=24&limit=10 → { conversations: [{ conversation_id, buyer, last_text, last_sender, last_message_at,
 //                                              order_id, product_name, owner, waiting }], waiting }
 //   waiting = pesan terakhir dari pembeli (belum dibalas toko). Hanya baca; tidak menandai sudah dibaca.
+//   &messages=N → tiap percakapan ikut membawa N pesan terakhir (urut lama → baru) untuk dibuka di dashboard HP
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { isBotRequest } from "@/lib/auth";
@@ -13,6 +14,7 @@ export async function GET(req: Request) {
   const sp = new URL(req.url).searchParams;
   const hours = Math.min(Math.max(Number(sp.get("hours")) || 24, 1), 24 * 7);
   const limit = Math.min(Math.max(Number(sp.get("limit")) || 10, 1), 30);
+  const perConv = Math.min(Math.max(Number(sp.get("messages")) || 0, 0), 40);
   const since = new Date(Date.now() - hours * 3600e3).toISOString();
 
   const { data, error } = await supabaseAdmin
@@ -22,6 +24,22 @@ export async function GET(req: Request) {
     .order("last_message_at", { ascending: false })
     .limit(limit);
   if (error) return NextResponse.json({ success: false, message: error.message }, { status: 500 });
+
+  const msgs = new Map<string, { sender: string; text: string | null; files: string[] | null; at: string }[]>();
+  if (perConv && data?.length) {
+    const { data: rows, error: mErr } = await supabaseAdmin
+      .from("chat_messages")
+      .select("conversation_id, sender, text, files, sent_at")
+      .in("conversation_id", data.map((c) => c.conversation_id))
+      .order("sent_at", { ascending: false })
+      .limit(Math.min(perConv * data.length * 2, 1500));
+    if (mErr) return NextResponse.json({ success: false, message: mErr.message }, { status: 500 });
+    for (const r of rows || []) {
+      const list = msgs.get(r.conversation_id) || [];
+      if (list.length < perConv) list.push({ sender: r.sender, text: r.text, files: r.files, at: r.sent_at });
+      msgs.set(r.conversation_id, list);
+    }
+  }
 
   const conversations = (data || []).map((c) => ({
     conversation_id: c.conversation_id,
@@ -33,6 +51,7 @@ export async function GET(req: Request) {
     product_name: c.product_name,
     owner: c.owner,
     waiting: c.last_sender === "buyer",
+    ...(perConv ? { messages: (msgs.get(c.conversation_id) || []).reverse() } : {}),
   }));
   return NextResponse.json({ success: true, conversations, waiting: conversations.filter((c) => c.waiting).length });
 }
