@@ -21,8 +21,13 @@ type In = {
 };
 
 const CONV_RE = /^[a-z_]*?_(\d+)_(\d+)$/;
+const ENTITIES: Record<string, string> = { "&amp;": "&", "&lt;": "<", "&gt;": ">", "&quot;": '"', "&#39;": "'", "&nbsp;": " " };
 const clean = (v: unknown, n: number) => {
-  const s = String(v ?? "").replace(/<br\s*\/?>/gi, "\n").replace(/\r/g, "").trim();
+  const s = String(v ?? "")
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/&(amp|lt|gt|quot|#39|nbsp);/g, (m) => ENTITIES[m] ?? m)     // Itemku menyimpan teks sebagai HTML
+    .replace(/\r/g, "")
+    .trim();
   return s ? s.slice(0, n) : null;
 };
 

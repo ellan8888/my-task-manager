@@ -55,6 +55,10 @@ const OUT_STATUS: Record<Outbox["status"], { label: string; cls: string }> = {
   failed: { label: "Gagal", cls: "text-rose-600 dark:text-rose-400 font-semibold" },
 };
 
+/** chat lama tersimpan dengan entitas HTML dari Itemku (&amp; dll.) */
+const decodeHtml = (t: string) =>
+  t.replace(/&(amp|lt|gt|quot|#39|nbsp);/g, (m) => ({ "&amp;": "&", "&lt;": "<", "&gt;": ">", "&quot;": '"', "&#39;": "'", "&nbsp;": " " })[m] ?? m);
+
 const buyerLabel = (c: Pick<Conversation, "buyer_name" | "buyer_id">) => c.buyer_name || `Pembeli #${c.buyer_id ?? "?"}`;
 const orderShort = (o: string | null) => (o ? o.replace(/^OD0*/, "#") : null);
 
@@ -377,7 +381,7 @@ export default function ChatDock() {
                           <span className="flex items-center gap-2">
                             <span className={`truncate text-xs ${c.unread ? "text-slate-800 dark:text-slate-200" : "text-slate-500"}`}>
                               {c.last_sender === "seller" && <span className="text-slate-400">Toko: </span>}
-                              {c.last_text || "Mengirim gambar"}
+                              {c.last_text ? decodeHtml(c.last_text) : "Mengirim gambar"}
                             </span>
                             {c.unread && <span className="ml-auto w-2.5 h-2.5 shrink-0 rounded-full bg-red-600" aria-label="belum dibaca" />}
                           </span>
@@ -495,7 +499,7 @@ export default function ChatDock() {
                                     }`}
                                     style={mine ? { backgroundColor: ITEMKU_BLUE } : undefined}
                                   >
-                                    {m.text}
+                                    {decodeHtml(m.text)}
                                   </div>
                                 )}
                                 <span className="mt-0.5 px-1 text-[10px] text-slate-400 tabular-nums">
