@@ -1,7 +1,8 @@
 "use client";
 
 // ChatDock — tombol "Pesan" melayang di semua halaman My Task + panel chat pembeli Itemku (hanya untuk dibaca).
-// Pesan dikumpulkan bot dari chat Tokoku; membalas tetap lewat Itemku (tombol "Balas di Itemku").
+// Pesan dikumpulkan bot dari chat Tokoku. Balasan ditulis di sini → antrean → bot (login_once) mengirim ke Itemku
+// (cara cepat langsung dari halaman Tokoku, cadangan: klik Hubungi Pembeli). Status tiap balasan terlihat di panel.
 // Warna biru mengikuti tombol "Pesan" Itemku supaya langsung terbaca sebagai chat Itemku.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -28,12 +29,31 @@ type Message = {
   order_id: string | null;
   product_name: string | null;
 };
-type Thread = { conversation: Conversation & { tokoku_url: string }; messages: Message[] };
+type Outbox = {
+  id: number;
+  text: string;
+  status: "pending" | "sending" | "sent" | "failed";
+  method: "fast" | "ui" | null;
+  error: string | null;
+  timetoken: string | null;
+  created_by: string;
+  created_at: string;
+  done_at: string | null;
+};
+type Thread = { conversation: Conversation & { tokoku_url: string }; messages: Message[]; outbox?: Outbox[] };
 
 const POLL_CLOSED = 30_000;
 const POLL_INBOX = 15_000;
 const POLL_THREAD = 10_000;
+const POLL_SENDING = 3_000;     // ada balasan yang sedang dikirim → cek lebih sering
 const ITEMKU_BLUE = "#2F80ED";
+
+const OUT_STATUS: Record<Outbox["status"], { label: string; cls: string }> = {
+  pending: { label: "Menunggu bot", cls: "text-slate-400" },
+  sending: { label: "Mengirim", cls: "text-blue-500" },
+  sent: { label: "Terkirim", cls: "text-emerald-600 dark:text-emerald-400" },
+  failed: { label: "Gagal", cls: "text-rose-600 dark:text-rose-400 font-semibold" },
+};
 
 const buyerLabel = (c: Pick<Conversation, "buyer_name" | "buyer_id">) => c.buyer_name || `Pembeli #${c.buyer_id ?? "?"}`;
 const orderShort = (o: string | null) => (o ? o.replace(/^OD0*/, "#") : null);
@@ -87,6 +107,9 @@ export default function ChatDock() {
   const [q, setQ] = useState("");
   const [now, setNow] = useState(0);
   const [zoom, setZoom] = useState<string | null>(null);
+  const [draft, setDraft] = useState("");
+  const [sending, setSending] = useState(false);
+  const [sendError, setSendError] = useState("");
   const endRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const lastCount = useRef(0);
@@ -160,16 +183,17 @@ export default function ChatDock() {
   }, [open, loadInbox]);
 
   // percakapan terbuka: isi tiap 10 detik
+  const waiting = (thread?.outbox || []).some((o) => o.status === "pending" || o.status === "sending");
   useEffect(() => {
     if (!open || !active) return;
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    loadThread(active);
-    const t = setInterval(() => document.visibilityState === "visible" && loadThread(active, true), POLL_THREAD);
+    loadThread(active, waiting);
+    const t = setInterval(() => document.visibilityState === "visible" && loadThread(active, true), waiting ? POLL_SENDING : POLL_THREAD);
     return () => clearInterval(t);
-  }, [open, active, loadThread]);
+  }, [open, active, loadThread, waiting]);
 
   // gulir ke pesan terbaru saat isi bertambah
-  const msgCount = thread?.messages.length ?? 0;
+  const msgCount = (thread?.messages.length ?? 0) + (thread?.outbox?.length ?? 0);
   useEffect(() => {
     if (msgCount > lastCount.current) endRef.current?.scrollIntoView({ block: "end" });
     lastCount.current = msgCount;
@@ -196,7 +220,30 @@ export default function ChatDock() {
       .filter((c) => !s || `${c.buyer_name} ${c.buyer_id} ${c.order_id} ${c.product_name} ${c.last_text} ${c.owner}`.toLowerCase().includes(s));
   }, [convs, filter, q]);
 
+  const send = async () => {
+    const text = draft.trim();
+    if (!active || !text || sending) return;
+    setSending(true);
+    setSendError("");
+    try {
+      const d = await fetch("/api/chat/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ conversation_id: active, text }),
+      }).then((r) => r.json());
+      if (!d.success) throw new Error(d.message || "Balasan belum masuk antrean, coba lagi");
+      setDraft("");
+      setThread((t) => (t && t.conversation.conversation_id === active ? { ...t, outbox: [...(t.outbox || []), d.item] } : t));
+    } catch (e) {
+      setSendError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setSending(false);
+    }
+  };
+
   const openConv = (id: string) => {
+    setDraft("");
+    setSendError("");
     lastCount.current = 0;
     setThread((t) => (t?.conversation.conversation_id === id ? t : null));
     setActive(id);
@@ -205,6 +252,10 @@ export default function ChatDock() {
   if (!enabled) return null;
 
   const current = thread && thread.conversation.conversation_id === active ? thread : null;
+  // balasan My Task yang sudah muncul sebagai pesan asli (timetoken sama) tidak ditampilkan dobel
+  const msgTts = new Set((current?.messages || []).map((m) => m.tt));
+  const repliedBy = new Map((current?.outbox || []).filter((o) => o.timetoken).map((o) => [o.timetoken as string, o.created_by]));
+  const pendingOut = (current?.outbox || []).filter((o) => !(o.status === "sent" && o.timetoken && msgTts.has(o.timetoken)));
   const activeConv = convs?.find((c) => c.conversation_id === active) || current?.conversation || null;
 
   return (
@@ -241,7 +292,7 @@ export default function ChatDock() {
             <div className="min-w-0 mr-auto">
               <div className="font-bold leading-tight">Pesan pembeli</div>
               <div className="text-[11px] text-blue-100 leading-tight">
-                {seeAll ? "Semua chat Itemku" : "Chat dari order milikmu & yang belum jelas ordernya"} · balas lewat Itemku
+                {seeAll ? "Semua chat Itemku" : "Chat dari order milikmu & yang belum jelas ordernya"} · balasan dikirim bot ke Itemku
               </div>
             </div>
             {unread > 0 && <span className="hidden sm:inline text-xs font-semibold bg-white/20 rounded-full px-2 py-0.5 tabular-nums">{unread} belum dibaca</span>}
@@ -378,10 +429,9 @@ export default function ChatDock() {
                       href={current?.conversation.tokoku_url || "https://tokoku.itemku.com/riwayat-pesanan"}
                       target="_blank"
                       rel="noreferrer"
-                      className="shrink-0 px-3 py-1.5 rounded-lg text-xs font-semibold text-white hover:brightness-110"
-                      style={{ backgroundColor: ITEMKU_BLUE }}
+                      className="shrink-0 px-3 py-1.5 rounded-lg text-xs font-semibold text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-500/30 hover:bg-blue-50 dark:hover:bg-blue-500/10"
                     >
-                      Balas di Itemku
+                      Buka di Itemku
                     </a>
                   </div>
 
@@ -449,7 +499,7 @@ export default function ChatDock() {
                                   </div>
                                 )}
                                 <span className="mt-0.5 px-1 text-[10px] text-slate-400 tabular-nums">
-                                  {mine ? "Toko · " : ""}
+                                  {mine ? (repliedBy.get(m.tt) ? `${repliedBy.get(m.tt)} dari My Task · ` : "Toko · ") : ""}
                                   {new Date(m.sent_at).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })}
                                 </span>
                               </div>
@@ -458,12 +508,77 @@ export default function ChatDock() {
                         );
                       })
                     )}
+                    {current &&
+                      pendingOut.map((o) => {
+                        const st = OUT_STATUS[o.status];
+                        return (
+                          <div key={`o${o.id}`} className="flex justify-end mt-3">
+                            <div className="max-w-[80%] flex flex-col items-end">
+                              <div
+                                className={`px-3.5 py-2 text-sm leading-relaxed whitespace-pre-wrap break-words rounded-2xl rounded-br-md ${
+                                  o.status === "failed"
+                                    ? "bg-rose-50 dark:bg-rose-500/10 text-rose-900 dark:text-rose-200 border border-rose-200 dark:border-rose-500/30"
+                                    : "text-white opacity-70"
+                                }`}
+                                style={o.status === "failed" ? undefined : { backgroundColor: ITEMKU_BLUE }}
+                              >
+                                {o.text}
+                              </div>
+                              <span className={`mt-0.5 px-1 text-[10px] ${st.cls}`}>
+                                {o.status === "sending" || o.status === "pending" ? <i className="fa-solid fa-spinner fa-spin mr-1"></i> : null}
+                                {st.label}
+                                {o.status === "sent" && o.method === "ui" ? " (lewat rincian order)" : ""}
+                                {" · "}
+                                {o.created_by}
+                              </span>
+                              {o.status === "failed" && (
+                                <span className="mt-0.5 px-1 text-[11px] text-rose-700 dark:text-rose-300 text-right max-w-xs">
+                                  {o.error || "Gagal dikirim"}{" "}
+                                  <button onClick={() => setDraft(o.text)} className="underline font-semibold">
+                                    Tulis ulang
+                                  </button>
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
                     <div ref={endRef} />
                   </div>
 
-                  <div className="shrink-0 px-4 py-2.5 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 text-[11px] text-slate-500 flex items-center gap-2">
-                    <i className="fa-solid fa-eye"></i>
-                    Hanya untuk dibaca. Membalas tetap lewat Itemku supaya tercatat di sana.
+                  <div className="shrink-0 px-3 py-2.5 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800">
+                    <div className="flex items-end gap-2">
+                      <textarea
+                        value={draft}
+                        onChange={(e) => {
+                          setDraft(e.target.value);
+                          if (sendError) setSendError("");
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+                            e.preventDefault();
+                            send();
+                          }
+                        }}
+                        rows={Math.min(5, Math.max(1, draft.split("\n").length))}
+                        maxLength={2000}
+                        placeholder={`Balas ${buyerLabel(activeConv)}…`}
+                        aria-label="Tulis balasan"
+                        className="flex-1 resize-none px-3.5 py-2 rounded-2xl bg-slate-100 dark:bg-slate-800 text-sm leading-relaxed focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                      <button
+                        onClick={send}
+                        disabled={!draft.trim() || sending}
+                        aria-label="Kirim balasan"
+                        className="w-10 h-10 shrink-0 rounded-full text-white disabled:opacity-40 hover:brightness-110 focus:outline-none focus-visible:ring-4 focus-visible:ring-blue-300"
+                        style={{ backgroundColor: ITEMKU_BLUE }}
+                      >
+                        <i className={`fa-solid ${sending ? "fa-spinner fa-spin" : "fa-paper-plane"}`}></i>
+                      </button>
+                    </div>
+                    <p className={`mt-1.5 px-1 text-[11px] ${sendError ? "text-rose-600 dark:text-rose-400" : "text-slate-400"}`}>
+                      {sendError || "Enter untuk kirim, Shift+Enter untuk baris baru. Bot mengirim ke Itemku, biasanya dalam beberapa puluh detik."}
+                    </p>
                   </div>
                 </>
               )}

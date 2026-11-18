@@ -1,5 +1,6 @@
 // app/api/chat/messages/route.ts — isi satu percakapan pembeli Itemku (hanya baca), staff yang login
-//   GET ?c=<conversation_id>  → { conversation, messages }  + tandai sudah dibaca oleh staff ini
+//   GET ?c=<conversation_id>  → { conversation, messages, outbox }  + tandai sudah dibaca oleh staff ini
+//   outbox = balasan dari My Task (menunggu / terkirim / gagal) supaya statusnya terlihat di panel
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { getSession } from "@/lib/auth";
@@ -32,6 +33,15 @@ export async function GET(req: Request) {
     .limit(LIMIT);
   if (error) return NextResponse.json({ success: false, message: error.message }, { status: 500 });
 
+  // balasan dari My Task (antrean) 2 hari terakhir — untuk status menunggu / terkirim / gagal
+  const { data: outbox } = await supabaseAdmin
+    .from("chat_outbox")
+    .select("id, text, status, method, error, timetoken, created_by, created_at, done_at")
+    .eq("conversation_id", conv)
+    .gte("created_at", new Date(Date.now() - 2 * 86400e3).toISOString())
+    .order("created_at", { ascending: true })
+    .limit(50);
+
   await supabaseAdmin
     .from("chat_reads")
     .upsert({ username: chatUser(session), conversation_id: conv, read_at: new Date().toISOString() }, { onConflict: "username,conversation_id" });
@@ -40,5 +50,6 @@ export async function GET(req: Request) {
     success: true,
     conversation: { ...c, tokoku_url: tokokuOrderUrl(c.order_id) },
     messages: (rows || []).reverse(),
+    outbox: outbox || [],
   });
 }
