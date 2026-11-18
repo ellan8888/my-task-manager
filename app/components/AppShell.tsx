@@ -3,6 +3,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
 import NotificationBell from "@/app/components/NotificationBell";
+import ChatDock from "@/app/components/ChatDock";
 import type { CurrentUser } from "@/lib/types";
 import { useToast } from "@/app/components/ToastProvider";
 import { useConfirmAsync } from "@/app/components/ConfirmDialog";
@@ -447,6 +448,7 @@ export default function AppShell({
           </div>
         </main>
       </div>
+      <ChatDock />
     </>
   );
 }

@@ -3,6 +3,7 @@
 import AdminSidebar from "../components/AdminSidebar";
 import { SidebarProvider, useSidebar } from "./SidebarContext";
 import { PushNotificationButton } from "../components/PushNotificationButton";
+import ChatDock from "../components/ChatDock";
 
 function LayoutInner({ children }: { children: React.ReactNode }) {
   const { sidebarOpen, setSidebarOpen } = useSidebar();
@@ -17,6 +18,7 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
       >
         {children}
       </main>
+      <ChatDock />
     </div>
   );
 }

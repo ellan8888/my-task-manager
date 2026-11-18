@@ -19,6 +19,8 @@ const JOBS: { path: string; when: (d: Date) => boolean; auth?: boolean }[] = [
   { path: "/api/cron/cleanup-redeem-codes", when: (d) => d.getUTCMinutes() === 12, auth: true },
   // Hapus log egg lama — tiap hari 03:00 UTC (10:00 WIB), sama seperti di Vercel
   { path: "/api/cron/cleanup-eggs", when: (d) => d.getUTCHours() === 3 && d.getUTCMinutes() === 0, auth: true },
+  // Isi chat pembeli Itemku > 30 hari — tiap hari 03:20 UTC (10:20 WIB)
+  { path: "/api/cron/cleanup-chat", when: (d) => d.getUTCHours() === 3 && d.getUTCMinutes() === 20, auth: true },
   // Ringkasan tugas harian ke Telegram — 07:00 WIB (route-nya sendiri menjaga sekali sehari)
   { path: "/api/telegram", when: (d) => d.getUTCHours() === 0 && d.getUTCMinutes() === 0 },
 ];
