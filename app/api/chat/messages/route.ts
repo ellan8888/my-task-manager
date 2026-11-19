@@ -36,7 +36,7 @@ export async function GET(req: Request) {
   // balasan dari My Task (antrean) 2 hari terakhir — untuk status menunggu / terkirim / gagal
   const { data: outbox } = await supabaseAdmin
     .from("chat_outbox")
-    .select("id, text, status, method, error, timetoken, created_by, created_at, done_at")
+    .select("id, text, status, method, error, timetoken, created_by, created_at, done_at, attempts")
     .eq("conversation_id", conv)
     .gte("created_at", new Date(Date.now() - 2 * 86400e3).toISOString())
     .order("created_at", { ascending: true })

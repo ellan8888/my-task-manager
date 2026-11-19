@@ -39,6 +39,7 @@ type Outbox = {
   created_by: string;
   created_at: string;
   done_at: string | null;
+  attempts?: number;
 };
 type Thread = { conversation: Conversation & { tokoku_url: string }; messages: Message[]; outbox?: Outbox[] };
 
@@ -47,6 +48,8 @@ const POLL_INBOX = 15_000;
 const POLL_THREAD = 10_000;
 const POLL_SENDING = 3_000;     // ada balasan yang sedang dikirim → cek lebih sering
 const ITEMKU_BLUE = "#2F80ED";
+const MAX_ATTEMPTS = 3;           // sama dengan /api/bot/chat/outbox
+const NEAR_BOTTOM = 120;          // px — di dekat bawah, pesan baru otomatis digulir
 
 const OUT_STATUS: Record<Outbox["status"], { label: string; cls: string }> = {
   pending: { label: "Menunggu bot", cls: "text-slate-400" },
@@ -115,6 +118,10 @@ export default function ChatDock() {
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState("");
   const endRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [atBottom, setAtBottom] = useState(true);
+  const [newBelow, setNewBelow] = useState(0);
+  const [retrying, setRetrying] = useState<number | null>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const lastCount = useRef(0);
 
@@ -196,12 +203,36 @@ export default function ChatDock() {
     return () => clearInterval(t);
   }, [open, active, loadThread, waiting]);
 
-  // gulir ke pesan terbaru saat isi bertambah
+  // gulir: buka chat → langsung ke pesan terbaru; pesan baru masuk → ikut turun HANYA kalau sedang di bawah,
+  // kalau sedang membaca pesan lama muncul tombol "pesan baru" (tidak ditarik paksa ke bawah)
   const msgCount = (thread?.messages.length ?? 0) + (thread?.outbox?.length ?? 0);
+  const threadReady = !!thread && thread.conversation.conversation_id === active;
   useEffect(() => {
-    if (msgCount > lastCount.current) endRef.current?.scrollIntoView({ block: "end" });
+    const el = scrollRef.current;
+    if (!el || !threadReady) return;
+    const prev = lastCount.current;
     lastCount.current = msgCount;
-  }, [msgCount, active]);
+    if (prev === 0) {
+      el.scrollTop = el.scrollHeight;                       // baru dibuka
+      return;
+    }
+    if (msgCount <= prev) return;
+    const near = el.scrollHeight - el.scrollTop - el.clientHeight < NEAR_BOTTOM + 200;
+    if (near) el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+    else setNewBelow((n) => n + (msgCount - prev));
+  }, [msgCount, threadReady]);
+
+  const onThreadScroll = () => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const bottom = el.scrollHeight - el.scrollTop - el.clientHeight < NEAR_BOTTOM;
+    setAtBottom(bottom);
+    if (bottom) setNewBelow(0);
+  };
+  const toBottom = (smooth = true) => {
+    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: smooth ? "smooth" : "auto" });
+    setNewBelow(0);
+  };
 
   useEffect(() => {
     if (!open) return;
@@ -238,6 +269,7 @@ export default function ChatDock() {
       if (!d.success) throw new Error(d.message || "Balasan belum masuk antrean, coba lagi");
       setDraft("");
       setThread((t) => (t && t.conversation.conversation_id === active ? { ...t, outbox: [...(t.outbox || []), d.item] } : t));
+      setTimeout(() => toBottom(), 50);                     // pesan sendiri selalu terlihat
     } catch (e) {
       setSendError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -245,9 +277,30 @@ export default function ChatDock() {
     }
   };
 
+  /** kirim lagi balasan yang gagal setelah semua percobaan otomatis — tanpa menulis ulang */
+  const retrySend = async (o: Outbox) => {
+    if (!active || retrying) return;
+    setRetrying(o.id);
+    try {
+      const d = await fetch("/api/chat/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ conversation_id: active, retry_id: o.id }),
+      }).then((r) => r.json());
+      if (!d.success) throw new Error(d.message || "Belum bisa dikirim lagi");
+      setThread((t) => (t ? { ...t, outbox: (t.outbox || []).map((x) => (x.id === o.id ? d.item : x)) } : t));
+    } catch (e) {
+      setSendError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setRetrying(null);
+    }
+  };
+
   const openConv = (id: string) => {
     setDraft("");
     setSendError("");
+    setNewBelow(0);
+    setAtBottom(true);
     lastCount.current = 0;
     setThread((t) => (t?.conversation.conversation_id === id ? t : null));
     setActive(id);
@@ -322,7 +375,7 @@ export default function ChatDock() {
                     value={q}
                     onChange={(e) => setQ(e.target.value)}
                     placeholder="Cari pembeli, order, produk"
-                    className="w-full pl-8 pr-3 py-2 rounded-lg bg-slate-100 dark:bg-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full pl-8 pr-3 py-2 rounded-lg bg-slate-100 dark:bg-slate-800 text-base sm:text-sm text-slate-900 dark:text-slate-100 placeholder:text-slate-400 caret-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
                 <div className="flex gap-1 text-xs font-semibold">
@@ -340,7 +393,7 @@ export default function ChatDock() {
                   ))}
                 </div>
               </div>
-              <ul className="flex-1 overflow-y-auto">
+              <ul className="chat-scroll flex-1 overflow-y-auto overscroll-contain">
                 {convs === null ? (
                   [0, 1, 2, 3, 4].map((i) => (
                     <li key={i} className="px-3 py-3 flex gap-3 animate-pulse">
@@ -439,7 +492,8 @@ export default function ChatDock() {
                     </a>
                   </div>
 
-                  <div className="flex-1 overflow-y-auto px-4 py-4" aria-live="polite">
+                  <div className="relative flex-1 min-h-0">
+                  <div ref={scrollRef} onScroll={onThreadScroll} className="chat-scroll h-full overflow-y-auto overscroll-contain px-4 sm:px-6 py-4" aria-live="polite">
                     {threadLoading && !current ? (
                       <div className="space-y-3 animate-pulse">
                         {[60, 40, 70, 30].map((w, i) => (
@@ -460,8 +514,8 @@ export default function ChatDock() {
                         return (
                           <div key={m.tt}>
                             {newDay && (
-                              <div className="text-center my-3">
-                                <span className="text-[11px] font-semibold text-slate-500 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-full px-3 py-1">
+                              <div className="sticky top-0 z-10 text-center py-2 pointer-events-none">
+                                <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 bg-white/90 dark:bg-slate-900/90 backdrop-blur border border-slate-200 dark:border-slate-800 rounded-full px-3 py-1 shadow-sm">
                                   {dayLabel(m.sent_at, now)}
                                 </span>
                               </div>
@@ -515,6 +569,8 @@ export default function ChatDock() {
                     {current &&
                       pendingOut.map((o) => {
                         const st = OUT_STATUS[o.status];
+                        const tries = o.attempts ?? 1;
+                        const retryingAuto = o.status === "pending" && tries > 1;
                         return (
                           <div key={`o${o.id}`} className="flex justify-end mt-3">
                             <div className="max-w-[80%] flex flex-col items-end">
@@ -530,17 +586,30 @@ export default function ChatDock() {
                               </div>
                               <span className={`mt-0.5 px-1 text-[10px] ${st.cls}`}>
                                 {o.status === "sending" || o.status === "pending" ? <i className="fa-solid fa-spinner fa-spin mr-1"></i> : null}
-                                {st.label}
+                                {retryingAuto ? `Gagal, mencoba ulang otomatis (${tries}/${MAX_ATTEMPTS})` : o.status === "sending" && tries > 1 ? `Mengirim ulang (${tries}/${MAX_ATTEMPTS})` : st.label}
                                 {o.status === "sent" && o.method === "ui" ? " (lewat rincian order)" : ""}
                                 {" · "}
                                 {o.created_by}
                               </span>
                               {o.status === "failed" && (
-                                <span className="mt-0.5 px-1 text-[11px] text-rose-700 dark:text-rose-300 text-right max-w-xs">
-                                  {o.error || "Gagal dikirim"}{" "}
-                                  <button onClick={() => setDraft(o.text)} className="underline font-semibold">
-                                    Tulis ulang
+                                <span className="mt-1 px-1 flex flex-wrap items-center justify-end gap-x-2 gap-y-1 text-[11px] text-rose-700 dark:text-rose-300 text-right max-w-sm">
+                                  <span>
+                                    {tries >= MAX_ATTEMPTS ? `Sudah dicoba ${tries}x · ` : ""}
+                                    {o.error || "Gagal dikirim"}
+                                  </span>
+                                  <button
+                                    onClick={() => retrySend(o)}
+                                    disabled={retrying === o.id}
+                                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-rose-600 text-white font-semibold hover:bg-rose-700 disabled:opacity-60 focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-300"
+                                  >
+                                    <i className={`fa-solid ${retrying === o.id ? "fa-spinner fa-spin" : "fa-rotate-right"}`}></i>
+                                    Kirim lagi
                                   </button>
+                                </span>
+                              )}
+                              {retryingAuto && o.error && (
+                                <span className="mt-0.5 px-1 text-[10px] text-slate-400 text-right max-w-xs truncate" title={o.error}>
+                                  Sebelumnya: {o.error}
                                 </span>
                               )}
                             </div>
@@ -548,6 +617,20 @@ export default function ChatDock() {
                         );
                       })}
                     <div ref={endRef} />
+                  </div>
+                  {(!atBottom || newBelow > 0) && current && (
+                    <button
+                      onClick={() => toBottom()}
+                      className={`absolute bottom-3 right-4 z-20 flex items-center gap-1.5 rounded-full shadow-lg shadow-slate-900/20 focus:outline-none focus-visible:ring-4 focus-visible:ring-blue-300 transition ${
+                        newBelow > 0 ? "px-3.5 h-9 text-white text-xs font-semibold" : "w-9 h-9 justify-center bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-200 border border-slate-200 dark:border-slate-700"
+                      }`}
+                      style={newBelow > 0 ? { backgroundColor: ITEMKU_BLUE } : undefined}
+                      aria-label={newBelow > 0 ? `${newBelow} pesan baru, gulir ke bawah` : "Gulir ke pesan terbaru"}
+                    >
+                      <i className="fa-solid fa-arrow-down"></i>
+                      {newBelow > 0 && <span>{newBelow} pesan baru</span>}
+                    </button>
+                  )}
                   </div>
 
                   <div className="shrink-0 px-3 py-2.5 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800">
@@ -568,7 +651,7 @@ export default function ChatDock() {
                         maxLength={2000}
                         placeholder={`Balas ${buyerLabel(activeConv)}…`}
                         aria-label="Tulis balasan"
-                        className="flex-1 resize-none px-3.5 py-2 rounded-2xl bg-slate-100 dark:bg-slate-800 text-sm leading-relaxed focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className="chat-scroll flex-1 resize-none px-3.5 py-2 rounded-2xl bg-slate-100 dark:bg-slate-800 text-base sm:text-sm leading-relaxed text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 caret-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
                       />
                       <button
                         onClick={send}
@@ -581,7 +664,7 @@ export default function ChatDock() {
                       </button>
                     </div>
                     <p className={`mt-1.5 px-1 text-[11px] ${sendError ? "text-rose-600 dark:text-rose-400" : "text-slate-400"}`}>
-                      {sendError || "Enter untuk kirim, Shift+Enter untuk baris baru. Bot mengirim ke Itemku, biasanya dalam beberapa puluh detik."}
+                      {sendError || "Enter untuk kirim, Shift+Enter untuk baris baru. Kalau gagal, bot otomatis mencoba lagi sampai 3x."}
                     </p>
                   </div>
                 </>
