@@ -25,6 +25,10 @@ export const KIND_LABEL: Record<NotifyKind, string> = {
   sistem: "Lainnya",
 };
 
+/** Jenis yang TIDAK masuk lonceng (riwayat): chat pembeli sudah punya angka & daftar sendiri di tombol "Pesan".
+ *  Push ke HP tetap dikirim. */
+export const NO_HISTORY_KINDS: NotifyKind[] = ["chat"];
+
 /** Jenis penting: tetap bunyi walau jam tenang (tapi tetap bisa dibisukan manual) */
 const CRITICAL_KINDS: NotifyKind[] = ["bot"];
 
@@ -142,15 +146,17 @@ export async function notify(input: NotifyInput): Promise<NotifyResult> {
   result.recipients = users.length;
   if (!users.length) return result;
 
-  // 1. Riwayat (tabel boleh belum ada → lewati diam-diam)
-  const { data: inserted, error: insErr } = await supabaseAdmin
-    .from("notifications")
-    .insert(users.map((username) => ({ username, kind, title, body: body || null, url })))
-    .select("id");
-  if (insErr) {
-    if (!/notifications/i.test(insErr.message)) console.error("[notify] Gagal simpan riwayat:", insErr.message);
-  } else {
-    result.stored = inserted?.length || 0;
+  // 1. Riwayat (tabel boleh belum ada → lewati diam-diam). Chat pembeli tidak masuk lonceng.
+  if (!NO_HISTORY_KINDS.includes(kind)) {
+    const { data: inserted, error: insErr } = await supabaseAdmin
+      .from("notifications")
+      .insert(users.map((username) => ({ username, kind, title, body: body || null, url })))
+      .select("id");
+    if (insErr) {
+      if (!/notifications/i.test(insErr.message)) console.error("[notify] Gagal simpan riwayat:", insErr.message);
+    } else {
+      result.stored = inserted?.length || 0;
+    }
   }
 
   // 2. Pengaturan
@@ -189,6 +195,7 @@ export async function notify(input: NotifyInput): Promise<NotifyResult> {
         .from("notifications")
         .select("id", { count: "exact", head: true })
         .eq("username", u)
+        .not("kind", "in", `(${NO_HISTORY_KINDS.join(",")})`)
         .is("read_at", null);
       unread.set(u, count || 0);
     })

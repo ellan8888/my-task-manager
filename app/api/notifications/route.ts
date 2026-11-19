@@ -5,6 +5,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { getSession } from "@/lib/auth";
+import { NO_HISTORY_KINDS } from "@/lib/notify";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -24,6 +25,7 @@ export async function GET(req: NextRequest) {
     .from("notifications")
     .select("id, kind, title, body, url, read_at, created_at")
     .eq("username", me)
+    .not("kind", "in", `(${NO_HISTORY_KINDS.join(",")})`)       // chat pembeli: lihat tombol "Pesan"
     .order("id", { ascending: false })
     .limit(limit);
   if (before) q = q.lt("id", before);
@@ -36,6 +38,7 @@ export async function GET(req: NextRequest) {
     .from("notifications")
     .select("id", { count: "exact", head: true })
     .eq("username", me)
+    .not("kind", "in", `(${NO_HISTORY_KINDS.join(",")})`)
     .is("read_at", null);
   return NextResponse.json({ success: true, data: data || [], unread: count || 0 });
 }
