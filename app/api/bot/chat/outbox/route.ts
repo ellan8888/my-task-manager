@@ -4,16 +4,17 @@
 //   GET ?peek=1 → { pending: n } — hanya menghitung (tidak mengambil); dipakai thread bot tiap beberapa detik
 //   POST { id, status: "sent"|"failed"|"retry", method?, error?, timetoken? } → hasil pengiriman
 //        retry = bot belum bisa mengirim di sela langkah lain → kembali ke antrean (diambil lagi di loop biasa)
-//        failed = otomatis dicoba ulang sampai MAX_ATTEMPTS (jeda RETRY_DELAY_SEC × percobaan); baru benar-benar
-//                 "Gagal" setelah percobaan terakhir. Staff tidak perlu menulis ulang.
+//        failed = TIDAK pernah final: balasan kembali ke antrean dan dicoba terus sampai terkirim
+//                 (jeda RETRY_DELAY_SEC × percobaan, maks. MAX_DELAY_SEC). Anti-dobel ada di chat_outbox_claim (032):
+//                 balasan yang ternyata sudah muncul di chat Itemku langsung ditandai Terkirim.
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { isBotRequest } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
-const MAX_ATTEMPTS = 3;
 const RETRY_DELAY_SEC = 15;
+const MAX_DELAY_SEC = 60;
 
 export async function GET(req: Request) {
   if (!isBotRequest(req)) return NextResponse.json({ success: false, message: "Unauthorized" }, { status: 401 });
@@ -51,14 +52,14 @@ export async function POST(req: Request) {
   if (status === "failed") {
     const { data: row } = await supabaseAdmin.from("chat_outbox").select("attempts").eq("id", id).maybeSingle();
     const attempts = row?.attempts ?? 1;
-    if (attempts < MAX_ATTEMPTS) {
+    {
       const { error } = await supabaseAdmin
         .from("chat_outbox")
         .update({
           status: "pending",
           claimed_at: null,
           attempts: attempts + 1,
-          next_try_at: new Date(Date.now() + RETRY_DELAY_SEC * attempts * 1000).toISOString(),
+          next_try_at: new Date(Date.now() + Math.min(RETRY_DELAY_SEC * attempts, MAX_DELAY_SEC) * 1000).toISOString(),
           error: body.error ? String(body.error).slice(0, 300) : null,           // alasan percobaan sebelumnya
         })
         .eq("id", id)

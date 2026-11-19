@@ -49,7 +49,6 @@ const POLL_INBOX = 15_000;
 const POLL_THREAD = 10_000;
 const POLL_SENDING = 3_000;     // ada balasan yang sedang dikirim → cek lebih sering
 const ITEMKU_BLUE = "#2F80ED";
-const MAX_ATTEMPTS = 3;           // sama dengan /api/bot/chat/outbox
 const NEAR_BOTTOM = 120;          // px — di dekat bawah, pesan baru otomatis digulir
 
 const OUT_STATUS: Record<Outbox["status"], { label: string; cls: string }> = {
@@ -118,7 +117,6 @@ export default function ChatDock() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [atBottom, setAtBottom] = useState(true);
   const [newBelow, setNewBelow] = useState(0);
-  const [retrying, setRetrying] = useState<number | null>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const lastCount = useRef(0);
 
@@ -271,25 +269,6 @@ export default function ChatDock() {
       setSendError(e instanceof Error ? e.message : String(e));
     } finally {
       setSending(false);
-    }
-  };
-
-  /** kirim lagi balasan yang gagal setelah semua percobaan otomatis — tanpa menulis ulang */
-  const retrySend = async (o: Outbox) => {
-    if (!active || retrying) return;
-    setRetrying(o.id);
-    try {
-      const d = await fetch("/api/chat/send", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ conversation_id: active, retry_id: o.id }),
-      }).then((r) => r.json());
-      if (!d.success) throw new Error(d.message || "Belum bisa dikirim lagi");
-      setThread((t) => (t ? { ...t, outbox: (t.outbox || []).map((x) => (x.id === o.id ? d.item : x)) } : t));
-    } catch (e) {
-      setSendError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setRetrying(null);
     }
   };
 
@@ -583,25 +562,18 @@ export default function ChatDock() {
                               </div>
                               <span className={`mt-0.5 px-1 text-[10px] ${st.cls}`}>
                                 {o.status === "sending" || o.status === "pending" ? <i className="fa-solid fa-spinner fa-spin mr-1"></i> : null}
-                                {retryingAuto ? `Gagal, mencoba ulang otomatis (${tries}/${MAX_ATTEMPTS})` : o.status === "sending" && tries > 1 ? `Mengirim ulang (${tries}/${MAX_ATTEMPTS})` : st.label}
+                                {retryingAuto
+                                  ? `Belum terkirim, dicoba lagi otomatis (percobaan ke-${tries})`
+                                  : o.status === "sending" && tries > 1
+                                    ? `Mengirim ulang (percobaan ke-${tries})`
+                                    : st.label}
                                 {o.status === "sent" && o.method === "ui" ? " (lewat rincian order)" : ""}
                                 {" · "}
                                 {o.created_by}
                               </span>
                               {o.status === "failed" && (
-                                <span className="mt-1 px-1 flex flex-wrap items-center justify-end gap-x-2 gap-y-1 text-[11px] text-rose-700 dark:text-rose-300 text-right max-w-sm">
-                                  <span>
-                                    {tries >= MAX_ATTEMPTS ? `Sudah dicoba ${tries}x · ` : ""}
-                                    {o.error || "Gagal dikirim"}
-                                  </span>
-                                  <button
-                                    onClick={() => retrySend(o)}
-                                    disabled={retrying === o.id}
-                                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-rose-600 text-white font-semibold hover:bg-rose-700 disabled:opacity-60 focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-300"
-                                  >
-                                    <i className={`fa-solid ${retrying === o.id ? "fa-spinner fa-spin" : "fa-rotate-right"}`}></i>
-                                    Kirim lagi
-                                  </button>
+                                <span className="mt-0.5 px-1 text-[11px] text-rose-700 dark:text-rose-300 text-right max-w-sm">
+                                  {o.error || "Gagal dikirim"}
                                 </span>
                               )}
                               {retryingAuto && o.error && (
@@ -661,7 +633,7 @@ export default function ChatDock() {
                       </button>
                     </div>
                     <p className={`mt-1.5 px-1 text-[11px] ${sendError ? "text-rose-600 dark:text-rose-400" : "text-slate-400"}`}>
-                      {sendError || "Enter untuk kirim, Shift+Enter untuk baris baru. Kalau gagal, bot otomatis mencoba lagi sampai 3x."}
+                      {sendError || "Enter untuk kirim, Shift+Enter untuk baris baru. Kalau gagal, bot otomatis mencoba lagi sampai terkirim."}
                     </p>
                   </div>
                 </>
