@@ -7,6 +7,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ChatText, { chatPreview } from "./ChatText";
+import { OPEN_CHAT_EVENT, chatIdFromUrl } from "@/lib/openChat";
 
 type Conversation = {
   conversation_id: string;
@@ -139,6 +140,7 @@ export default function ChatDock() {
     try {
       const d = await fetch("/api/chat/inbox", { cache: "no-store" }).then((r) => r.json());
       if (d.success) {
+        setEnabled(true);                                   // dibuka langsung dari notif sebelum angka dimuat
         setConvs(d.conversations || []);
         setUnread(d.unread || 0);
         setSeeAll(!!d.see_all);
@@ -281,6 +283,27 @@ export default function ChatDock() {
     setThread((t) => (t?.conversation.conversation_id === id ? t : null));
     setActive(id);
   };
+
+  // buka ruang chat dari notif: lewat lonceng (event) atau dari push notif (?chat=… di alamat halaman)
+  useEffect(() => {
+    const go = (id: string) => {
+      setOpen(true);
+      openConv(id);
+    };
+    const fromUrl = chatIdFromUrl(window.location.href);
+    if (fromUrl) {
+      go(fromUrl);
+      const u = new URL(window.location.href);
+      u.searchParams.delete("chat");
+      window.history.replaceState(window.history.state, "", u.pathname + u.search + u.hash);
+    }
+    const onEvt = (e: Event) => {
+      const id = (e as CustomEvent<string>).detail;
+      if (id) go(id);
+    };
+    window.addEventListener(OPEN_CHAT_EVENT, onEvt);
+    return () => window.removeEventListener(OPEN_CHAT_EVENT, onEvt);
+  }, []);
 
   if (!enabled) return null;
 

@@ -108,6 +108,8 @@ export type NotifyInput = {
   kind?: NotifyKind;
   /** abaikan bisu & jam tenang (mis. tes notifikasi) */
   force?: boolean;
+  /** notif dengan tag sama saling menggantikan di HP (default: jenisnya). Chat: per pembeli. */
+  tag?: string;
 };
 
 export type NotifyResult = {
@@ -205,7 +207,7 @@ export async function notify(input: NotifyInput): Promise<NotifyResult> {
             body,
             url,
             kind,
-            tag: kind,
+            tag: input.tag || kind,
             unread: unread.get(String(s.username || "").toLowerCase()) || 0,
             ts: Date.now(),
             icon: "/icon-192.png",

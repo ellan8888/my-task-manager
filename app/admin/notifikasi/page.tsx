@@ -1,5 +1,6 @@
 "use client";
 
+import { openChatFromUrl } from "@/lib/openChat";
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import AdminHeader from "@/app/components/AdminHeader";
@@ -212,6 +213,7 @@ export default function NotifikasiPage() {
       setItems((l) => l.map((x) => (x.id === n.id ? { ...x, read_at: new Date().toISOString() } : x)));
       setUnread((u) => Math.max(0, u - 1));
     }
+    if (openChatFromUrl(n.url)) return;          // notif chat → langsung buka ruang chat pembeli
     if (n.url && n.url.startsWith("/")) router.push(n.url);
   };
 

@@ -8,7 +8,11 @@
 //        Hanya simpan pasangan percakapan → order (nomor order terlihat di percakapan).
 //
 //   POST { type: "unread", count }
-//        Cadangan: angka "Pesan" belum dibaca naik tapi isi pesan tidak terbaca → notif ke semua staff.
+//        Cadangan: angka "Pesan" belum dibaca naik. Notif dikirim PER PEMBELI yang chatnya belum dibalas & belum
+//        dinotif (dari chat_conversations), bukan lagi satu notif "N pesan belum dibaca".
+//
+//   Klik notif → My Task membuka ruang chat pembeli itu (/?chat=<conversation_id>, ditangani ChatDock).
+//   Tag notif per percakapan: beberapa pesan dari pembeli yang sama saling menggantikan di HP, beda pembeli = beda notif.
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { isBotRequest } from "@/lib/auth";
@@ -16,10 +20,21 @@ import { notify } from "@/lib/notify";
 
 export const dynamic = "force-dynamic";
 
-const CHAT_URL = "https://tokoku.itemku.com/riwayat-pesanan";
-const orderUrl = (orderId: string) => {
-  const num = orderId.replace(/^OD0*/i, "");
-  return /^\d+$/.test(num) ? `https://tokoku.itemku.com/riwayat-pesanan/rincian/${num}` : CHAT_URL;
+/** buka ruang chat pembeli ini di My Task */
+const chatUrl = (conversationId: string) => `/?chat=${encodeURIComponent(conversationId)}`;
+const buyerLabel = (name: string | null | undefined, buyerId: number | null | undefined) =>
+  name || (buyerId ? `Pembeli #${buyerId}` : "Pembeli Itemku");
+const MAX_UNREAD_NOTIFS = 6;
+
+/** pratinjau isi pesan: tag HTML (template bot) & spasi berlebih dibuang */
+const preview = (raw: unknown) => {
+  const t = String(raw || "")
+    .replace(/<br\s*\/?>/gi, " ")
+    .replace(/<a\b[^>]*>([\s\S]*?)<\/a>/gi, "$1")
+    .replace(/<[^>]+>/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  return t ? (t.length > 160 ? t.slice(0, 157) + "…" : t) : "Mengirim gambar";
 };
 
 /** "168321882" / "OD000000168321882" → "OD000000168321882" */
@@ -67,14 +82,36 @@ export async function POST(request: Request) {
     if (type === "unread") {
       const count = Math.max(0, Number(body.count) || 0);
       if (!count) return NextResponse.json({ success: true, skipped: true });
-      const res = await notify({
-        to: "all",
-        kind: "chat",
-        title: `${count} pesan belum dibaca di Itemku`,
-        body: "Ada pesan pembeli yang belum dibalas — buka chat Tokoku.",
-        url: CHAT_URL,
-      });
-      return NextResponse.json({ success: true, result: res });
+      // pembeli yang pesan terakhirnya belum dibalas & belum pernah dinotif sejak pesan itu
+      const { data: rows } = await supabaseAdmin
+        .from("chat_conversations")
+        .select("conversation_id, buyer_id, buyer_name, owner, order_id, last_text, last_message_at, last_notified_at")
+        .eq("last_sender", "buyer")
+        .gte("last_message_at", new Date(Date.now() - 24 * 3600e3).toISOString())
+        .order("last_message_at", { ascending: false })
+        .limit(30);
+      const todo = (rows || []).filter(
+        (c) => !c.last_notified_at || new Date(c.last_message_at) > new Date(c.last_notified_at),
+      );
+      let sent = 0;
+      for (const c of todo.slice(0, MAX_UNREAD_NOTIFS)) {
+        await notify({
+          to: c.owner || "all",
+          kind: "chat",
+          tag: `chat:${c.conversation_id}`,
+          title: `Chat dari ${buyerLabel(c.buyer_name, c.buyer_id)}`,
+          body: preview(c.last_text),
+          url: chatUrl(c.conversation_id),
+        });
+        sent++;
+      }
+      if (todo.length) {
+        await supabaseAdmin
+          .from("chat_conversations")
+          .update({ last_notified_at: new Date().toISOString() })
+          .in("conversation_id", todo.map((c) => c.conversation_id));
+      }
+      return NextResponse.json({ success: true, notified: sent, pending: todo.length });
     }
 
     const conversationId = String(body.conversation_id || "").slice(0, 120);
@@ -93,23 +130,24 @@ export async function POST(request: Request) {
     let linkedOrder: string | null = orderId;
     if (orderId) {
       owner = await saveLink(conversationId, buyerId, orderId);
-    } else {
-      const { data: conv } = await supabaseAdmin
-        .from("chat_conversations")
-        .select("order_id, owner")
-        .eq("conversation_id", conversationId)
-        .maybeSingle();
+    }
+    const { data: conv } = await supabaseAdmin
+      .from("chat_conversations")
+      .select("order_id, owner, buyer_name")
+      .eq("conversation_id", conversationId)
+      .maybeSingle();
+    if (!orderId) {
       linkedOrder = conv?.order_id || null;
       owner = conv?.owner || (linkedOrder ? await ownerOfOrder(linkedOrder) : null);
     }
 
-    const text = String(body.text || "").replace(/<br\s*\/?>/gi, " ").replace(/\s+/g, " ").trim();
     const res = await notify({
       to: owner || "all",
       kind: "chat",
-      title: linkedOrder ? `Pesan pembeli · ${linkedOrder}` : "Pesan baru dari pembeli Itemku",
-      body: text ? (text.length > 160 ? text.slice(0, 157) + "…" : text) : "(pesan tanpa teks / gambar)",
-      url: linkedOrder ? orderUrl(linkedOrder) : CHAT_URL,
+      tag: `chat:${conversationId}`,
+      title: `Chat dari ${buyerLabel(conv?.buyer_name, buyerId)}`,
+      body: (linkedOrder ? `#${linkedOrder.replace(/^OD0*/i, "")} · ` : "") + preview(body.text),
+      url: chatUrl(conversationId),
     });
     await supabaseAdmin
       .from("chat_conversations")

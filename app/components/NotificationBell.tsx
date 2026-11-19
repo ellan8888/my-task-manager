@@ -1,5 +1,6 @@
 "use client";
 
+import { openChatFromUrl } from "@/lib/openChat";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createPortal } from "react-dom";
@@ -164,6 +165,7 @@ export default function NotificationBell() {
   const openItem = async (n: Notif) => {
     if (!n.read_at) markRead({ ids: [n.id] });
     setOpen(false);
+    if (openChatFromUrl(n.url)) return;          // notif chat → langsung buka ruang chat pembeli
     if (n.url && n.url.startsWith("/")) router.push(n.url);
   };
 
