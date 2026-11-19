@@ -1,13 +1,14 @@
 import { NextResponse } from "next/server";
+import { getEndpoint } from "@/lib/botEndpoints";
 
 export async function GET() {
   try {
-    const ramUrl = process.env.RAM_TUNNEL_URL;
+    const ramUrl = await getEndpoint("ram");          // dari PC (ram_tunnel.py), cadangan env RAM_TUNNEL_URL
     const ramPassword = process.env.RAM_PASSWORD;
 
     if (!ramUrl) {
       return NextResponse.json(
-        { success: false, message: "RAM_TUNNEL_URL belum diset", accounts: [] },
+        { success: false, message: "Alamat tunnel RAM belum ada — nyalakan ram_tunnel.py di PC", accounts: [] },
         { status: 500 }
       );
     }

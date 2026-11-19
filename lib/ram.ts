@@ -1,11 +1,13 @@
 // lib/ram.ts — tutup akun Roblox di Roblox Account Manager (RAM) lewat tunnel. Server only.
+// Alamat tunnel: dari bot_endpoints (dikirim otomatis ram_tunnel.py di PC), cadangan env RAM_TUNNEL_URL.
+import { getEndpoint } from "@/lib/botEndpoints";
 
 export type RamResult = { success: boolean; status: number; message: string };
 
 export async function removeFromRam(username: string): Promise<RamResult> {
-  const ramUrl = process.env.RAM_TUNNEL_URL;
+  const ramUrl = await getEndpoint("ram");
   const ramPassword = process.env.RAM_PASSWORD;
-  if (!ramUrl) return { success: false, status: 500, message: "RAM_TUNNEL_URL belum diset di Vercel" };
+  if (!ramUrl) return { success: false, status: 500, message: "Alamat tunnel RAM belum ada — nyalakan ram_tunnel.py di PC" };
 
   let targetUrl = `${ramUrl}/RemoveAccount?Account=${encodeURIComponent(username)}`;
   if (ramPassword && ramPassword.length >= 6) {
