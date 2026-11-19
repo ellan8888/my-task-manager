@@ -6,6 +6,7 @@
 // Warna biru mengikuti tombol "Pesan" Itemku supaya langsung terbaca sebagai chat Itemku.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import ChatText, { chatPreview } from "./ChatText";
 
 type Conversation = {
   conversation_id: string;
@@ -57,10 +58,6 @@ const OUT_STATUS: Record<Outbox["status"], { label: string; cls: string }> = {
   sent: { label: "Terkirim", cls: "text-emerald-600 dark:text-emerald-400" },
   failed: { label: "Gagal", cls: "text-rose-600 dark:text-rose-400 font-semibold" },
 };
-
-/** chat lama tersimpan dengan entitas HTML dari Itemku (&amp; dll.) */
-const decodeHtml = (t: string) =>
-  t.replace(/&(amp|lt|gt|quot|#39|nbsp);/g, (m) => ({ "&amp;": "&", "&lt;": "<", "&gt;": ">", "&quot;": '"', "&#39;": "'", "&nbsp;": " " })[m] ?? m);
 
 const buyerLabel = (c: Pick<Conversation, "buyer_name" | "buyer_id">) => c.buyer_name || `Pembeli #${c.buyer_id ?? "?"}`;
 const orderShort = (o: string | null) => (o ? o.replace(/^OD0*/, "#") : null);
@@ -434,7 +431,7 @@ export default function ChatDock() {
                           <span className="flex items-center gap-2">
                             <span className={`truncate text-xs ${c.unread ? "text-slate-800 dark:text-slate-200" : "text-slate-500"}`}>
                               {c.last_sender === "seller" && <span className="text-slate-400">Toko: </span>}
-                              {c.last_text ? decodeHtml(c.last_text) : "Mengirim gambar"}
+                              {c.last_text ? chatPreview(c.last_text) : "Mengirim gambar"}
                             </span>
                             {c.unread && <span className="ml-auto w-2.5 h-2.5 shrink-0 rounded-full bg-red-600" aria-label="belum dibaca" />}
                           </span>
@@ -527,7 +524,7 @@ export default function ChatDock() {
                               </div>
                             )}
                             <div className={`flex ${mine ? "justify-end" : "justify-start"} ${grouped ? "mt-1" : "mt-3"}`}>
-                              <div className={`max-w-[80%] ${mine ? "items-end" : "items-start"} flex flex-col`}>
+                              <div className={`max-w-[85%] sm:max-w-[75%] min-w-0 ${mine ? "items-end" : "items-start"} flex flex-col`}>
                                 {m.files && m.files.length > 0 && (
                                   <div className={`flex flex-wrap gap-1.5 mb-1 ${mine ? "justify-end" : ""}`}>
                                     {m.files.map((f) =>
@@ -546,14 +543,14 @@ export default function ChatDock() {
                                 )}
                                 {m.text && (
                                   <div
-                                    className={`px-3.5 py-2 text-sm leading-relaxed whitespace-pre-wrap break-words shadow-sm ${
+                                    className={`max-w-full min-w-0 px-3.5 py-2 text-sm leading-relaxed shadow-sm ${
                                       mine
                                         ? "text-white rounded-2xl rounded-br-md"
                                         : "bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 rounded-2xl rounded-bl-md border border-slate-200 dark:border-slate-700"
                                     }`}
                                     style={mine ? { backgroundColor: ITEMKU_BLUE } : undefined}
                                   >
-                                    {decodeHtml(m.text)}
+                                    <ChatText text={m.text} mine={mine} />
                                   </div>
                                 )}
                                 <span className="mt-0.5 px-1 text-[10px] text-slate-400 tabular-nums">
