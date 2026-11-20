@@ -200,24 +200,45 @@ export function Dropdown<T extends string>({
 }
 
 // ── Segment ────────────────────────────────────────────────────────────────
+/** tombol berkelompok — latar putih menggeser ke pilihan yang aktif */
 export function Segment<T extends string>({ value, options, onChange }: { value: T; options: Opt<T>[]; onChange: (v: T) => void }) {
+  const wrap = useRef<HTMLDivElement>(null);
+  const [ind, setInd] = useState<{ left: number; width: number } | null>(null);
+  useLayoutEffect(() => {
+    const measure = () => {
+      const el = wrap.current?.querySelector<HTMLButtonElement>(`[data-v="${value}"]`);
+      setInd(el ? { left: el.offsetLeft, width: el.offsetWidth } : null);
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    if (wrap.current) ro.observe(wrap.current);
+    return () => ro.disconnect();
+  }, [value, options.length]);
   return (
-    <div role="radiogroup" className="flex p-1 rounded-2xl bg-slate-100 dark:bg-slate-800/70 ring-1 ring-inset ring-slate-200/80 dark:ring-slate-700/60">
+    <div ref={wrap} role="radiogroup" className="relative flex p-1 rounded-2xl bg-slate-100 dark:bg-slate-800/70 ring-1 ring-inset ring-slate-200/80 dark:ring-slate-700/60">
+      {ind && (
+        <span
+          aria-hidden
+          className="absolute top-1 bottom-1 rounded-xl bg-white dark:bg-slate-950 shadow-sm ring-1 ring-slate-200 dark:ring-slate-700 transition-[left,width] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]"
+          style={{ left: ind.left, width: ind.width }}
+        />
+      )}
       {options.map((o) => {
         const sel = o.value === value;
         return (
           <button
             key={o.value}
+            data-v={o.value}
             role="radio"
             aria-checked={sel}
             onClick={() => onChange(o.value)}
-            className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-xl text-[13px] font-semibold whitespace-nowrap transition focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-400 ${
-              sel ? "bg-white dark:bg-slate-950 text-slate-900 dark:text-white shadow-sm ring-1 ring-slate-200 dark:ring-slate-700" : "text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200"
+            className={`relative z-10 flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-xl text-[13px] font-semibold whitespace-nowrap transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-400 ${
+              sel ? "text-slate-900 dark:text-white" : "text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200"
             }`}
           >
-            {o.dot && <span className={`w-2 h-2 rounded-full ${o.dot}`} />}
+            {o.dot && <span className={`w-2 h-2 rounded-full transition-transform duration-300 ${o.dot} ${sel ? "scale-125" : ""}`} />}
             {o.label}
-            {o.count !== undefined && <span className={`text-[11px] tabular-nums ${sel ? "text-slate-400" : "text-slate-400/80"}`}>{o.count}</span>}
+            {o.count !== undefined && <span className="text-[11px] tabular-nums text-slate-400">{o.count}</span>}
           </button>
         );
       })}

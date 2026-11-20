@@ -348,8 +348,6 @@ export default function StockPage() {
     <>
       {confirmDialog}
       <style>{`
-        .custom-scrollbar::-webkit-scrollbar { display: none; }
-        .custom-scrollbar { scrollbar-width: none; }
         html, body { scrollbar-width: none; -ms-overflow-style: none; }
         html::-webkit-scrollbar, body::-webkit-scrollbar { display: none; }
       `}</style>

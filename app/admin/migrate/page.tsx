@@ -218,7 +218,7 @@ export default function BulkMigratePage() {
       {header}
       {confirmDialog}
 
-      <div className="flex-1 overflow-y-auto scrollbar-hide p-4 md:p-8">
+      <div className="flex-1 overflow-y-auto custom-scrollbar p-4 md:p-8">
         <div className="max-w-5xl mx-auto space-y-6">
           {/* ═══ ANTREAN BERJALAN ═══ */}
           {queue.length > 0 && (

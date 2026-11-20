@@ -251,8 +251,6 @@ export default function AppShell({
         body, aside, main, header {
           transition: background-color 0.25s ease, color 0.25s ease, border-color 0.25s ease;
         }
-        .custom-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
-        .custom-scrollbar::-webkit-scrollbar { display: none; }
         html, body { scrollbar-width: none; -ms-overflow-style: none; }
         html::-webkit-scrollbar, body::-webkit-scrollbar { display: none; }
       `}</style>

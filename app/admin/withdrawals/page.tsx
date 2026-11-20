@@ -254,7 +254,7 @@ export default function WithdrawalsPage() {
         subtitle={<>{currentUser?.role === "superadmin" ? "Review & approve request penarikan" : "Ajukan penarikan pendapatan kamu"}</>}
       />
 
-      <div className="flex-1 overflow-y-auto scrollbar-hide p-4 md:p-8">
+      <div className="flex-1 overflow-y-auto custom-scrollbar p-4 md:p-8">
         {loading ? (
           <SkeletonPage stats={3} rows={5} padded={false} />
         ) : (

@@ -423,7 +423,7 @@ export default function RedeemPage() {
       </AdminHeader>
 
       {/* CONTENT */}
-      <div className="flex-1 overflow-y-auto scrollbar-hide p-4 md:p-8">
+      <div className="flex-1 overflow-y-auto custom-scrollbar p-4 md:p-8">
         {loading ? (
           <SkeletonPage stats={3} rows={6} padded={false} />
         ) : (

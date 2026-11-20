@@ -281,6 +281,8 @@ export default function ProdukTerlarisPage() {
   const filteredTotal = base.reduce((s, p) => s + p.n, 0);
   const filteredPrev = base.reduce((s, p) => s + p.prev_n, 0);
   const podium = sort === "most" && !q ? list.slice(0, 3) : [];
+  // kunci tampilan: berubah saat filter / periode diganti → daftar & podium diputar ulang animasi masuknya
+  const viewKey = `${qs}|${cat}|${game}|${sort}|${loadedKey}`;
 
   const busiest = useMemo(() => {
     if (!data) return null;
@@ -378,14 +380,15 @@ export default function ProdukTerlarisPage() {
             <div className="flex sm:grid sm:grid-cols-3 gap-3 items-stretch overflow-x-auto snap-x snap-mandatory scroll-px-4 -mx-4 px-4 sm:mx-0 sm:px-0 sm:overflow-visible [scrollbar-width:none]">
               {(podium.length ? podium : [null, null, null]).map((p, i) => (
                 <button
-                  key={p?.key || i}
+                  key={`${viewKey}-${p?.key || i}`}
+                  style={{ animationDelay: `${i * 60}ms` }}
                   disabled={!p}
                   onClick={() => {
                     if (!p) return;
                     setOpen(p.key);
                     setTimeout(() => document.getElementById(`row-${p.key}`)?.scrollIntoView({ behavior: "smooth", block: "center" }), 50);
                   }}
-                  className={`group relative shrink-0 w-[78%] sm:w-auto snap-start text-left rounded-3xl p-4 md:p-5 overflow-hidden ring-1 ring-inset transition hover:-translate-y-0.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-400 ${
+                  className={`group relative shrink-0 w-[78%] sm:w-auto snap-start text-left rounded-3xl p-4 md:p-5 overflow-hidden motion-safe:animate-[riseIn_.45s_cubic-bezier(0.22,1,0.36,1)_both] ring-1 ring-inset transition hover:-translate-y-0.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-400 ${
                     i === 0
                       ? "bg-gradient-to-br from-violet-600 to-indigo-700 text-white ring-violet-500/40 shadow-lg shadow-violet-700/25 sm:row-span-1"
                       : "bg-white dark:bg-slate-900 ring-slate-200 dark:ring-slate-800 hover:ring-slate-300 dark:hover:ring-slate-700"
@@ -474,12 +477,16 @@ export default function ProdukTerlarisPage() {
                   )}
                 </div>
               )}
-              <ol className={`transition-opacity ${loading && data ? "opacity-60" : ""}`}>
+              <ol key={viewKey} className={`transition-opacity ${loading && data ? "opacity-60" : ""}`}>
                 {shown.map((p, idx) => {
                   const isOpen = open === p.key;
                   const pos = idx + 1;
                   return (
-                    <li key={p.key} id={`row-${p.key}`} className={`scroll-mt-24 border-b border-slate-100 dark:border-slate-800/80 last:border-0 ${isOpen ? "bg-slate-50/80 dark:bg-slate-800/30" : ""}`}>
+                    <li
+                      key={p.key}
+                      id={`row-${p.key}`}
+                      style={{ animationDelay: `${Math.min(idx, 12) * 35}ms` }}
+                      className={`motion-safe:animate-[riseIn_.4s_cubic-bezier(0.22,1,0.36,1)_both] scroll-mt-24 border-b border-slate-100 dark:border-slate-800/80 last:border-0 ${isOpen ? "bg-slate-50/80 dark:bg-slate-800/30" : ""}`}>
                       <button
                         onClick={() => setOpen(isOpen ? null : p.key)}
                         aria-expanded={isOpen}

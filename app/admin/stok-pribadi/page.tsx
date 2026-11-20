@@ -495,8 +495,6 @@ const idleCount = accounts.filter((a) => a.idle && !a.logged_out).length;
   return (
     <>
       <style>{`
-        .custom-scrollbar::-webkit-scrollbar { display: none; }
-        .custom-scrollbar { scrollbar-width: none; }
       `}</style>
 
       {/* Header */}

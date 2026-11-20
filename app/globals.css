@@ -72,34 +72,42 @@ input[type="time"] {
   scrollbar-width: none !important;
 }
 
-/* Alias — biar .custom-scrollbar sama kayak .scrollbar-hide */
-.custom-scrollbar::-webkit-scrollbar {
-  display: none !important;
-  width: 0 !important;
-  height: 0 !important;
-  background: transparent !important;
-}
-
-.custom-scrollbar {
-  -ms-overflow-style: none !important;
-  scrollbar-width: none !important;
-}
-
-/* Scroll panel chat (ChatDock): tipis, muncul di PC, tidak ada di HP */
-.chat-scroll {
-  scrollbar-width: thin;
-  scrollbar-color: rgb(148 163 184 / 0.45) transparent;
-  scroll-behavior: auto;
-}
-.chat-scroll::-webkit-scrollbar { width: 8px; height: 8px; }
-.chat-scroll::-webkit-scrollbar-track { background: transparent; }
-.chat-scroll::-webkit-scrollbar-thumb {
-  background: rgb(148 163 184 / 0.4);
+/* ============================================
+   SCROLLBAR MY TASK — tipis, membulat, ikut tema
+   Berlaku untuk semua area yang bisa digulir (kecuali .scrollbar-hide).
+   Thumb samar, menebal & lebih jelas saat disentuh kursor, ungu saat ditarik.
+   Chrome/Edge memakai ::-webkit-scrollbar; Firefox memakai scrollbar-color (di bawah).
+   ============================================ */
+*::-webkit-scrollbar { width: 12px; height: 12px; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-corner { background: transparent; }
+*::-webkit-scrollbar-button { display: none; width: 0; height: 0; }
+*::-webkit-scrollbar-thumb {
+  background-color: rgb(148 163 184 / 0.45);
   border-radius: 999px;
-  border: 2px solid transparent;
+  border: 3px solid transparent;
   background-clip: padding-box;
+  min-height: 40px;
 }
-.chat-scroll:hover::-webkit-scrollbar-thumb { background-color: rgb(100 116 139 / 0.6); }
+*:hover::-webkit-scrollbar-thumb { background-color: rgb(100 116 139 / 0.6); }
+*::-webkit-scrollbar-thumb:hover { background-color: rgb(100 116 139 / 0.85); border-width: 2px; }
+*::-webkit-scrollbar-thumb:active { background-color: rgb(124 58 237 / 0.85); border-width: 2px; }
+.dark *::-webkit-scrollbar-thumb { background-color: rgb(100 116 139 / 0.5); }
+.dark *:hover::-webkit-scrollbar-thumb { background-color: rgb(148 163 184 / 0.6); }
+.dark *::-webkit-scrollbar-thumb:hover { background-color: rgb(148 163 184 / 0.8); }
+.dark *::-webkit-scrollbar-thumb:active { background-color: rgb(167 139 250 / 0.9); }
+
+/* area utama halaman (.custom-scrollbar): scrollbar atas-bawah tampil, yang menyamping disembunyikan */
+.custom-scrollbar::-webkit-scrollbar:horizontal { height: 0; }
+
+/* Firefox */
+@supports not selector(::-webkit-scrollbar) {
+  * { scrollbar-width: thin; scrollbar-color: rgb(148 163 184 / 0.5) transparent; }
+  .dark * { scrollbar-color: rgb(71 85 105 / 0.7) transparent; }
+}
+
+/* Panel chat */
+.chat-scroll { scroll-behavior: auto; }
 
 /* Hide scrollbar global di html/body */
 html, body {
@@ -246,4 +254,10 @@ body::-webkit-scrollbar {
 }
 @media (prefers-reduced-motion: reduce) {
   [class*="animate-[pop"] { animation: none !important; }
+}
+
+/* Daftar berganti isi (ganti filter / periode): baris muncul bergantian dari bawah */
+@keyframes riseIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
 }

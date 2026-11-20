@@ -204,7 +204,7 @@ export default function OrderGagalPage() {
       {/* ══════════════════════════════════════════════════
           CONTENT
       ══════════════════════════════════════════════════ */}
-      <div className="flex-1 overflow-y-auto scrollbar-hide p-4 md:p-8 space-y-6">
+      <div className="flex-1 overflow-y-auto custom-scrollbar p-4 md:p-8 space-y-6">
         {/* ─────────────────────────────────────
             SUMMARY CARDS
         ───────────────────────────────────── */}

@@ -318,8 +318,6 @@ const [defaultEgg, setDefaultEgg] = useState("");// ⭐ NEW
   return (
     <>
       <style>{`
-        .custom-scrollbar::-webkit-scrollbar { display: none; }
-        .custom-scrollbar { scrollbar-width: none; }
       `}</style>
 
       {/* Header */}
