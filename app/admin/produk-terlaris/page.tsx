@@ -281,8 +281,10 @@ export default function ProdukTerlarisPage() {
   const filteredTotal = base.reduce((s, p) => s + p.n, 0);
   const filteredPrev = base.reduce((s, p) => s + p.prev_n, 0);
   const podium = sort === "most" && !q ? list.slice(0, 3) : [];
-  // kunci tampilan: berubah saat filter / periode diganti → daftar & podium diputar ulang animasi masuknya
-  const viewKey = `${qs}|${cat}|${game}|${sort}|${loadedKey}`;
+  // kunci tampilan: berubah saat ISI yang ditampilkan berubah → daftar & podium diputar ulang animasi masuknya.
+  // Sengaja pakai loadedKey (data yang sudah tiba), bukan periode yang baru diklik: kalau pakai periode,
+  // animasi jalan 2x (data lama dulu, lalu data baru) — itu yang terasa "patah".
+  const viewKey = `${loadedKey}|${cat}|${game}|${sort}`;
 
   const busiest = useMemo(() => {
     if (!data) return null;
