@@ -3,8 +3,9 @@
 // Produk Terlaris — apa yang paling banyak laku per hari / minggu / bulan. Hanya JUMLAH terjual (tanpa rupiah),
 // boleh dilihat semua staff. Data: /api/stats/top-products (income_log, stok dari Live Stock).
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import AdminHeader from "@/app/components/AdminHeader";
+import { DateRange, Dropdown, FilterChip, PeriodTabs, Segment, type Opt } from "./controls";
 
 type Range = "today" | "7d" | "30d" | "month" | "custom";
 type Product = {
@@ -33,13 +34,20 @@ type Data = {
   slow: Slow[];
 };
 
-const RANGES: [Range, string][] = [
+const RANGES: [Exclude<Range, "custom">, string][] = [
   ["today", "Hari ini"],
   ["7d", "7 hari"],
   ["30d", "30 hari"],
   ["month", "Bulan ini"],
-  ["custom", "Pilih tanggal"],
 ];
+type Sort = "most" | "up" | "down" | "new";
+const SORTS: Opt<Sort>[] = [
+  { value: "most", label: "Terbanyak terjual", icon: "fa-arrow-down-wide-short" },
+  { value: "up", label: "Paling naik", hint: "dibanding periode sebelumnya", icon: "fa-arrow-trend-up" },
+  { value: "down", label: "Paling turun", hint: "dibanding periode sebelumnya", icon: "fa-arrow-trend-down" },
+  { value: "new", label: "Baru laku", hint: "tidak laku di periode sebelumnya", icon: "fa-sparkles" },
+];
+const CAT_DOT = { Akun: "bg-blue-500", Joki: "bg-violet-500", Lainnya: "bg-slate-400" } as const;
 const PREV_LABEL: Record<Range, string> = {
   today: "kemarin",
   "7d": "7 hari sebelumnya",
@@ -85,7 +93,7 @@ function Delta({ n, prev }: { n: number; prev: number }) {
 }
 
 /** tren harian kecil — satu warna, titik terakhir ditandai */
-function Spark({ values, days }: { values: number[]; days: string[] }) {
+function Spark({ values, days, tone = "text-violet-500 dark:text-violet-400" }: { values: number[]; days: string[]; tone?: string }) {
   const [hover, setHover] = useState<number | null>(null);
   if (values.length < 2) return null;
   const W = 120;
@@ -101,7 +109,7 @@ function Spark({ values, days }: { values: number[]; days: string[] }) {
         width={W}
         height={H}
         viewBox={`0 0 ${W} ${H}`}
-        className="overflow-visible text-violet-500 dark:text-violet-400"
+        className={`overflow-visible ${tone}`}
         onMouseLeave={() => setHover(null)}
         onMouseMove={(e) => {
           const r = e.currentTarget.getBoundingClientRect();
@@ -124,7 +132,7 @@ function Spark({ values, days }: { values: number[]; days: string[] }) {
 }
 
 /** grafik batang harian (detail produk) */
-function DailyBars({ values, days }: { values: number[]; days: string[] }) {
+function DailyBars({ values, days, tone = "bg-violet-500/85 dark:bg-violet-400/85" }: { values: number[]; days: string[]; tone?: string }) {
   const max = Math.max(1, ...values);
   const labelEvery = Math.ceil(values.length / 8);
   return (
@@ -133,7 +141,7 @@ function DailyBars({ values, days }: { values: number[]; days: string[] }) {
         {values.map((v, i) => (
           <div key={days[i]} className="group relative flex-1 h-full flex items-end">
             <div
-              className="w-full rounded-t-[4px] bg-violet-500/85 dark:bg-violet-400/85 group-hover:bg-violet-600 dark:group-hover:bg-violet-300 min-h-[2px]"
+              className={`w-full rounded-t-[4px] ${tone} group-hover:brightness-110 min-h-[2px]`}
               style={{ height: `${v ? Math.max(4, (v / max) * 100) : 2}%`, opacity: v ? 1 : 0.25 }}
             />
             <div className="hidden group-hover:block absolute bottom-full mb-1 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-md bg-slate-900 text-white dark:bg-white dark:text-slate-900 px-2 py-1 text-[11px] font-semibold z-10">
@@ -176,7 +184,7 @@ function StockChip({ stock, daysLeft }: { stock: number | null; daysLeft: number
 
 function Card({ title, icon, hint, children }: { title: string; icon: string; hint?: string; children: React.ReactNode }) {
   return (
-    <section className="rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-4 md:p-5">
+    <section className="rounded-3xl bg-white dark:bg-slate-900 ring-1 ring-inset ring-slate-200 dark:ring-slate-800 p-4 md:p-5">
       <div className="flex items-baseline gap-2 mb-3">
         <i className={`fa-solid ${icon} text-[13px] text-slate-400`}></i>
         <h2 className="text-sm font-bold text-slate-800 dark:text-slate-100">{title}</h2>
@@ -194,12 +202,14 @@ export default function ProdukTerlarisPage() {
   const [cat, setCat] = useState<"all" | "Akun" | "Joki">("all");
   const [game, setGame] = useState("all");
   const [q, setQ] = useState("");
+  const [sort, setSort] = useState<Sort>("most");
   const [open, setOpen] = useState<string | null>(null);
   const [showAll, setShowAll] = useState(false);
   const [data, setData] = useState<Data | null>(null);
   const [error, setError] = useState("");
   const [nonce, setNonce] = useState(0);
   const [loadedKey, setLoadedKey] = useState("");
+  const searchRef = useRef<HTMLInputElement>(null);
   const qs = useMemo(() => {
     const p = new URLSearchParams({ range });
     if (range === "custom") {
@@ -229,17 +239,48 @@ export default function ProdukTerlarisPage() {
     };
   }, [qs, nonce]);
 
-  const games = useMemo(() => [...new Set((data?.products || []).map((p) => p.game))].sort(), [data]);
+  // "/" → langsung ke kolom cari
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (e.key === "/" && tag !== "INPUT" && tag !== "TEXTAREA") {
+        e.preventDefault();
+        searchRef.current?.focus();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  const all = useMemo(() => data?.products || [], [data]);
+  // jumlah per pilihan filter (ikut filter lain supaya angkanya jujur)
+  const catCount = (c: "Akun" | "Joki") => all.filter((p) => p.category === c && (game === "all" || p.game === game)).length;
+  const gameOpts = useMemo<Opt<string>[]>(() => {
+    const counts = new Map<string, number>();
+    for (const p of all) if (cat === "all" || p.category === cat) counts.set(p.game, (counts.get(p.game) || 0) + p.n);
+    return [
+      { value: "all", label: "Semua game", icon: "fa-gamepad", count: [...counts.values()].reduce((a, b) => a + b, 0) },
+      ...[...counts.entries()].sort((a, b) => b[1] - a[1]).map(([g, n]) => ({ value: g, label: g, count: n, icon: "fa-cube" })),
+    ];
+  }, [all, cat]);
+
   const list = useMemo(() => {
     const s = q.trim().toLowerCase();
-    return (data?.products || []).filter(
+    const f = all.filter(
       (p) => (cat === "all" || p.category === cat) && (game === "all" || p.game === game) && (!s || p.title.toLowerCase().includes(s)),
     );
-  }, [data, cat, game, q]);
+    const diff = (p: Product) => p.n - p.prev_n;
+    if (sort === "up") return [...f].filter((p) => diff(p) > 0).sort((a, b) => diff(b) - diff(a) || b.n - a.n);
+    if (sort === "down") return [...f].filter((p) => diff(p) < 0).sort((a, b) => diff(a) - diff(b));
+    if (sort === "new") return [...f].filter((p) => !p.prev_n).sort((a, b) => b.n - a.n);
+    return f;
+  }, [all, cat, game, q, sort]);
   const shown = showAll ? list : list.slice(0, 15);
   const max = Math.max(1, ...list.map((p) => p.n));
-  const filteredTotal = list.reduce((s, p) => s + p.n, 0);
-  const filteredPrev = list.reduce((s, p) => s + p.prev_n, 0);
+  const base = all.filter((p) => (cat === "all" || p.category === cat) && (game === "all" || p.game === game));
+  const filteredTotal = base.reduce((s, p) => s + p.n, 0);
+  const filteredPrev = base.reduce((s, p) => s + p.prev_n, 0);
+  const podium = sort === "most" && !q ? list.slice(0, 3) : [];
 
   const busiest = useMemo(() => {
     if (!data) return null;
@@ -249,6 +290,14 @@ export default function ProdukTerlarisPage() {
   }, [data]);
   const heatMax = Math.max(1, ...(data?.heatmap.flat() || [0]));
   const days = data?.period.days || [];
+  const periodText = days.length > 1 ? `${fmtDay(days[0])} – ${fmtDay(days[days.length - 1])}` : days[0] ? fmtDay(days[0]) : "";
+  const filtersOn = cat !== "all" || game !== "all" || q.trim() !== "" || sort !== "most";
+  const clearAll = () => {
+    setCat("all");
+    setGame("all");
+    setQ("");
+    setSort("most");
+  };
 
   return (
     <>
@@ -256,136 +305,252 @@ export default function ProdukTerlarisPage() {
       <div className="flex-1 overflow-y-auto">
         <div className="max-w-7xl mx-auto px-4 md:px-8 py-5 md:py-7 space-y-5">
           {/* ── filter ── */}
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="inline-flex max-w-full overflow-x-auto p-0.5 rounded-xl bg-slate-200/70 dark:bg-slate-800 text-[13px] font-semibold">
-              {RANGES.map(([v, label]) => (
-                <button
-                  key={v}
-                  onClick={() => setRange(v)}
-                  className={`px-3 py-1.5 rounded-lg whitespace-nowrap transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-400 ${
-                    range === v ? "bg-white dark:bg-slate-950 text-slate-900 dark:text-white shadow-sm" : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
-                  }`}
-                >
-                  {label}
-                </button>
-              ))}
+          <section className="rounded-3xl bg-white/70 dark:bg-slate-900/60 ring-1 ring-slate-200 dark:ring-slate-800 p-3 md:p-4 space-y-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <PeriodTabs value={range === "custom" ? ("" as Exclude<Range, "custom">) : range} options={RANGES} onChange={(v) => setRange(v)} />
+              <DateRange
+                from={from}
+                to={to}
+                active={range === "custom"}
+                onApply={(f, t) => {
+                  setFrom(f);
+                  setTo(t);
+                  setRange("custom");
+                }}
+              />
+              <span className="ml-auto hidden md:flex items-center gap-1.5 text-[12px] text-slate-400">
+                {loading ? <i className="fa-solid fa-circle-notch fa-spin text-[11px]"></i> : <i className="fa-regular fa-calendar text-[11px]"></i>}
+                {periodText}
+              </span>
             </div>
-            {range === "custom" && (
-              <div className="flex items-center gap-1.5 text-[13px]">
-                <input type="date" value={from} max={to} onChange={(e) => setFrom(e.target.value)} className="px-2.5 py-1.5 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100" />
-                <span className="text-slate-400">sampai</span>
-                <input type="date" value={to} min={from} max={wibYmd(new Date())} onChange={(e) => setTo(e.target.value)} className="px-2.5 py-1.5 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100" />
+            <div className="grid gap-2 md:grid-cols-[auto_minmax(0,14rem)_minmax(0,1fr)] items-center">
+              <Segment
+                value={cat}
+                onChange={setCat}
+                options={[
+                  { value: "all", label: "Semua", count: all.filter((p) => game === "all" || p.game === game).length },
+                  { value: "Akun", label: "Akun", dot: CAT_DOT.Akun, count: catCount("Akun") },
+                  { value: "Joki", label: "Joki", dot: CAT_DOT.Joki, count: catCount("Joki") },
+                ]}
+              />
+              <Dropdown label="Game" icon="fa-gamepad" value={game} options={gameOpts} onChange={setGame} width="w-72" />
+              <label className="relative block">
+                <i className="fa-solid fa-magnifying-glass absolute left-3.5 top-1/2 -translate-y-1/2 text-[12px] text-slate-400"></i>
+                <input
+                  ref={searchRef}
+                  value={q}
+                  onChange={(e) => setQ(e.target.value)}
+                  placeholder="Cari produk, mis. 100B atau treadmill"
+                  className="w-full pl-9 pr-16 py-2.5 rounded-xl bg-white dark:bg-slate-900 ring-1 ring-inset ring-slate-200 dark:ring-slate-700 hover:ring-slate-300 dark:hover:ring-slate-600 text-base md:text-[13px] text-slate-900 dark:text-slate-100 placeholder:text-slate-400 caret-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-400"
+                />
+                {q ? (
+                  <button onClick={() => setQ("")} aria-label="Hapus pencarian" className="absolute right-2 top-1/2 -translate-y-1/2 w-7 h-7 rounded-lg grid place-items-center text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800">
+                    <i className="fa-solid fa-xmark text-[12px]"></i>
+                  </button>
+                ) : (
+                  <kbd className="hidden md:block absolute right-3 top-1/2 -translate-y-1/2 px-1.5 py-0.5 rounded-md text-[11px] font-semibold text-slate-400 ring-1 ring-slate-200 dark:ring-slate-700">/</kbd>
+                )}
+              </label>
+            </div>
+            {filtersOn && (
+              <div className="flex flex-wrap items-center gap-1.5">
+                {cat !== "all" && <FilterChip onClear={() => setCat("all")}>{cat} saja</FilterChip>}
+                {game !== "all" && <FilterChip onClear={() => setGame("all")}>{game}</FilterChip>}
+                {q.trim() && <FilterChip onClear={() => setQ("")}>&ldquo;{q.trim()}&rdquo;</FilterChip>}
+                {sort !== "most" && <FilterChip onClear={() => setSort("most")}>{SORTS.find((x) => x.value === sort)?.label}</FilterChip>}
+                <button onClick={clearAll} className="text-[12px] font-semibold text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 px-2">
+                  Hapus semua
+                </button>
               </div>
             )}
-            <div className="flex flex-wrap md:flex-nowrap items-center gap-1.5 md:ml-auto w-full md:w-auto">
-              <select value={cat} onChange={(e) => setCat(e.target.value as typeof cat)} className="flex-1 md:flex-none px-2.5 py-1.5 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-[13px] text-slate-900 dark:text-slate-100">
-                <option value="all">Akun & Joki</option>
-                <option value="Akun">Akun saja</option>
-                <option value="Joki">Joki saja</option>
-              </select>
-              <select value={game} onChange={(e) => setGame(e.target.value)} className="px-2.5 py-1.5 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-[13px] text-slate-900 dark:text-slate-100 flex-1 md:flex-none md:max-w-[11rem]">
-                <option value="all">Semua game</option>
-                {games.map((g) => (
-                  <option key={g} value={g}>{g}</option>
-                ))}
-              </select>
-              <div className="relative w-full md:w-52">
-                <i className="fa-solid fa-magnifying-glass absolute left-2.5 top-1/2 -translate-y-1/2 text-[11px] text-slate-400"></i>
-                <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Cari produk" className="w-full pl-7 pr-2.5 py-1.5 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-base md:text-[13px] text-slate-900 dark:text-slate-100 placeholder:text-slate-400" />
-              </div>
-            </div>
-          </div>
+          </section>
 
           {error && (
-            <div className="rounded-xl bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/30 px-4 py-3 text-sm text-rose-700 dark:text-rose-300">
-              {error} <button onClick={load} className="underline font-semibold ml-1">Coba lagi</button>
+            <div className="rounded-2xl bg-rose-50 dark:bg-rose-500/10 ring-1 ring-rose-200 dark:ring-rose-500/30 px-4 py-3 text-sm text-rose-700 dark:text-rose-300 flex items-center gap-2">
+              <i className="fa-solid fa-circle-exclamation"></i>
+              {error}
+              <button onClick={load} className="ml-auto font-semibold underline">Coba lagi</button>
             </div>
           )}
 
-          {/* ── ringkasan ── */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-            <div className="rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 px-4 py-3.5">
-              <div className="text-[12px] text-slate-500">Terjual</div>
-              <div className="flex items-baseline gap-2 mt-0.5">
-                <span className="text-2xl font-bold tabular-nums">{loading && !data ? "–" : filteredTotal}</span>
-                {data && <Delta n={filteredTotal} prev={filteredPrev} />}
+          {/* ── podium 3 teratas + ringkasan ── */}
+          <div className={`grid gap-3 lg:grid-cols-[minmax(0,1fr)_17rem] items-start transition-opacity ${loading && data ? "opacity-60" : ""}`}>
+            <div className="flex sm:grid sm:grid-cols-3 gap-3 items-stretch overflow-x-auto snap-x snap-mandatory scroll-px-4 -mx-4 px-4 sm:mx-0 sm:px-0 sm:overflow-visible [scrollbar-width:none]">
+              {(podium.length ? podium : [null, null, null]).map((p, i) => (
+                <button
+                  key={p?.key || i}
+                  disabled={!p}
+                  onClick={() => {
+                    if (!p) return;
+                    setOpen(p.key);
+                    setTimeout(() => document.getElementById(`row-${p.key}`)?.scrollIntoView({ behavior: "smooth", block: "center" }), 50);
+                  }}
+                  className={`group relative shrink-0 w-[78%] sm:w-auto snap-start text-left rounded-3xl p-4 md:p-5 overflow-hidden ring-1 ring-inset transition hover:-translate-y-0.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-400 ${
+                    i === 0
+                      ? "bg-gradient-to-br from-violet-600 to-indigo-700 text-white ring-violet-500/40 shadow-lg shadow-violet-700/25 sm:row-span-1"
+                      : "bg-white dark:bg-slate-900 ring-slate-200 dark:ring-slate-800 hover:ring-slate-300 dark:hover:ring-slate-700"
+                  }`}
+                >
+                  <span
+                    aria-hidden
+                    className={`absolute -right-2 -bottom-6 text-[7rem] leading-none font-black tabular-nums select-none ${
+                      i === 0 ? "text-white/10" : "text-slate-900/[0.04] dark:text-white/[0.05]"
+                    }`}
+                  >
+                    {i + 1}
+                  </span>
+                  {p ? (
+                    <>
+                      <div className={`text-[12px] font-semibold ${i === 0 ? "text-violet-100" : "text-slate-400"}`}>
+                        {i === 0 ? "Paling laku" : `Peringkat ${i + 1}`}
+                      </div>
+                      <div className={`mt-1.5 text-[15px] font-bold leading-snug line-clamp-2 min-h-[2.6em] ${i === 0 ? "" : "text-slate-900 dark:text-white"}`}>{shortTitle(p.title)}</div>
+                      <div className="mt-3 flex items-end gap-2">
+                        <span className="text-3xl font-black tabular-nums leading-none">{p.n}</span>
+                        <span className={`text-[12px] mb-0.5 ${i === 0 ? "text-violet-100" : "text-slate-400"}`}>terjual</span>
+                        <span className={`ml-auto mb-0.5 ${i === 0 ? "[&_*]:!text-white" : ""}`}>
+                          <Delta n={p.n} prev={p.prev_n} />
+                        </span>
+                      </div>
+                      <div className={`mt-2 flex items-center gap-1.5 text-[11px] ${i === 0 ? "text-violet-100" : "text-slate-400"}`}>
+                        <span className={`w-1.5 h-1.5 rounded-full ${i === 0 ? "bg-white/70" : CAT_DOT[p.category]}`} />
+                        {p.category} · {p.game}
+                      </div>
+                    </>
+                  ) : (
+                    <div className="h-[8.5rem] flex items-center justify-center text-[13px] text-slate-400">
+                      {loading ? <i className="fa-solid fa-circle-notch fa-spin"></i> : sort !== "most" || q ? "Urutan khusus aktif" : "Belum ada"}
+                    </div>
+                  )}
+                </button>
+              ))}
+            </div>
+            <dl className="rounded-3xl bg-white dark:bg-slate-900 ring-1 ring-inset ring-slate-200 dark:ring-slate-800 divide-y divide-slate-100 dark:divide-slate-800 px-4">
+              <div className="flex items-center gap-3 py-3">
+                <dt className="text-[12px] text-slate-500 flex-1">Terjual</dt>
+                <dd className="flex items-baseline gap-2">
+                  {data && <Delta n={filteredTotal} prev={filteredPrev} />}
+                  <span className="text-xl font-black tabular-nums" title={`${PREV_LABEL[range]}: ${filteredPrev}`}>{data ? filteredTotal : "–"}</span>
+                </dd>
               </div>
-              <div className="text-[11px] text-slate-400 mt-0.5">vs {PREV_LABEL[range]}: {data ? filteredPrev : "–"}</div>
-            </div>
-            <div className="rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 px-4 py-3.5">
-              <div className="text-[12px] text-slate-500">Produk yang laku</div>
-              <div className="text-2xl font-bold tabular-nums mt-0.5">{data ? list.length : "–"}</div>
-              <div className="text-[11px] text-slate-400 mt-0.5">dari semua produk di toko</div>
-            </div>
-            <div className="rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 px-4 py-3.5 col-span-2 lg:col-span-1">
-              <div className="text-[12px] text-slate-500">Paling laku</div>
-              <div className="text-[15px] font-bold leading-snug mt-1 line-clamp-2">{list[0] ? shortTitle(list[0].title) : "–"}</div>
-              <div className="text-[11px] text-slate-400 mt-0.5">{list[0] ? `${list[0].n} terjual · ${list[0].game}` : ""}</div>
-            </div>
-            <div className="rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 px-4 py-3.5 col-span-2 lg:col-span-1">
-              <div className="text-[12px] text-slate-500">Paling ramai</div>
-              <div className="text-[15px] font-bold mt-1">{busiest ? `${DOW[busiest.dow]}, ${String(busiest.hour).padStart(2, "0")}.00–${String((busiest.hour + 1) % 24).padStart(2, "0")}.00` : "–"}</div>
-              <div className="text-[11px] text-slate-400 mt-0.5">jam & hari dengan penjualan terbanyak</div>
-            </div>
+              <div className="flex items-center gap-3 py-3">
+                <dt className="text-[12px] text-slate-500 flex-1">Produk laku</dt>
+                <dd className="text-xl font-black tabular-nums">{data ? base.length : "–"}</dd>
+              </div>
+              <div className="flex items-center gap-3 py-3">
+                <dt className="text-[12px] text-slate-500 flex-1">Paling ramai</dt>
+                <dd className="text-[13px] font-bold tabular-nums text-right">
+                  {busiest ? `${DOW[busiest.dow]}, ${String(busiest.hour).padStart(2, "0")}.00` : "–"}
+                </dd>
+              </div>
+            </dl>
           </div>
 
           <div className="grid lg:grid-cols-[minmax(0,1fr)_22rem] gap-5 items-start">
             {/* ── peringkat ── */}
-            <section className="rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 overflow-hidden">
-              <div className="flex items-baseline gap-2 px-4 md:px-5 pt-4 pb-3 border-b border-slate-100 dark:border-slate-800">
-                <h2 className="text-sm font-bold">Peringkat</h2>
-                <span className="text-[11px] text-slate-400">
-                  {days.length > 1 ? `${fmtDay(days[0])} – ${fmtDay(days[days.length - 1])}` : days[0] ? fmtDay(days[0]) : ""} · ketuk produk untuk grafik harian
-                </span>
-                {loading && <i className="fa-solid fa-circle-notch fa-spin text-[11px] text-slate-400 ml-auto"></i>}
+            <section className="relative rounded-3xl bg-white dark:bg-slate-900 ring-1 ring-inset ring-slate-200 dark:ring-slate-800 overflow-hidden">
+              {loading && (
+                <div className="absolute inset-x-0 top-0 h-0.5 overflow-hidden">
+                  <div className="h-full w-1/3 bg-violet-500" style={{ animation: "indeterminate 1.2s ease-in-out infinite" }} />
+                </div>
+              )}
+              <div className="flex flex-wrap items-center gap-3 px-4 md:px-5 pt-4 pb-3 border-b border-slate-100 dark:border-slate-800">
+                <div className="min-w-0">
+                  <h2 className="text-[15px] font-bold">Peringkat</h2>
+                  <p className="text-[12px] text-slate-400">{list.length} produk · klik untuk lihat grafik harian</p>
+                </div>
+                <div className="ml-auto w-56">
+                  <Dropdown label="Urutkan" icon="fa-sort" value={sort} options={SORTS} onChange={setSort} align="right" />
+                </div>
               </div>
               {!loading && !list.length && (
-                <div className="px-5 py-12 text-center text-sm text-slate-500">Belum ada yang laku di periode ini.</div>
+                <div className="px-5 py-14 text-center">
+                  <div className="text-sm font-semibold text-slate-700 dark:text-slate-200">Tidak ada produk yang cocok</div>
+                  <p className="text-[13px] text-slate-500 mt-1">Coba periode lain atau hapus filter.</p>
+                  {filtersOn && (
+                    <button onClick={clearAll} className="mt-3 px-3.5 py-1.5 rounded-xl text-[13px] font-semibold bg-violet-600 text-white hover:bg-violet-500">
+                      Hapus semua filter
+                    </button>
+                  )}
+                </div>
               )}
-              <ol>
-                {shown.map((p) => {
+              <ol className={`transition-opacity ${loading && data ? "opacity-60" : ""}`}>
+                {shown.map((p, idx) => {
                   const isOpen = open === p.key;
+                  const pos = idx + 1;
                   return (
-                    <li key={p.key} className="border-b border-slate-100 dark:border-slate-800/80 last:border-0">
+                    <li key={p.key} id={`row-${p.key}`} className={`scroll-mt-24 border-b border-slate-100 dark:border-slate-800/80 last:border-0 ${isOpen ? "bg-slate-50/80 dark:bg-slate-800/30" : ""}`}>
                       <button
                         onClick={() => setOpen(isOpen ? null : p.key)}
                         aria-expanded={isOpen}
-                        className="w-full text-left px-4 md:px-5 py-3 flex items-center gap-3 md:gap-4 hover:bg-slate-50 dark:hover:bg-slate-800/40 focus:outline-none focus-visible:bg-slate-50 dark:focus-visible:bg-slate-800/40"
+                        className="group w-full text-left px-4 md:px-5 py-3.5 flex items-center gap-3 md:gap-4 hover:bg-slate-50 dark:hover:bg-slate-800/40 focus:outline-none focus-visible:bg-slate-50 dark:focus-visible:bg-slate-800/40"
                       >
-                        <span className={`w-7 shrink-0 text-right tabular-nums font-bold ${p.rank <= 3 ? "text-lg text-slate-900 dark:text-white" : "text-sm text-slate-400"}`}>{p.rank}</span>
+                        <span
+                          className={`w-8 h-8 shrink-0 rounded-xl grid place-items-center tabular-nums font-black text-[13px] ${
+                            pos === 1
+                              ? "bg-violet-600 text-white"
+                              : pos <= 3
+                                ? "bg-violet-100 text-violet-700 dark:bg-violet-500/15 dark:text-violet-300"
+                                : "text-slate-400"
+                          }`}
+                        >
+                          {pos}
+                        </span>
                         <div className="min-w-0 flex-1">
-                          <div className="flex items-baseline gap-2">
-                            <span className="text-[14px] font-semibold leading-snug text-slate-900 dark:text-slate-100">{shortTitle(p.title)}</span>
-                          </div>
-                          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mt-1 text-[11px] text-slate-500">
-                            <span className={`px-1.5 py-px rounded font-semibold ${p.category === "Joki" ? "bg-violet-100 text-violet-700 dark:bg-violet-500/15 dark:text-violet-300" : "bg-blue-100 text-blue-700 dark:bg-blue-500/15 dark:text-blue-300"}`}>{p.category}</span>
+                          <div className="text-[14px] font-semibold leading-snug text-slate-900 dark:text-slate-100">{shortTitle(p.title)}</div>
+                          <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 mt-1 text-[11px] text-slate-500">
+                            <span className="inline-flex items-center gap-1 font-semibold text-slate-600 dark:text-slate-300">
+                              <span className={`w-1.5 h-1.5 rounded-full ${CAT_DOT[p.category]}`} />
+                              {p.category}
+                            </span>
                             <span>{p.game}</span>
                             <StockChip stock={p.stock} daysLeft={p.days_left} />
                           </div>
                           <div className="mt-2 h-1.5 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
-                            <div className="h-full rounded-full bg-violet-500 dark:bg-violet-400" style={{ width: `${(p.n / max) * 100}%` }} />
+                            <div
+                              className={`h-full rounded-full transition-[width] duration-700 ease-[cubic-bezier(0.22,1,0.36,1)] ${p.category === "Joki" ? "bg-violet-500 dark:bg-violet-400" : "bg-blue-500 dark:bg-blue-400"}`}
+                              style={{ width: `${(p.n / max) * 100}%` }}
+                            />
                           </div>
                         </div>
                         <div className="hidden sm:block shrink-0">
-                          <Spark values={p.daily} days={days} />
+                          <Spark values={p.daily} days={days} tone={p.category === "Joki" ? "text-violet-500 dark:text-violet-400" : "text-blue-500 dark:text-blue-400"} />
                         </div>
                         <div className="w-16 shrink-0 text-right">
-                          <div className="text-lg font-bold tabular-nums leading-none">{p.n}</div>
+                          <div className="text-xl font-black tabular-nums leading-none">{p.n}</div>
                           <div className="mt-1"><Delta n={p.n} prev={p.prev_n} /></div>
                         </div>
+                        <i className={`fa-solid fa-chevron-down text-[10px] text-slate-300 dark:text-slate-600 transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`}></i>
                       </button>
-                      {isOpen && (
-                        <div className="px-4 md:px-5 pb-4 pl-14 md:pl-16">
-                          <div className="text-[12px] text-slate-500 mb-2 break-words">{p.title}</div>
-                          {days.length > 1 && <DailyBars values={p.daily} days={days} />}
-                          <dl className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-3 text-[12px]">
-                            <div><dt className="text-slate-400">Periode ini</dt><dd className="font-semibold tabular-nums">{p.n} terjual</dd></div>
-                            <div><dt className="text-slate-400">Sebelumnya</dt><dd className="font-semibold tabular-nums">{p.prev_n} terjual</dd></div>
-                            <div><dt className="text-slate-400">Rata-rata 7 hari</dt><dd className="font-semibold tabular-nums">{p.per_day_7d} / hari</dd></div>
-                            <div><dt className="text-slate-400">Terakhir laku</dt><dd className="font-semibold">{ago(p.last_at)}</dd></div>
-                          </dl>
+                      <div className={`grid transition-[grid-template-rows] duration-300 ease-out ${isOpen ? "grid-rows-[1fr]" : "grid-rows-[0fr]"}`}>
+                        <div className="overflow-hidden">
+                          {isOpen && (
+                            <div className="px-4 md:px-5 pb-5 pl-[3.75rem] md:pl-[4.25rem]">
+                              <div className="text-[12px] text-slate-500 mb-3 break-words">{p.title}</div>
+                              {days.length > 1 && (
+                                <DailyBars
+                                  values={p.daily}
+                                  days={days}
+                                  tone={p.category === "Joki" ? "bg-violet-500/85 dark:bg-violet-400/85" : "bg-blue-500/85 dark:bg-blue-400/85"}
+                                />
+                              )}
+                              <dl className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-4 text-[12px]">
+                                {[
+                                  ["Periode ini", `${p.n} terjual`],
+                                  ["Sebelumnya", `${p.prev_n} terjual`],
+                                  ["Rata-rata 7 hari", `${p.per_day_7d} / hari`],
+                                  ["Terakhir laku", ago(p.last_at)],
+                                ].map(([k, v]) => (
+                                  <div key={k} className="rounded-xl bg-white dark:bg-slate-900 ring-1 ring-inset ring-slate-200 dark:ring-slate-800 px-3 py-2">
+                                    <dt className="text-slate-400">{k}</dt>
+                                    <dd className="font-semibold tabular-nums">{v}</dd>
+                                  </div>
+                                ))}
+                              </dl>
+                            </div>
+                          )}
                         </div>
-                      )}
+                      </div>
                     </li>
                   );
                 })}
@@ -396,7 +561,6 @@ export default function ProdukTerlarisPage() {
                 </button>
               )}
             </section>
-
             <div className="space-y-5">
               {/* ── perlu diisi ── */}
               <Card title="Perlu diisi" icon="fa-boxes-stacked" hint="menurut laku 7 hari">
