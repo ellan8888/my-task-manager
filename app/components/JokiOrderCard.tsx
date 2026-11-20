@@ -26,6 +26,17 @@ export function isDoneByBot(o: JokiOrder) {
   return o.completed_by_bot === true || o.queue_status === "completed";
 }
 
+/** "Selesaikan manual" sudah ditekan dan bot belum selesai / gagal → loading tetap tampil (juga setelah refresh
+ *  dan di perangkat staff lain), sampai card memudar (selesai) atau tombol Hapus paksa muncul (gagal).
+ *  Catatan: bot me-reset manual_complete_triggered SEGERA saat mengambil order (sebelum diproses), jadi yang
+ *  dipakai juga manual_complete_at (tidak di-reset) — dalam 24 jam terakhir. */
+export function isBotProcessing(o: JokiOrder) {
+  if (isDoneByBot(o) || o.completed || o.bot_process_failed) return false;
+  if (o.manual_complete_triggered === true) return true;
+  const at = o.manual_complete_at ? new Date(o.manual_complete_at).getTime() : 0;
+  return at > 0 && Date.now() - at < 24 * 3600e3;
+}
+
 const formatRupiah = (n: number) => `Rp ${new Intl.NumberFormat("id-ID").format(n)}`;
 
 const formatDateTime = (iso: string) =>
@@ -871,7 +882,15 @@ export default function JokiOrderCard({
             />
           </div>
           <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-2">
-            Card akan hilang otomatis setelah selesai. Kalau bot gagal, tombol &quot;Hapus paksa&quot; muncul.
+            {order.manual_complete_at && now - new Date(order.manual_complete_at).getTime() > 60_000
+              ? `Sudah ${Math.floor((now - new Date(order.manual_complete_at).getTime()) / 60_000)} menit. `
+              : ""}
+            Loading ini tetap tampil sampai bot selesai (card memudar). Kalau bot gagal, tombol &quot;Hapus paksa&quot; muncul.
+            {order.manual_complete_at && now - new Date(order.manual_complete_at).getTime() > 5 * 60_000 && (
+              <span className="block mt-1 font-semibold text-amber-600 dark:text-amber-400">
+                Lebih lama dari biasanya — pastikan bot Itemku (login_once) sedang jalan.
+              </span>
+            )}
           </p>
         </div>
       )}

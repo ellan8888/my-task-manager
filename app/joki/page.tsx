@@ -6,7 +6,7 @@ import { useCurrentUser } from "@/app/hooks/useCurrentUser";
 import type { JokiOrder, RamAccount } from "@/lib/types";
 import AppShell from "@/app/components/AppShell";
 import { ConfirmDialog, useConfirm } from "@/app/components/ConfirmDialog";
-import JokiOrderCard, { isProgressOrder, isDoneByBot } from "@/app/components/JokiOrderCard";
+import JokiOrderCard, { isProgressOrder, isDoneByBot, isBotProcessing } from "@/app/components/JokiOrderCard";
 import { useToast } from "@/app/components/ToastProvider";
 import {
   StatCard,
@@ -97,17 +97,18 @@ export default function JokiPage() {
         setOrdersLoaded(true); // gagal muat → jangan skeleton selamanya
         return;
       }
-      // Bersihin centang untuk order yang berubah (bot sukses/gagal) atau sudah hilang
-      const next = new Map(data.map((o) => [o.id, JSON.stringify(o)]));
-      const changed = [...lastSeen.current.keys()].filter((id) => next.get(id) !== lastSeen.current.get(id));
-      lastSeen.current = next;
-      if (changed.length) {
-        setCheckedOrders((prev) => {
-          let out = prev;
-          for (const id of changed) if (out.has(id)) out = withId(out, id, false);
-          return out;
-        });
-      }
+      // Tanda "bot memproses" lokal dilepas HANYA kalau bot benar-benar selesai / gagal / order hilang —
+      // bukan setiap kali baris order berubah (dulu loading hilang begitu flag manual_complete tersimpan).
+      const byId = new Map(data.map((o) => [o.id, o]));
+      lastSeen.current = new Map(data.map((o) => [o.id, JSON.stringify(o)]));
+      setCheckedOrders((prev) => {
+        let out = prev;
+        for (const id of prev) {
+          const o = byId.get(id);
+          if (!o || isDoneByBot(o) || o.completed || o.bot_process_failed) out = withId(out, id, false);
+        }
+        return out;
+      });
       setJokiOrders(data);
       setOrdersLoaded(true);
     });
@@ -439,7 +440,7 @@ export default function JokiPage() {
       now={now}
       isProcessing={processingOrders.has(order.id)}
       isStarting={startingOrders.has(order.id)}
-      isChecked={checkedOrders.has(order.id)}
+      isChecked={checkedOrders.has(order.id) || isBotProcessing(order)}
       isDeleting={deletingOrders.has(order.id)}
       editingUsername={editingUsername}
       ramAccounts={ramAccounts}

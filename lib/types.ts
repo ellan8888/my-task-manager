@@ -38,6 +38,9 @@ export type JokiOrder = {
   bot_process_failed: boolean | null;
   bot_failed_reason: string | null;
   bot_failed_at: string | null;
+  /** Staff menekan "Selesaikan manual" — bot sedang/akan memproses (tetap true sampai bot selesai / gagal) */
+  manual_complete_triggered?: boolean | null;
+  manual_complete_at?: string | null;
   // Detail pesanan Itemku (bisa kosong untuk order lama)
   buyer_name?: string | null;
   quantity?: string | null;
