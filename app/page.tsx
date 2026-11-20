@@ -10,6 +10,7 @@ import { useToast } from "@/app/components/ToastProvider";
 import {
   StatCard,
   FilterPill,
+  PillTabs,
   SearchInput,
   ViewToggle,
   SectionHeader,
@@ -329,7 +330,7 @@ export default function TasksPage() {
         }
       >
         {/* METRICS */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="stagger-pop grid grid-cols-2 lg:grid-cols-4 gap-4">
           <StatCard label="Total Tugas" value={tasks.length} icon="fa-book-open" color="violet" footerIcon="fa-layer-group" footerText="Semua tugas kuliah" />
           <StatCard label="Hari Ini" value={todayCount} icon="fa-fire" color="amber" footerIcon="fa-clock" footerText="Deadline hari ini" />
           <StatCard label="Overdue" value={overdueCount} icon="fa-triangle-exclamation" color="rose" footerIcon="fa-bell" footerText="Lewat deadline" />
@@ -338,7 +339,8 @@ export default function TasksPage() {
 
         {/* TOOLBAR */}
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-white dark:bg-slate-900/60 p-4 rounded-2xl border border-slate-200 dark:border-slate-800/80 shadow-sm">
-          <div className="flex items-center space-x-1.5 overflow-x-auto pb-2 lg:pb-0 custom-scrollbar">
+          <div className="overflow-x-auto pb-2 lg:pb-0 custom-scrollbar">
+            <PillTabs className="inline-flex items-center gap-0.5 p-1 rounded-2xl bg-slate-100 dark:bg-slate-800/70">
             <FilterPill active={filter === "All"} onClick={() => setFilter("All")}>
               Semua ({tasks.length})
             </FilterPill>
@@ -351,6 +353,7 @@ export default function TasksPage() {
             <FilterPill active={filter === "Done"} onClick={() => setFilter("Done")} dot="bg-emerald-400">
               Selesai
             </FilterPill>
+          </PillTabs>
           </div>
           <div className="flex items-center space-x-3">
             <SearchInput value={search} onChange={setSearch} placeholder="Cari tugas / mata kuliah..." />
@@ -360,9 +363,9 @@ export default function TasksPage() {
 
         {/* LIST VIEW */}
         {view === "list" && (
-          <section>
+          <section key="list" className="view-swap">
             <SectionHeader icon="fa-clipboard-list" title="Daftar Tugas" count={filteredTasks.length} />
-            <div className="pt-4 pb-6 space-y-3.5">
+            <div key={filter} className="stagger pt-4 pb-6 space-y-3.5">
               {filteredTasks.length === 0 ? (
                 <EmptyState
                   icon="fa-regular fa-clipboard"
@@ -466,7 +469,7 @@ export default function TasksPage() {
 
         {/* KANBAN VIEW */}
         {view === "kanban" && (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pb-6">
+          <div key="kanban" className="view-swap stagger grid grid-cols-1 md:grid-cols-3 gap-6 pb-6">
             <KanbanColumn title="Mendesak" icon="fa-fire" color="amber" count={kanbanUrgent.length}>
               {kanbanUrgent.map((t) => (
                 <TaskMiniCard key={t.id} task={t} onEdit={editTask} onDelete={deleteTask} />

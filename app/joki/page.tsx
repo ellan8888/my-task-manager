@@ -11,6 +11,7 @@ import { useToast } from "@/app/components/ToastProvider";
 import {
   StatCard,
   FilterPill,
+  PillTabs,
   SearchInput,
   ViewToggle,
   SectionHeader,
@@ -471,7 +472,7 @@ export default function JokiPage() {
         refreshKey={jokiOrders.length}
       >
         {/* METRICS */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="stagger-pop grid grid-cols-2 lg:grid-cols-4 gap-4">
           <StatCard label="Total Jokian" value={ordersLoaded ? jokiOrders.length : <SkeletonText className="w-10 h-7" />} icon="fa-boxes-stacked" color="violet" footerIcon="fa-robot" footerText="Sync Tokoku-bot" />
           <StatCard label="Hari Ini" value={ordersLoaded ? jokiToday : <SkeletonText className="w-10 h-7" />} icon="fa-fire" color="amber" footerIcon="fa-clock" footerText="Prioritas Pengerjaan" />
           <StatCard label="Belum Dijadwalkan" value={ordersLoaded ? jokiNotScheduled : <SkeletonText className="w-10 h-7" />} icon="fa-clock" color="indigo" footerIcon="fa-hourglass-half" footerText="Nunggu Jadwal" />
@@ -480,7 +481,8 @@ export default function JokiPage() {
 
         {/* TOOLBAR */}
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-white dark:bg-slate-900/60 p-4 rounded-2xl border border-slate-200 dark:border-slate-800/80 shadow-sm">
-          <div className="flex items-center space-x-1.5 overflow-x-auto pb-2 lg:pb-0 custom-scrollbar">
+          <div className="overflow-x-auto pb-2 lg:pb-0 custom-scrollbar">
+            <PillTabs className="inline-flex items-center gap-0.5 p-1 rounded-2xl bg-slate-100 dark:bg-slate-800/70">
             <FilterPill active={filter === "All"} onClick={() => setFilter("All")}>
               Semua ({jokiOrders.length})
             </FilterPill>
@@ -493,6 +495,7 @@ export default function JokiPage() {
             <FilterPill active={filter === "Overdue"} onClick={() => setFilter("Overdue")} dot="bg-rose-400">
               Overdue
             </FilterPill>
+          </PillTabs>
           </div>
           <div className="flex items-center space-x-3">
             <SearchInput value={search} onChange={setSearch} placeholder="Cari username / order ID..." />
@@ -502,10 +505,10 @@ export default function JokiPage() {
 
         {/* LIST VIEW */}
         {view === "list" && (
-          <>
+          <div key="list" className="view-swap space-y-4">
             <section>
               <SectionHeader icon="fa-hourglass-half" title="Jadwal Jokian (Countdown)" count={countdownOrders.length} />
-              <div className="pt-4 pb-6 space-y-3.5">
+              <div key={filter} className="stagger pt-4 pb-6 space-y-3.5">
                 {!ordersLoaded ? (
                   <SkeletonTable rows={2} />
                 ) : countdownOrders.length === 0 ? (
@@ -523,7 +526,7 @@ export default function JokiPage() {
 
             <section>
               <SectionHeader icon="fa-egg" title="Progress Order" count={progressOrders.length} />
-              <div className="pt-4 pb-6 space-y-3.5">
+              <div key={filter} className="stagger pt-4 pb-6 space-y-3.5">
                 {!ordersLoaded ? (
                   <SkeletonTable rows={3} />
                 ) : progressOrders.length === 0 ? (
@@ -541,15 +544,15 @@ export default function JokiPage() {
             {unscheduledOrders.length > 0 && (
               <section>
                 <SectionHeader icon="fa-clock" title="Belum Dijadwalkan" count={unscheduledOrders.length} color="indigo" />
-                <div className="pt-4 pb-6 space-y-3.5">{unscheduledOrders.map(renderCard)}</div>
+                <div key={filter} className="stagger pt-4 pb-6 space-y-3.5">{unscheduledOrders.map(renderCard)}</div>
               </section>
             )}
-          </>
+          </div>
         )}
 
         {/* KANBAN VIEW */}
         {view === "kanban" && (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pb-6">
+          <div key="kanban" className="view-swap stagger grid grid-cols-1 md:grid-cols-3 gap-6 pb-6">
             <KanbanColumn title="Hari Ini" icon="fa-fire" color="amber" count={kanbanToday.length}>
               {kanbanToday.map((o) => (
                 <JokiMiniCard key={o.id} order={o} right={o.schedule_time ? o.schedule_time.slice(0, 5) : "-"} />

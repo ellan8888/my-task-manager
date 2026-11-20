@@ -5,9 +5,11 @@ import { SidebarProvider, useSidebar } from "./SidebarContext";
 import { PushNotificationButton } from "../components/PushNotificationButton";
 import ChatDock from "../components/ChatDock";
 import VersionWatcher from "@/app/components/VersionWatcher";
+import { usePathname } from "next/navigation";
 
 function LayoutInner({ children }: { children: React.ReactNode }) {
   const { sidebarOpen, setSidebarOpen } = useSidebar();
+  const pathname = usePathname();
 
   return (
     <div className="h-screen overflow-hidden bg-slate-100 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col relative">
@@ -17,7 +19,10 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
           sidebarOpen ? "md:ml-72" : "md:ml-0"
         }`}
       >
-        {children}
+        {/* key = halaman → tiap pindah menu, isi halaman masuk dengan animasi */}
+        <div key={pathname} className="page-enter flex-1 flex flex-col min-h-0">
+          {children}
+        </div>
       </main>
       <ChatDock />
       <VersionWatcher />

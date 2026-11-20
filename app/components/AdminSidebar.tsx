@@ -430,7 +430,8 @@ const isEllan = currentUser?.username?.toLowerCase() === "ellan";
                         ></i>
                       </button>
 
-                      {openDropdown === "akun" && (
+                      <div className="collapse-grid" data-open={openDropdown === "akun"} aria-hidden={openDropdown !== "akun"} inert={openDropdown !== "akun"}>
+                        <div>
                         <div className="mt-1 ml-4 pl-4 border-l-2 border-slate-200 dark:border-slate-800 space-y-1">
                           {akunSubMenu.map((item) => (
                             <Link
@@ -457,7 +458,8 @@ const isEllan = currentUser?.username?.toLowerCase() === "ellan";
                             </Link>
                           ))}
                         </div>
-                      )}
+                        </div>
+                      </div>
                     </div>
                   </>
                 )}

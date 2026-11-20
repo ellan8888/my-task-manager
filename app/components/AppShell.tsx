@@ -2,6 +2,7 @@
 
 import { useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import NotificationBell from "@/app/components/NotificationBell";
 import ChatDock from "@/app/components/ChatDock";
 import VersionWatcher from "@/app/components/VersionWatcher";
@@ -96,6 +97,7 @@ export default function AppShell({
   children,
 }: AppShellProps) {
   const toast = useToast();
+  const pathname = usePathname();
   const { confirm, confirmDialog } = useConfirmAsync();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarHydrated, setSidebarHydrated] = useState(false);
@@ -441,7 +443,7 @@ export default function AppShell({
           </header>
 
           <div className="flex-1 overflow-y-auto custom-scrollbar">
-            <div className="px-4 md:px-8 py-4 space-y-4">
+            <div key={pathname} className="page-enter px-4 md:px-8 py-4 space-y-4">
               {children}
             </div>
           </div>

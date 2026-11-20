@@ -9,6 +9,7 @@ import { useConfirmAsync } from "@/app/components/ConfirmDialog";
 import { KIND_STYLE, timeAgo } from "@/app/components/NotificationBell";
 import { getPushStatus, registerPushSubscription, sendTestPush, unregisterPushSubscription } from "@/lib/push";
 import { SkeletonTable } from "@/app/components/Skeleton";
+import { PillTabs } from "@/app/components/ui";
 
 type Notif = { id: number; kind: string; title: string; body: string | null; url: string | null; read_at: string | null; created_at: string };
 type Device = { id: number; endpoint: string; user_agent?: string | null; created_at?: string | null; last_used_at?: string | null };
@@ -259,18 +260,21 @@ export default function NotifikasiPage() {
               </div>
             </div>
 
-            <div className="flex gap-1.5 overflow-x-auto pb-2 mb-2 custom-scrollbar">
-              {[{ key: "all", label: "Semua" }, { key: "unread", label: "Belum dibaca" }, ...Object.entries(KIND_STYLE).map(([key, v]) => ({ key, label: v.label }))].map((f) => (
-                <button
-                  key={f.key}
-                  onClick={() => setFilter(f.key)}
-                  className={`shrink-0 px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
-                    filter === f.key ? "bg-violet-600 text-white" : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200"
-                  }`}
-                >
-                  {f.label}
-                </button>
-              ))}
+            <div className="overflow-x-auto pb-2 mb-2 custom-scrollbar">
+              <PillTabs className="flex gap-1.5 w-max" indicatorClassName="rounded-lg bg-violet-600 shadow-sm shadow-violet-600/30">
+                {[{ key: "all", label: "Semua" }, { key: "unread", label: "Belum dibaca" }, ...Object.entries(KIND_STYLE).map(([key, v]) => ({ key, label: v.label }))].map((f) => (
+                  <button
+                    key={f.key}
+                    onClick={() => setFilter(f.key)}
+                    data-active={filter === f.key || undefined}
+                    className={`press relative z-10 shrink-0 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors duration-300 ${
+                      filter === f.key ? "text-white" : "text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+                    }`}
+                  >
+                    {f.label}
+                  </button>
+                ))}
+              </PillTabs>
             </div>
 
             {loading ? (
@@ -281,7 +285,7 @@ export default function NotifikasiPage() {
                 <p className="text-sm text-slate-500 mt-2">Tidak ada notifikasi di sini</p>
               </div>
             ) : (
-              <div className="divide-y divide-slate-100 dark:divide-slate-800 -mx-2">
+              <div key={filter} className="stagger divide-y divide-slate-100 dark:divide-slate-800 -mx-2">
                 {shown.map((n) => {
                   const st = KIND_STYLE[n.kind] || KIND_STYLE.sistem;
                   return (

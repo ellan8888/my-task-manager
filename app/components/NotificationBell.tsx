@@ -206,7 +206,7 @@ export default function NotificationBell() {
         <div
           ref={panelRef}
           style={{ top: pos.top, right: pos.right }}
-          className="fixed left-2 sm:left-auto sm:w-96 z-[1000] rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xl shadow-slate-900/20 overflow-hidden"
+          className="panel-in fixed left-2 sm:left-auto sm:w-96 z-[1000] rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xl shadow-slate-900/20 overflow-hidden"
         >
           <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 dark:border-slate-800">
             <div className="flex items-center gap-2">

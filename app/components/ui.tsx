@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, type PointerEvent, type ReactNode } from "react";
+import { createContext, useContext, useLayoutEffect, useRef, useState, type PointerEvent, type ReactNode } from "react";
 
 // ══════════════════════════════════════════════════════════════
 // STAT CARD
@@ -125,6 +125,9 @@ export function StatCard({
 // TOOLBAR PARTS
 // ══════════════════════════════════════════════════════════════
 
+/** Dalam <PillTabs>, latar ungu digambar oleh indikator yang bergeser. */
+const PillGroupCtx = createContext(false);
+
 export function FilterPill({
   active,
   onClick,
@@ -136,18 +139,82 @@ export function FilterPill({
   dot?: string; // contoh: "bg-amber-400"
   children: ReactNode;
 }) {
+  const inGroup = useContext(PillGroupCtx);
   return (
     <button
       onClick={onClick}
-      className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap ${
+      data-active={active || undefined}
+      aria-pressed={active}
+      className={`press relative z-10 px-4 py-2 rounded-xl text-xs font-bold transition-colors duration-300 flex items-center gap-1.5 whitespace-nowrap ${
         active
-          ? "bg-violet-600 text-white shadow-md shadow-violet-600/30"
+          ? inGroup
+            ? "text-white"
+            : "bg-violet-600 text-white shadow-md shadow-violet-600/30"
+          : inGroup
+          ? "text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-white/70 dark:hover:bg-slate-700/60"
           : "bg-slate-100 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700"
       }`}
     >
-      {dot && <span className={`w-2 h-2 rounded-full ${dot}`}></span>}
+      {dot && (
+        <span
+          className={`w-2 h-2 rounded-full transition-transform duration-300 ${dot} ${active ? "scale-125 ring-2 ring-white/70" : ""}`}
+        ></span>
+      )}
       {children}
     </button>
+  );
+}
+
+/**
+ * Wadah FilterPill dengan latar aktif yang meluncur ke pil yang dipilih.
+ * Ukur ulang tiap render & saat ukuran berubah (teks jumlah ikut berubah).
+ */
+export function PillTabs({
+  className = "",
+  indicatorClassName = "rounded-xl bg-violet-600 shadow-md shadow-violet-600/30",
+  children,
+}: {
+  className?: string;
+  /** bentuk/warna latar yang meluncur */
+  indicatorClassName?: string;
+  /** tombol yang aktif diberi atribut data-active */
+  children: ReactNode;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [ind, setInd] = useState<{ x: number; w: number; h: number; y: number } | null>(null);
+
+  useLayoutEffect(() => {
+    const box = ref.current;
+    if (!box) return;
+    const measure = () => {
+      const el = box.querySelector<HTMLElement>("[data-active]");
+      const next = el ? { x: el.offsetLeft, y: el.offsetTop, w: el.offsetWidth, h: el.offsetHeight } : null;
+      setInd((cur) =>
+        cur && next && cur.x === next.x && cur.w === next.w && cur.h === next.h && cur.y === next.y ? cur : next,
+      );
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(box);
+    box.querySelectorAll("button").forEach((b) => ro.observe(b));
+    return () => ro.disconnect();
+  });
+
+  return (
+    <PillGroupCtx.Provider value={true}>
+      <div ref={ref} className={`relative ${className}`}>
+        <span
+          aria-hidden
+          className={`pill-indicator absolute left-0 top-0 pointer-events-none ${indicatorClassName}`}
+          style={
+            ind
+              ? { width: ind.w, height: ind.h, transform: `translate(${ind.x}px, ${ind.y}px)` }
+              : { opacity: 0, width: 0, height: 0 }
+          }
+        />
+        {children}
+      </div>
+    </PillGroupCtx.Provider>
   );
 }
 

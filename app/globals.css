@@ -261,3 +261,105 @@ body::-webkit-scrollbar {
   from { opacity: 0; transform: translateY(8px); }
   to { opacity: 1; transform: none; }
 }
+
+/* ══════════════════════════════════════════════════════ */
+/* MOTION KIT — transisi ringan, hanya opacity/transform  */
+/* (dikerjakan GPU, tidak memicu layout ulang)            */
+/* ══════════════════════════════════════════════════════ */
+:root {
+  --ease-out-quint: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-spring: cubic-bezier(0.34, 1.4, 0.64, 1);
+}
+
+/* Pindah halaman: konten naik sedikit + memudar masuk */
+@keyframes pageIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: none; }
+}
+.page-enter { animation: pageIn 0.42s var(--ease-out-quint) backwards; }
+
+/* Ganti tampilan (list ↔ kanban, tab): geser masuk dari samping */
+@keyframes swapIn {
+  from { opacity: 0; transform: translateX(14px); }
+  to { opacity: 1; transform: none; }
+}
+.view-swap { animation: swapIn 0.34s var(--ease-out-quint) backwards; }
+
+/* Daftar: anak-anaknya muncul bergantian (maks 12 jeda, sisanya langsung).
+   Pakai "backwards" supaya setelah selesai tidak mengunci opacity/transform
+   (kartu yang memudar/menghilang tetap bisa beranimasi sendiri). */
+.stagger > * { animation: riseIn 0.4s var(--ease-out-quint) backwards; }
+.stagger > :nth-child(2) { animation-delay: 30ms; }
+.stagger > :nth-child(3) { animation-delay: 60ms; }
+.stagger > :nth-child(4) { animation-delay: 90ms; }
+.stagger > :nth-child(5) { animation-delay: 120ms; }
+.stagger > :nth-child(6) { animation-delay: 150ms; }
+.stagger > :nth-child(7) { animation-delay: 175ms; }
+.stagger > :nth-child(8) { animation-delay: 200ms; }
+.stagger > :nth-child(9) { animation-delay: 220ms; }
+.stagger > :nth-child(10) { animation-delay: 240ms; }
+.stagger > :nth-child(11) { animation-delay: 255ms; }
+.stagger > :nth-child(n + 12) { animation-delay: 270ms; }
+
+/* Kartu statistik: muncul dengan sedikit "membal" */
+@keyframes popIn {
+  from { opacity: 0; transform: translateY(6px) scale(0.96); }
+  to { opacity: 1; transform: none; }
+}
+.stagger-pop > * { animation: popIn 0.5s var(--ease-spring) backwards; }
+.stagger-pop > :nth-child(2) { animation-delay: 50ms; }
+.stagger-pop > :nth-child(3) { animation-delay: 100ms; }
+.stagger-pop > :nth-child(4) { animation-delay: 150ms; }
+
+/* Panel melayang (lonceng notifikasi, menu) — tumbuh dari pojok tombolnya */
+@keyframes panelIn {
+  from { opacity: 0; transform: translateY(-6px) scale(0.96); }
+  to { opacity: 1; transform: none; }
+}
+.panel-in { transform-origin: top right; animation: panelIn 0.2s var(--ease-out-quint) backwards; }
+
+/* Semua modal (lapisan gelap fixed + blur): latar memudar, kotak membal masuk.
+   ConfirmDialog sudah punya .animate-in sendiri, jadi dilewati. */
+@keyframes backdropIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes dialogIn {
+  from { opacity: 0; transform: translateY(14px) scale(0.96); }
+  to { opacity: 1; transform: none; }
+}
+.fixed.inset-0[class*="backdrop-blur"] { animation: backdropIn 0.22s ease-out backwards; }
+.fixed.inset-0[class*="backdrop-blur"] > :not(.animate-in):not(.no-motion) {
+  animation: dialogIn 0.32s var(--ease-spring) backwards;
+}
+/* Lembar bawah di HP (sheet) naik dari bawah */
+@keyframes sheetUp {
+  from { transform: translateY(40px); opacity: 0; }
+  to { transform: none; opacity: 1; }
+}
+.sheet-up { animation: sheetUp 0.34s var(--ease-out-quint) backwards; }
+
+/* Buka-tutup (accordion) tanpa ukur tinggi: grid 0fr ↔ 1fr */
+.collapse-grid {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  transition: grid-template-rows 0.3s var(--ease-out-quint), opacity 0.2s ease;
+}
+.collapse-grid[data-open="true"] { grid-template-rows: 1fr; opacity: 1; }
+.collapse-grid > * { overflow: hidden; min-height: 0; }
+
+/* Tekan tombol: sedikit mengecil (umpan balik sentuh) */
+.press { transition: transform 0.15s var(--ease-out-quint); }
+.press:active { transform: scale(0.96); }
+
+/* Indikator pil yang bergeser (PillTabs) */
+.pill-indicator {
+  transition: transform 0.38s var(--ease-out-quint), width 0.38s var(--ease-out-quint), opacity 0.2s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .page-enter, .view-swap, .stagger > *, .stagger-pop > *, .panel-in, .sheet-up,
+  .fixed.inset-0[class*="backdrop-blur"], .fixed.inset-0[class*="backdrop-blur"] > * {
+    animation: none !important;
+  }
+  .collapse-grid, .pill-indicator, .press { transition: none !important; }
+  .press:active { transform: none; }
+}
