@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import LoadingScreen from "@/components/LoadingScreen";
 import { ToastProvider } from "./components/ToastProvider";
@@ -9,6 +9,20 @@ export const metadata: Metadata = {
   description: "Personal task manager and reminder",
   applicationName: "My Task Manager",
   manifest: "/manifest.webmanifest",
+};
+
+/**
+ * Tampilan HP seperti aplikasi: tidak ada zoom otomatis saat mengetik / menekan tombol.
+ * - maximumScale 1 → browser HP tidak membesarkan layar saat kolom input difokus
+ * - interactiveWidget → keyboard HP memperkecil area halaman, bukan menutupi kolom
+ * Pendukung di globals.css: teks input min 16px di layar sentuh + touch-action manipulation.
+ */
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+  viewportFit: "cover",
+  interactiveWidget: "resizes-content",
 };
 
 export default function RootLayout({

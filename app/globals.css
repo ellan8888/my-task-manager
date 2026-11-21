@@ -363,3 +363,28 @@ body::-webkit-scrollbar {
   .collapse-grid, .pill-indicator, .press { transition: none !important; }
   .press:active { transform: none; }
 }
+
+/* ══════════════════════════════════════════════════════ */
+/* HP: TANPA ZOOM SAAT MENGETIK / MENEKAN TOMBOL           */
+/* ══════════════════════════════════════════════════════ */
+html {
+  /* jangan perbesar teks sendiri saat HP diputar */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+/* Ketuk dua kali tidak lagi memicu zoom (dan tombol langsung merespons, tanpa jeda 300 ms) */
+html, body, button, a, input, select, textarea, label, [role="button"], [role="tab"], [role="option"] {
+  touch-action: manipulation;
+}
+/* Browser HP (terutama Safari/iPhone & Samsung Internet) otomatis zoom kalau teks kolom < 16px.
+   Di layar sentuh, kolom ketik dipaksa minimal 16px; tampilan di PC tetap seperti semula. */
+@media (pointer: coarse) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]),
+  select,
+  textarea,
+  [contenteditable="true"] {
+    font-size: max(16px, 1em) !important;
+  }
+}
+/* Sorotan biru saat tombol diketuk di Android diganti umpan balik .press / hover yang sudah ada */
+* { -webkit-tap-highlight-color: transparent; }
