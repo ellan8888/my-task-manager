@@ -1,7 +1,10 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import { isCronRequest } from "@/lib/cronAuth";
 
-export async function GET() {
+export async function GET(req: Request) {
+  // Hanya penjadwal (Cron Trigger Worker) — dulu terbuka, siapa pun bisa memicu kirim notifikasi/Telegram
+  if (!isCronRequest(req)) return NextResponse.json({ success: false, message: "Unauthorized" }, { status: 401 });
   try {
     const botToken = process.env.TELEGRAM_BOT_TOKEN;
     const chatId = process.env.TELEGRAM_CHAT_ID;

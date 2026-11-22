@@ -1,11 +1,14 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import { isCronRequest } from "@/lib/cronAuth";
 import { notify } from "@/lib/notify";
 
 // Kirim notifikasi lewat lib/notify → otomatis tersimpan di riwayat (ikon lonceng),
 // ikut pengaturan bisu / jam tenang user, dan dikirim paralel ke semua perangkatnya.
 
-export async function GET() {
+export async function GET(req: Request) {
+  // Hanya penjadwal (Cron Trigger Worker) — dulu terbuka, siapa pun bisa memicu kirim notifikasi/Telegram
+  if (!isCronRequest(req)) return NextResponse.json({ success: false, message: "Unauthorized" }, { status: 401 });
   try {
     const now = new Date();
 

@@ -11,13 +11,13 @@
 //   • disetujui/ditolak → email ke staff pemilik saldo
 // Alamat email diatur tiap user di halaman Notifikasi. On/off ikut toggle "Penarikan saldo"
 // di bagian Jenis notifikasi (muted_kinds) — kalau dimatikan, HP & email sama-sama diam.
-import nodemailer from "nodemailer";
+import nodemailer, { type Transporter } from "nodemailer";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
 const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL || "https://my-task-manager.ellanaryaalqohari8888.workers.dev").replace(/\/$/, "");
 export const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
-let transporter: nodemailer.Transporter | null = null;
+let transporter: Transporter | null = null;
 export function emailConfigured() {
   return !!(process.env.SMTP_USER && process.env.SMTP_PASS);
 }

@@ -56,6 +56,11 @@ const PROTECTED_API = [
   "/api/queue/check-completed",
   "/api/queue/update-progress",
   "/api/queue/complete-progress",
+  // Dipakai halaman admin Daftar Order Jokian saja (bukan halaman pembeli) — dulu terbuka:
+  // siapa pun yang tahu order ID bisa menandai selesai / mulai / ganti username.
+  "/api/queue/manual-complete",
+  "/api/queue/start-progress",
+  "/api/queue/update-username",
 ];
 
 // Pengecualian di dalam PROTECTED_API yang memang dibuka untuk pembeli (halaman /queue/[order_id])

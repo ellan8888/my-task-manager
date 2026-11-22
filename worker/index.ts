@@ -3,6 +3,7 @@
 // • scheduled → pengganti cron Vercel + layanan cron luar. Satu Cron Trigger tiap menit,
 //               lalu dibagi di sini supaya jadwal semua tugas ada di satu tempat.
 import handler from "vinext/server/fetch-handler";
+import { INTERNAL_CRON_HEADER, internalCronToken } from "../lib/cronAuth";
 
 type Ctx = { waitUntil(p: Promise<unknown>): void; passThroughOnException?(): void };
 type Env = Record<string, unknown> & { CRON_SECRET?: string };
@@ -35,7 +36,8 @@ export default {
     const due = JOBS.filter((j) => j.when(now));
     await Promise.all(
       due.map(async (job) => {
-        const headers = new Headers({ "user-agent": "cloudflare-cron" });
+        // token isolate — route memeriksanya lewat lib/cronAuth (tidak butuh env)
+        const headers = new Headers({ "user-agent": "cloudflare-cron", [INTERNAL_CRON_HEADER]: internalCronToken() });
         if (job.auth && env.CRON_SECRET) headers.set("authorization", `Bearer ${env.CRON_SECRET}`);
         try {
           const res = await handler.fetch(new Request(`https://cron.internal${job.path}`, { headers }), env, ctx);

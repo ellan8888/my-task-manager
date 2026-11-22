@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
+import { isCronRequest } from "@/lib/cronAuth";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
 export const runtime = "nodejs";
 
 export async function GET(req: Request) {
   // ⭐ Cek API key
-  const authHeader = req.headers.get("authorization");
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+  if (!isCronRequest(req)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

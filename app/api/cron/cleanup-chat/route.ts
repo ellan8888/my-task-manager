@@ -2,6 +2,7 @@
 // Dipanggil cron Cloudflare sekali sehari (worker/index.ts), header Authorization: Bearer CRON_SECRET.
 // Ringkasan percakapan (chat_conversations) tetap ada supaya pasangan percakapan → order tidak hilang.
 import { NextResponse } from "next/server";
+import { isCronRequest } from "@/lib/cronAuth";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { CHAT_KEEP_DAYS } from "@/lib/chat";
 
@@ -9,7 +10,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET(req: Request) {
-  if (req.headers.get("authorization") !== `Bearer ${process.env.CRON_SECRET}`) {
+  if (!isCronRequest(req)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   const cutoff = new Date(Date.now() - CHAT_KEEP_DAYS * 86400e3).toISOString();

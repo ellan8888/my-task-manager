@@ -6,6 +6,7 @@
 //     dan buku kas → saldo & Riwayat Saldo tidak berubah.
 //   • stok "available" tidak pernah disentuh.
 import { NextResponse } from "next/server";
+import { isCronRequest } from "@/lib/cronAuth";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { codeExpiryCutoff } from "@/lib/redeem";
 
@@ -13,7 +14,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET(req: Request) {
-  if (req.headers.get("authorization") !== `Bearer ${process.env.CRON_SECRET}`) {
+  if (!isCronRequest(req)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

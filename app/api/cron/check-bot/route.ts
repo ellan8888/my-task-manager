@@ -7,6 +7,7 @@
 //   • Pengingat     — kalau masih bermasalah, diingatkan lagi tiap 2 jam
 //   • Kembali Online — begitu normal lagi, lengkap dengan lama gangguan
 import { NextResponse } from "next/server";
+import { isCronRequest } from "@/lib/cronAuth";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { notify } from "@/lib/notify";
 import { BOT_NAME, getBotStatus, humanDuration, wibTime } from "@/lib/botStatus";
@@ -20,7 +21,7 @@ const REMIND_EVERY_MIN = 120;
 type Incident = { id: number; kind: string | null; sent_at: string; started_at: string | null; recovered_at: string | null };
 
 export async function GET(req: Request) {
-  if (req.headers.get("authorization") !== `Bearer ${process.env.CRON_SECRET}`) {
+  if (!isCronRequest(req)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
