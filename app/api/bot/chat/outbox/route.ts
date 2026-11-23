@@ -1,5 +1,6 @@
 // app/api/bot/chat/outbox/route.ts — antrean balasan chat untuk bot (login_once), header x-bot-api-key
-//   GET  → { items: [{ id, conversation_id, text, created_by, order_id }] }
+//   GET  → { items: [{ id, conversation_id, text, created_by, order_id, files: [{path,name,mime,size,url}] }] }
+//          files = foto dari My Task; url = signed URL 15 menit untuk diunduh bot
 //          diambil atomik (status → sending) lewat fungsi SQL chat_outbox_claim; yang > 30 menit kedaluwarsa
 //   GET ?peek=1 → { pending: n } — hanya menghitung (tidak mengambil); dipakai thread bot tiap beberapa detik
 //   POST { id, status: "sent"|"failed"|"retry", method?, error?, timetoken? } → hasil pengiriman
@@ -10,6 +11,7 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { isBotRequest } from "@/lib/auth";
+import { signedUrl, type ChatFile } from "@/lib/chatMedia";
 
 export const dynamic = "force-dynamic";
 
@@ -29,7 +31,15 @@ export async function GET(req: Request) {
   }
   const { data, error } = await supabaseAdmin.rpc("chat_outbox_claim", { p_limit: 5 });
   if (error) return NextResponse.json({ success: false, message: error.message }, { status: 500 });
-  return NextResponse.json({ success: true, items: data || [] });
+  const items = await Promise.all(
+    ((data || []) as { files?: ChatFile[] | null }[]).map(async (it) => ({
+      ...it,
+      files: await Promise.all(
+        (Array.isArray(it.files) ? it.files : []).map(async (f) => ({ ...f, url: await signedUrl(f.path, 900) })),
+      ),
+    })),
+  );
+  return NextResponse.json({ success: true, items });
 }
 
 export async function POST(req: Request) {

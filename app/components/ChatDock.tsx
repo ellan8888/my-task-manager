@@ -8,6 +8,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ChatText, { chatPreview } from "./ChatText";
 import { OPEN_CHAT_EVENT, chatIdFromUrl } from "@/lib/openChat";
+import {
+  MAX_ATTACH,
+  compressImage,
+  imagesFrom,
+  mediaKind,
+  mediaSrc,
+  uploadAttachment,
+  type Attachment,
+  type ChatFile,
+} from "./chatAttach";
 
 type Conversation = {
   conversation_id: string;
@@ -26,7 +36,7 @@ type Message = {
   tt: string;
   sender: "buyer" | "seller";
   text: string | null;
-  files: string[] | null;
+  files: (ChatFile | string)[] | null;
   sent_at: string;
   order_id: string | null;
   product_name: string | null;
@@ -34,6 +44,7 @@ type Message = {
 type Outbox = {
   id: number;
   text: string;
+  files?: ChatFile[] | null;
   status: "pending" | "sending" | "sent" | "failed";
   method: "fast" | "ui" | null;
   error: string | null;
@@ -98,6 +109,57 @@ function Avatar({ c, size = "md" }: { c: Pick<Conversation, "buyer_name" | "buye
   );
 }
 
+/** Foto / video / file di gelembung chat. Link lama yang sudah kedaluwarsa → kotak "tidak tersedia". */
+function MediaTile({ f, onZoom, dim = false }: { f: ChatFile | string; onZoom: (src: string) => void; dim?: boolean }) {
+  const [broken, setBroken] = useState(false);
+  const src = mediaSrc(f);
+  const kind = mediaKind(f);
+  const name = typeof f === "string" ? "" : f.name;
+  if (!src || broken) {
+    return (
+      <span className="w-40 h-28 rounded-xl border border-dashed border-slate-300 dark:border-slate-700 bg-slate-100/70 dark:bg-slate-800/50 flex flex-col items-center justify-center gap-1 text-center px-2 text-[11px] text-slate-500">
+        <i className="fa-regular fa-image text-lg text-slate-400"></i>
+        {kind === "video" ? "Video" : "Foto"} sudah tidak tersedia
+      </span>
+    );
+  }
+  if (kind === "video") {
+    return (
+      <video
+        src={src}
+        controls
+        preload="metadata"
+        onError={() => setBroken(true)}
+        className={`w-56 max-h-72 rounded-xl bg-black border border-slate-200 dark:border-slate-800 ${dim ? "opacity-70" : ""}`}
+      />
+    );
+  }
+  if (kind === "file") {
+    return (
+      <a href={src} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs text-blue-700 dark:text-blue-300">
+        <i className="fa-solid fa-paperclip"></i>
+        <span className="truncate max-w-[10rem]">{name || "Lampiran"}</span>
+      </a>
+    );
+  }
+  return (
+    <button
+      onClick={() => onZoom(src)}
+      className="rounded-xl overflow-hidden border border-slate-200 dark:border-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+      aria-label="Perbesar foto"
+    >
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={src}
+        alt="Foto dari chat"
+        loading="lazy"
+        onError={() => setBroken(true)}
+        className={`w-40 h-40 sm:w-48 sm:h-48 object-cover bg-slate-200 dark:bg-slate-800 ${dim ? "opacity-70" : ""}`}
+      />
+    </button>
+  );
+}
+
 export default function ChatDock() {
   const [enabled, setEnabled] = useState(false);
   const [open, setOpen] = useState(false);
@@ -114,6 +176,11 @@ export default function ChatDock() {
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState("");
+  const [atts, setAtts] = useState<Attachment[]>([]);
+  const [dragging, setDragging] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const textRef = useRef<HTMLTextAreaElement>(null);
+  const dragDepth = useRef(0);
   const endRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const [atBottom, setAtBottom] = useState(true);
@@ -252,21 +319,83 @@ export default function ChatDock() {
       .filter((c) => !s || `${c.buyer_name} ${c.buyer_id} ${c.order_id} ${c.product_name} ${c.last_text} ${c.owner}`.toLowerCase().includes(s));
   }, [convs, filter, q]);
 
+  // ── lampiran foto: kecilkan → unggah langsung di latar (saat staff masih mengetik keterangan) ──
+  const patchAtt = (id: string, p: Partial<Attachment>) => setAtts((as) => as.map((a) => (a.id === id ? { ...a, ...p } : a)));
+
+  const startUpload = async (conv: string, a: Attachment, file?: File) => {
+    try {
+      let blob = a.blob;
+      if (!blob) {
+        patchAtt(a.id, { status: "compressing", error: undefined });
+        blob = await compressImage(file!);
+      }
+      patchAtt(a.id, { status: "uploading", progress: 0, blob, error: undefined });
+      const up = await uploadAttachment(conv, blob, (pr) => patchAtt(a.id, { progress: pr }));
+      patchAtt(a.id, { status: "ready", progress: 1, uploaded: up });
+    } catch (e) {
+      patchAtt(a.id, { status: "error", error: e instanceof Error ? e.message : String(e) });
+    }
+  };
+
+  const addFiles = (files: File[]) => {
+    if (!active || !files.length) return;
+    const room = MAX_ATTACH - atts.length;
+    if (room <= 0) {
+      setSendError(`Maksimal ${MAX_ATTACH} foto sekali kirim`);
+      return;
+    }
+    if (files.length > room) setSendError(`Hanya ${room} foto lagi yang bisa ditambahkan (maks. ${MAX_ATTACH})`);
+    else setSendError("");
+    const conv = active;
+    for (const file of files.slice(0, room)) {
+      const a: Attachment = {
+        id: crypto.randomUUID(),
+        name: file.name || "foto",
+        preview: URL.createObjectURL(file),
+        status: "compressing",
+        progress: 0,
+      };
+      setAtts((as) => [...as, a]);
+      startUpload(conv, a, file);
+    }
+  };
+
+  const removeAtt = (id: string) =>
+    setAtts((as) => {
+      const a = as.find((x) => x.id === id);
+      if (a) URL.revokeObjectURL(a.preview);
+      return as.filter((x) => x.id !== id);
+    });
+
+  const clearAtts = () =>
+    setAtts((as) => {
+      as.forEach((a) => URL.revokeObjectURL(a.preview));
+      return [];
+    });
+
+  const uploadingCount = atts.filter((a) => a.status === "compressing" || a.status === "uploading").length;
+  const failedCount = atts.filter((a) => a.status === "error").length;
+  const canSend = !sending && uploadingCount === 0 && failedCount === 0 && (!!draft.trim() || atts.length > 0);
+
   const send = async () => {
     const text = draft.trim();
-    if (!active || !text || sending) return;
+    if (!active || !canSend) return;
     setSending(true);
     setSendError("");
     try {
+      const files = atts.map((a) => a.uploaded).filter((f): f is ChatFile => !!f);
       const d = await fetch("/api/chat/send", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ conversation_id: active, text }),
+        body: JSON.stringify({ conversation_id: active, text, files }),
       }).then((r) => r.json());
       if (!d.success) throw new Error(d.message || "Balasan belum masuk antrean, coba lagi");
       setDraft("");
-      setThread((t) => (t && t.conversation.conversation_id === active ? { ...t, outbox: [...(t.outbox || []), d.item] } : t));
+      clearAtts();
+      const added: Outbox[] = d.items || (d.item ? [d.item] : []);
+      setThread((t) => (t && t.conversation.conversation_id === active ? { ...t, outbox: [...(t.outbox || []), ...added] } : t));
       setTimeout(() => toBottom(), 50);                     // pesan sendiri selalu terlihat
+      textRef.current?.focus();
     } catch (e) {
       setSendError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -276,6 +405,7 @@ export default function ChatDock() {
 
   const openConv = (id: string) => {
     setDraft("");
+    clearAtts();
     setSendError("");
     setNewBelow(0);
     setAtBottom(true);
@@ -455,7 +585,38 @@ export default function ChatDock() {
             </aside>
 
             {/* isi percakapan */}
-            <section className={`${active ? "flex" : "hidden sm:flex"} flex-1 min-w-0 flex-col bg-slate-50 dark:bg-slate-950`}>
+            <section
+              className={`${active ? "flex" : "hidden sm:flex"} relative flex-1 min-w-0 flex-col bg-slate-50 dark:bg-slate-950`}
+              onDragEnter={(e) => {
+                if (!active || !e.dataTransfer.types.includes("Files")) return;
+                e.preventDefault();
+                dragDepth.current += 1;
+                setDragging(true);
+              }}
+              onDragOver={(e) => {
+                if (active && e.dataTransfer.types.includes("Files")) e.preventDefault();
+              }}
+              onDragLeave={() => {
+                dragDepth.current = Math.max(0, dragDepth.current - 1);
+                if (!dragDepth.current) setDragging(false);
+              }}
+              onDrop={(e) => {
+                if (!active) return;
+                e.preventDefault();
+                dragDepth.current = 0;
+                setDragging(false);
+                addFiles(imagesFrom(e.dataTransfer.files));
+              }}
+            >
+              {dragging && (
+                <div className="absolute inset-2 z-30 rounded-2xl border-2 border-dashed border-blue-500 bg-blue-50/90 dark:bg-blue-500/15 backdrop-blur-sm grid place-items-center pointer-events-none motion-safe:animate-[pop_.16s_ease-out]">
+                  <div className="text-center text-blue-700 dark:text-blue-300">
+                    <i className="fa-solid fa-images text-3xl mb-2"></i>
+                    <p className="text-sm font-semibold">Lepas foto di sini</p>
+                    <p className="text-xs opacity-80">maks. {MAX_ATTACH} foto sekali kirim</p>
+                  </div>
+                </div>
+              )}
               {!active || !activeConv ? (
                 <div className="flex-1 flex flex-col items-center justify-center text-center p-8 text-slate-500">
                   <i className="fa-regular fa-comments text-3xl mb-3 text-slate-300 dark:text-slate-700"></i>
@@ -529,18 +690,9 @@ export default function ChatDock() {
                               <div className={`max-w-[85%] sm:max-w-[75%] min-w-0 ${mine ? "items-end" : "items-start"} flex flex-col`}>
                                 {m.files && m.files.length > 0 && (
                                   <div className={`flex flex-wrap gap-1.5 mb-1 ${mine ? "justify-end" : ""}`}>
-                                    {m.files.map((f) =>
-                                      !/\.(pdf|zip|rar|docx?|xlsx?|txt|mp4|mov)(\?|$)/i.test(f) ? (
-                                        <button key={f} onClick={() => setZoom(f)} className="rounded-xl overflow-hidden border border-slate-200 dark:border-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">
-                                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                                          <img src={f} alt="Gambar dari chat" loading="lazy" className="w-40 h-40 object-cover bg-slate-200 dark:bg-slate-800" />
-                                        </button>
-                                      ) : (
-                                        <a key={f} href={f} target="_blank" rel="noreferrer" className="text-xs underline text-blue-700 dark:text-blue-400">
-                                          <i className="fa-solid fa-paperclip mr-1"></i>Lampiran
-                                        </a>
-                                      ),
-                                    )}
+                                    {m.files.map((f, fi) => (
+                                      <MediaTile key={typeof f === "string" ? f : f.path || `${f.name}${fi}`} f={f} onZoom={setZoom} />
+                                    ))}
                                   </div>
                                 )}
                                 {m.text && (
@@ -573,6 +725,21 @@ export default function ChatDock() {
                         return (
                           <div key={`o${o.id}`} className="flex justify-end mt-3">
                             <div className="max-w-[80%] flex flex-col items-end">
+                              {o.files && o.files.length > 0 && (
+                                <div className="relative mb-1">
+                                  {o.files.map((f) => (
+                                    <MediaTile key={f.path} f={f} onZoom={setZoom} dim={o.status !== "failed"} />
+                                  ))}
+                                  {(o.status === "pending" || o.status === "sending") && (
+                                    <span className="absolute inset-0 grid place-items-center pointer-events-none">
+                                      <span className="w-9 h-9 rounded-full bg-slate-900/55 text-white grid place-items-center">
+                                        <i className="fa-solid fa-arrow-up text-sm motion-safe:animate-bounce"></i>
+                                      </span>
+                                    </span>
+                                  )}
+                                </div>
+                              )}
+                              {o.text && (
                               <div
                                 className={`px-3.5 py-2 text-sm leading-relaxed whitespace-pre-wrap break-words rounded-2xl rounded-br-md ${
                                   o.status === "failed"
@@ -583,6 +750,7 @@ export default function ChatDock() {
                               >
                                 {o.text}
                               </div>
+                              )}
                               <span className={`mt-0.5 px-1 text-[10px] ${st.cls}`}>
                                 {o.status === "sending" || o.status === "pending" ? <i className="fa-solid fa-spinner fa-spin mr-1"></i> : null}
                                 {retryingAuto
@@ -626,12 +794,101 @@ export default function ChatDock() {
                   </div>
 
                   <div className="shrink-0 px-3 py-2.5 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800">
+                    {atts.length > 0 && (
+                      <ul className="flex gap-2 overflow-x-auto pt-2 pr-2 pb-2 mb-1 chat-scroll" aria-label="Foto yang akan dikirim">
+                        {atts.map((a) => {
+                          const busy = a.status === "compressing" || a.status === "uploading";
+                          return (
+                            <li key={a.id} className="relative shrink-0 motion-safe:animate-[pop_.18s_ease-out]">
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img
+                                src={a.preview}
+                                alt={a.name}
+                                className={`w-16 h-16 rounded-xl object-cover border ${
+                                  a.status === "error" ? "border-rose-400 opacity-60" : "border-slate-200 dark:border-slate-700"
+                                } ${busy ? "opacity-60" : ""}`}
+                              />
+                              {busy && (
+                                <span className="absolute inset-x-1.5 bottom-1.5 h-1.5 rounded-full bg-white/70 overflow-hidden" aria-hidden>
+                                  <span
+                                    className={`block h-full rounded-full bg-blue-600 transition-[width] duration-200 ${a.status === "compressing" ? "w-1/4 animate-pulse" : ""}`}
+                                    style={a.status === "uploading" ? { width: `${Math.max(8, a.progress * 100)}%` } : undefined}
+                                  />
+                                </span>
+                              )}
+                              {a.status === "ready" && (
+                                <span className="absolute left-1 bottom-1 w-5 h-5 rounded-full bg-emerald-500 text-white text-[10px] grid place-items-center shadow" aria-label="siap dikirim">
+                                  <i className="fa-solid fa-check"></i>
+                                </span>
+                              )}
+                              {a.status === "error" && (
+                                <button
+                                  onClick={() => active && startUpload(active, a)}
+                                  disabled={!a.blob}
+                                  title={a.error}
+                                  className="absolute inset-0 rounded-xl grid place-items-center text-rose-600 bg-white/40 dark:bg-slate-900/40 disabled:cursor-not-allowed"
+                                  aria-label={`Gagal: ${a.error}. Coba unggah lagi`}
+                                >
+                                  <i className={`fa-solid ${a.blob ? "fa-rotate-right" : "fa-triangle-exclamation"}`}></i>
+                                </button>
+                              )}
+                              <button
+                                onClick={() => removeAtt(a.id)}
+                                className="absolute -top-1.5 -right-1.5 w-6 h-6 rounded-full bg-slate-800 text-white text-[11px] grid place-items-center shadow ring-2 ring-white dark:ring-slate-900 hover:bg-rose-600"
+                                aria-label={`Hapus ${a.name}`}
+                              >
+                                <i className="fa-solid fa-xmark"></i>
+                              </button>
+                            </li>
+                          );
+                        })}
+                        {atts.length < MAX_ATTACH && (
+                          <li className="shrink-0">
+                            <button
+                              onClick={() => fileInputRef.current?.click()}
+                              className="w-16 h-16 rounded-xl border-2 border-dashed border-slate-300 dark:border-slate-700 text-slate-400 hover:text-blue-600 hover:border-blue-400 grid place-items-center"
+                              aria-label="Tambah foto"
+                            >
+                              <i className="fa-solid fa-plus"></i>
+                            </button>
+                          </li>
+                        )}
+                      </ul>
+                    )}
                     <div className="flex items-end gap-2">
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp,image/gif,image/heic,image/heif"
+                        multiple
+                        hidden
+                        onChange={(e) => {
+                          addFiles(imagesFrom(e.target.files));
+                          e.target.value = "";
+                        }}
+                      />
+                      <button
+                        onClick={() => fileInputRef.current?.click()}
+                        disabled={atts.length >= MAX_ATTACH}
+                        aria-label="Lampirkan foto"
+                        title="Lampirkan foto (bisa juga tempel Ctrl+V atau seret ke sini)"
+                        className="press w-10 h-10 shrink-0 rounded-full text-slate-500 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-500/10 disabled:opacity-40 focus:outline-none focus-visible:ring-4 focus-visible:ring-blue-300"
+                      >
+                        <i className="fa-solid fa-image text-lg"></i>
+                      </button>
                       <textarea
+                        ref={textRef}
                         value={draft}
                         onChange={(e) => {
                           setDraft(e.target.value);
                           if (sendError) setSendError("");
+                        }}
+                        onPaste={(e) => {
+                          const imgs = imagesFrom(e.clipboardData?.items);
+                          if (imgs.length) {
+                            e.preventDefault();
+                            addFiles(imgs);
+                          }
                         }}
                         onKeyDown={(e) => {
                           if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
@@ -641,22 +898,29 @@ export default function ChatDock() {
                         }}
                         rows={Math.min(5, Math.max(1, draft.split("\n").length))}
                         maxLength={2000}
-                        placeholder={`Balas ${buyerLabel(activeConv)}…`}
+                        placeholder={atts.length ? "Tambahkan keterangan (opsional)…" : `Balas ${buyerLabel(activeConv)}…`}
                         aria-label="Tulis balasan"
                         className="chat-scroll flex-1 resize-none px-3.5 py-2 rounded-2xl bg-slate-100 dark:bg-slate-800 text-base sm:text-sm leading-relaxed text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 caret-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
                       />
                       <button
                         onClick={send}
-                        disabled={!draft.trim() || sending}
-                        aria-label="Kirim balasan"
-                        className="w-10 h-10 shrink-0 rounded-full text-white disabled:opacity-40 hover:brightness-110 focus:outline-none focus-visible:ring-4 focus-visible:ring-blue-300"
+                        disabled={!canSend}
+                        aria-label={atts.length ? `Kirim ${atts.length} foto` : "Kirim balasan"}
+                        className="press w-10 h-10 shrink-0 rounded-full text-white disabled:opacity-40 hover:brightness-110 focus:outline-none focus-visible:ring-4 focus-visible:ring-blue-300"
                         style={{ backgroundColor: ITEMKU_BLUE }}
                       >
                         <i className={`fa-solid ${sending ? "fa-spinner fa-spin" : "fa-paper-plane"}`}></i>
                       </button>
                     </div>
-                    <p className={`mt-1.5 px-1 text-[11px] ${sendError ? "text-rose-600 dark:text-rose-400" : "text-slate-400"}`}>
-                      {sendError || "Enter untuk kirim, Shift+Enter untuk baris baru. Kalau gagal, bot otomatis mencoba lagi sampai terkirim."}
+                    <p className={`mt-1.5 px-1 text-[11px] ${sendError || failedCount ? "text-rose-600 dark:text-rose-400" : "text-slate-400"}`}>
+                      {sendError ||
+                        (failedCount
+                          ? `${failedCount} foto gagal diunggah — ketuk fotonya untuk coba lagi, atau hapus`
+                          : uploadingCount
+                            ? `Menyiapkan ${uploadingCount} foto…`
+                            : atts.length
+                              ? `${atts.length} foto siap. Foto dikirim satu per satu, keterangan menyusul setelahnya.`
+                              : "Enter untuk kirim, Shift+Enter baris baru. Foto: tombol gambar, tempel, atau seret ke sini.")}
                     </p>
                   </div>
                 </>
@@ -670,7 +934,7 @@ export default function ChatDock() {
       {zoom && (
         <div className="fixed inset-0 z-[950] bg-slate-950/85 flex items-center justify-center p-4" onClick={() => setZoom(null)} role="dialog" aria-label="Gambar dari chat">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={zoom} alt="Gambar dari chat" className="max-w-full max-h-full rounded-xl" />
+          <img src={zoom} alt="Foto dari chat" className="max-w-full max-h-full rounded-xl object-contain" />
           <button className="absolute top-4 right-4 w-10 h-10 rounded-full bg-white/15 text-white" aria-label="Tutup gambar">
             <i className="fa-solid fa-xmark"></i>
           </button>

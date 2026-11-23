@@ -6,6 +6,7 @@ import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { isBotRequest } from "@/lib/auth";
 import { normalizeOrder, orderInfo } from "@/lib/chat";
+import { cleanFiles } from "@/lib/chatMedia";
 
 export const dynamic = "force-dynamic";
 
@@ -44,9 +45,8 @@ export async function POST(req: Request) {
     if (!cm || tt.length < 13) continue;
     const sender = m.sender === "seller" ? "seller" : m.sender === "buyer" ? "buyer" : null;
     if (!sender) continue;
-    const files = Array.isArray(m.files)
-      ? m.files.filter((f): f is string => typeof f === "string" && /^https?:\/\//.test(f)).slice(0, 10)
-      : [];
+    // salinan di penyimpanan My Task ({path…}); link PubNub mentah disimpan TANPA kunci akses
+    const files = cleanFiles(m.files);
     const text = clean(m.text, 4000);
     if (!text && !files.length) continue;
     rows.push({
@@ -89,7 +89,7 @@ export async function POST(req: Request) {
     const patch: Record<string, unknown> = { conversation_id: conv, buyer_id: latest._buyer, updated_at: new Date().toISOString() };
     if (!ex?.last_message_at || new Date(latest.sent_at) >= new Date(ex.last_message_at)) {
       patch.last_message_at = latest.sent_at;
-      patch.last_text = latest.text ? latest.text.slice(0, 200) : "Mengirim gambar";
+      patch.last_text = latest.text ? latest.text.slice(0, 200) : "Mengirim foto";
       patch.last_sender = latest.sender;
     }
     if (withProduct) {
