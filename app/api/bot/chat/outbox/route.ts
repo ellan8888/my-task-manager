@@ -29,7 +29,7 @@ export async function GET(req: Request) {
     if (error) return NextResponse.json({ success: false, message: error.message }, { status: 500 });
     return NextResponse.json({ success: true, pending: count || 0 });
   }
-  const { data, error } = await supabaseAdmin.rpc("chat_outbox_claim", { p_limit: 5 });
+  const { data, error } = await supabaseAdmin.rpc("chat_outbox_claim_v2", { p_limit: 5 });
   if (error) return NextResponse.json({ success: false, message: error.message }, { status: 500 });
   const items = await Promise.all(
     ((data || []) as { files?: ChatFile[] | null }[]).map(async (it) => ({

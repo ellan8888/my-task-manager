@@ -3,6 +3,7 @@
 //   outbox = balasan dari My Task (menunggu / terkirim / gagal) supaya statusnya terlihat di panel
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import { cleanFiles } from "@/lib/chatMedia";
 import { getSession } from "@/lib/auth";
 import { canSeeConversation, chatUser, tokokuOrderUrl } from "@/lib/chat";
 
@@ -49,7 +50,8 @@ export async function GET(req: Request) {
   return NextResponse.json({
     success: true,
     conversation: { ...c, tokoku_url: tokokuOrderUrl(c.order_id) },
-    messages: (rows || []).reverse(),
+    // link file PubNub lama: kunci akses (auth=…) tidak pernah dikirim ke browser
+    messages: (rows || []).reverse().map((m) => ({ ...m, files: m.files ? cleanFiles(m.files) : null })),
     outbox: outbox || [],
   });
 }

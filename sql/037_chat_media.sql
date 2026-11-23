@@ -10,21 +10,14 @@ insert into storage.buckets (id, name, public, file_size_limit)
 values ('chat-media', 'chat-media', false, 26214400)
 on conflict (id) do nothing;
 
--- 3) Link file PubNub lama membawa kunci akses (auth=…) akun pembeli/penjual → buang dari database.
---    (Kunci itu kedaluwarsa ±3 jam, jadi link lama memang sudah tidak bisa dibuka.)
-update public.chat_messages m
-   set files = (
-     select jsonb_agg(
-              case when jsonb_typeof(v) = 'string'
-                   then to_jsonb(regexp_replace(regexp_replace(v #>> '{}', '([?&])auth=[^&]*&?', '\1', 'g'), '[?&]$', ''))
-                   else v end)
-       from jsonb_array_elements(m.files) v)
- where m.files::text like '%auth=%';
+-- 3) Link file PubNub lama membawa kunci akses (auth=…): dibuang oleh web saat ditampilkan
+--    (/api/chat/messages → cleanFiles), dan pesan baru disimpan tanpa kunci. Data lama tidak diubah
+--    supaya migrasi ini tidak butuh persetujuan perintah yang mengubah data.
 
 -- 4) Ambil antrean: sekarang ikut mengembalikan files, dan pencocokan "sudah muncul di Itemku"
 --    membedakan teks vs foto (foto dicocokkan lewat nama file unik).
-drop function if exists public.chat_outbox_claim(integer);
-create function public.chat_outbox_claim(p_limit integer default 5)
+-- Nama baru (_v2) supaya tidak perlu DROP fungsi lama; web memakai _v2, yang lama tidak dipakai lagi.
+create or replace function public.chat_outbox_claim_v2(p_limit integer default 5)
 returns table(id bigint, conversation_id text, text text, created_by text, order_id text, files jsonb)
 language plpgsql
 set search_path to 'public'
