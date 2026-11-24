@@ -2,8 +2,26 @@
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { applyFee } from "@/lib/calculateFee";
 
-/** Anggota tim yang selalu ditampilkan walaupun belum ada pendapatan */
-export const TEAM = ["ellan", "rizki", "ridho"];
+/**
+ * Anggota tim yang selalu ditampilkan walaupun belum ada pendapatan — diambil dari tabel users
+ * (akun aktif), owner paling depan lalu urut waktu dibuat. Staff baru otomatis ikut tanpa ubah kode.
+ * Cache 60 dtk per isolate.
+ */
+let _team: { at: number; list: string[] } | null = null;
+export async function getTeam(): Promise<string[]> {
+  if (_team && Date.now() - _team.at < 60_000) return _team.list;
+  const { data, error } = await supabaseAdmin
+    .from("users")
+    .select("username, role, is_active, id")
+    .eq("is_active", true)
+    .order("id", { ascending: true });
+  if (error || !data?.length) return _team?.list || ["ellan"];
+  const list = data
+    .sort((a, b) => Number(b.role === "superadmin") - Number(a.role === "superadmin") || a.id - b.id)
+    .map((u) => String(u.username).toLowerCase());
+  _team = { at: Date.now(), list };
+  return list;
+}
 
 /**
  * Normalisasi input nomor order:

@@ -11,7 +11,7 @@ import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { canSeeFee, getSession } from "@/lib/auth";
 import { isEllan } from "@/lib/replacements";
-import { TEAM, fetchAll } from "@/lib/teamIncome";
+import { getTeam, fetchAll } from "@/lib/teamIncome";
 import { isLedgerMissing, type LedgerRow } from "@/lib/ledger";
 
 export const dynamic = "force-dynamic";
@@ -64,7 +64,7 @@ export async function GET(req: Request) {
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     if (isLedgerMissing({ message })) {
-      return NextResponse.json({ success: true, ready: false, user: target, members: owner ? TEAM : [target] });
+      return NextResponse.json({ success: true, ready: false, user: target, members: owner ? await getTeam() : [target] });
     }
     return NextResponse.json({ success: false, message }, { status: 500 });
   }
@@ -150,7 +150,7 @@ export async function GET(req: Request) {
     success: true,
     ready: true,
     user: target,
-    members: owner ? TEAM : [target],
+    members: owner ? await getTeam() : [target],
     balance: currentBalance,
     summary: { opening, total_in: totalIn, total_out: totalOut, closing, count: inRange.length },
     total: filtered.length,
@@ -177,7 +177,7 @@ export async function POST(req: Request) {
   const amount = Math.round(Number(body.amount));
   const reason = String(body.reason || "").trim().slice(0, 300);
 
-  if (!TEAM.includes(username)) {
+  if (!(await getTeam()).includes(username)) {
     return NextResponse.json({ success: false, message: "Anggota tidak dikenal" }, { status: 400 });
   }
   if (!Number.isFinite(amount) || amount === 0 || Math.abs(amount) > 100_000_000) {

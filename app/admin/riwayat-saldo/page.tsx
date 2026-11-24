@@ -5,6 +5,7 @@
 //   Ellan : memilih anggota + membuat penyesuaian manual
 
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
+import { teamColor } from "@/lib/teamColors";
 import AdminHeader from "@/app/components/AdminHeader";
 import RoleBadge from "@/app/components/RoleBadge";
 import { DatePicker, FieldLabel, SegmentedChoice } from "@/app/components/Pickers";
@@ -140,10 +141,10 @@ const WD_STATUS: Record<string, { label: string; icon: string; cls: string }> = 
   rejected: { label: "Ditolak", icon: "fa-circle-xmark", cls: "bg-rose-100 text-rose-700 dark:bg-rose-500/15 dark:text-rose-300" },
 };
 
-const USER_AVATAR: Record<string, { soft: string; solid: string }> = {
-  ellan: { soft: "bg-violet-100 text-violet-600 dark:bg-violet-500/15 dark:text-violet-400", solid: "bg-violet-500 border-violet-500 shadow-violet-500/30" },
-  rizki: { soft: "bg-sky-100 text-sky-600 dark:bg-sky-500/15 dark:text-sky-400", solid: "bg-sky-500 border-sky-500 shadow-sky-500/30" },
-  ridho: { soft: "bg-amber-100 text-amber-600 dark:bg-amber-500/15 dark:text-amber-400", solid: "bg-amber-500 border-amber-500 shadow-amber-500/30" },
+// warna avatar anggota tim — sumber tunggal di lib/teamColors (staff baru otomatis dapat warna)
+const avatarOf = (name: string) => {
+  const c = teamColor(name);
+  return { soft: c.avatar, solid: c.solid };
 };
 
 // ══════════════════════════════════════════════════════════════
@@ -294,12 +295,12 @@ export default function RiwayatSaldoPage() {
               ariaLabel="Pilih anggota"
               value={target}
               onChange={(v) => setMember(v)}
-              options={(data?.members || ["ellan", "rizki", "ridho"]).map((m) => ({
+              options={(data?.members || []).map((m) => ({
                 value: m,
                 label: cap(m),
                 avatar: true,
-                avatarClass: USER_AVATAR[m]?.soft,
-                activeClass: `${USER_AVATAR[m]?.solid || "bg-slate-600 border-slate-600"} text-white`,
+                avatarClass: avatarOf(m).soft,
+                activeClass: `${avatarOf(m).solid} text-white`,
               }))}
             />
           )}
@@ -478,7 +479,7 @@ export default function RiwayatSaldoPage() {
       {showAdjust && isEllan && (
         <AdjustModal
           defaultMember={target}
-          members={data?.members || ["ellan", "rizki", "ridho"]}
+          members={data?.members || []}
           onClose={() => setShowAdjust(false)}
           onSaved={(m) => {
             setShowAdjust(false);
@@ -718,8 +719,8 @@ function AdjustModal({
               value: m,
               label: cap(m),
               avatar: true,
-              avatarClass: USER_AVATAR[m]?.soft,
-              activeClass: `${USER_AVATAR[m]?.solid || "bg-slate-600 border-slate-600"} text-white`,
+              avatarClass: avatarOf(m).soft,
+              activeClass: `${avatarOf(m).solid} text-white`,
             }))}
           />
         </div>

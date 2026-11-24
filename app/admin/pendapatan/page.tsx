@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
+import { teamColor } from "@/lib/teamColors";
 import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import AdminHeader from "@/app/components/AdminHeader";
 import RoleBadge from "@/app/components/RoleBadge";
@@ -113,13 +114,7 @@ function presetRange(key: Exclude<PresetKey, "custom">): { from: string; to: str
   return { from: lastEnd.slice(0, 8) + "01", to: lastEnd };
 }
 
-const USER_COLORS: Record<string, { solid: string; bar: string; ring: string; text: string; soft: string }> = {
-  ellan: { solid: "bg-violet-500 border-violet-500 shadow-violet-500/30", bar: "#8b5cf6", ring: "border-violet-300 dark:border-violet-500/40", text: "text-violet-600 dark:text-violet-400", soft: "bg-violet-100 dark:bg-violet-500/15" },
-  rizki: { solid: "bg-sky-500 border-sky-500 shadow-sky-500/30", bar: "#0ea5e9", ring: "border-sky-300 dark:border-sky-500/40", text: "text-sky-600 dark:text-sky-400", soft: "bg-sky-100 dark:bg-sky-500/15" },
-  ridho: { solid: "bg-amber-500 border-amber-500 shadow-amber-500/30", bar: "#f59e0b", ring: "border-amber-300 dark:border-amber-500/40", text: "text-amber-600 dark:text-amber-400", soft: "bg-amber-100 dark:bg-amber-500/15" },
-};
-const OTHER_COLOR = { solid: "bg-slate-500 border-slate-500 shadow-slate-500/30", bar: "#64748b", ring: "border-slate-300 dark:border-slate-700", text: "text-slate-600 dark:text-slate-300", soft: "bg-slate-100 dark:bg-slate-800" };
-const colorOf = (name: string) => USER_COLORS[name] || OTHER_COLOR;
+const colorOf = (name: string) => teamColor(name);
 
 // ══════════════════════════════════════════════════════════════
 // PAGE

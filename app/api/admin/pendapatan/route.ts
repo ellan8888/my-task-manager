@@ -5,7 +5,7 @@ import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { getSession } from "@/lib/auth";
 import { isEllan } from "@/lib/replacements";
-import { TEAM, fetchAll } from "@/lib/teamIncome";
+import { getTeam, fetchAll } from "@/lib/teamIncome";
 
 export const dynamic = "force-dynamic";
 
@@ -89,6 +89,7 @@ export async function GET(request: Request) {
     }
 
     // Ringkasan per user
+    const TEAM = await getTeam();
     const names = new Set(TEAM);
     rows.forEach((r) => names.add((r.joki_name || "ellan").toLowerCase()));
     const users = [...names].map((name) => ({ name, net: 0, gross: 0, fee: 0, count: 0, prev_net: 0, prev_count: 0 }));
